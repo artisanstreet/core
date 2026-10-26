@@ -30,6 +30,8 @@ export interface RequestContext {
   readonly txRunner: TxRunner;
   /** Test-only capture for delivered mail (never set in production). */
   readonly mailSink?: (m: { to: string; subject: string; text: string; confirmUrl: string }) => void;
+  /** Optional static asset backend (portal web/dist via Workers Assets). */
+  readonly assets?: { fetch(request: Request): Promise<Response> };
   /** Explicit clock (tests inject a mutable fake; production omits it). */
   readonly now?: () => number;
 }
@@ -650,15 +652,78 @@ export function createApp(ctx: RequestContext) {
   });
 
   // -- sign-in UI -----------------------------------------------------------------------------
-  app.get("/ui/signin", (c) => (c as unknown as H).html(signinPage()));
-  app.get("/ui/claim", (c) => (c as unknown as H).html(claimPage()));
+  app.get("/ui/signin", (c) => {
+    const h = c as unknown as H;
+    h.header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'");
+    return h.html(signinPage());
+  });
+  app.get("/ui/claim", (c) => {
+    const h = c as unknown as H;
+    h.header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'");
+    return h.html(claimPage());
+  });
   app.get("/v1/auth/magic/confirm", (c) => {
     const h = c as unknown as H;
     const token = new URL(h.req.url).searchParams.get("token") ?? "";
     if (!/^[A-Za-z0-9_-]{10,128}$/.test(token)) {
+      h.header("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'");
       return h.html("<p>Invalid link.</p>", 400);
     }
+    // Shipped email links enter the correct UI: when the portal SPA is
+    // deployed (CORE_SPA_APPROVE_PATH set, e.g. "/#/approve"), redirect
+    // there with the token preserved; same-browser/new-tab completion then
+    // happens in the SPA via the same consume/finalize API. Otherwise serve
+    // the minimal backend approval page (safe fallback, no SPA required).
+    const spa = ctx.env.vars.CORE_SPA_APPROVE_PATH;
+    if (spa) {
+      return new Response(null, {
+        status: 302,
+        headers: {
+          Location: `${spa}?token=${token}`,
+          "Cache-Control": "no-store",
+          "Referrer-Policy": "no-referrer",
+        },
+      });
+    }
+    h.header(
+      "Content-Security-Policy",
+      "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'",
+    );
     return h.html(confirmPage(token));
+  });
+
+  // -- portal SPA hosting (optional) -------------------------------------------------
+  // Serves the portal build (web/dist) when the ASSETS binding is present.
+  // API, UI, and metadata paths never fall through. Unknown app paths serve
+  // the SPA shell (index.html) with no-store + strict CSP so routing stays
+  // client-side; hashed static assets keep their upstream cache headers.
+  app.get("*", async (c) => {
+    const h = c as unknown as H;
+    const url = new URL(h.req.url);
+    const p = url.pathname;
+    if (p.startsWith("/v1/") || p.startsWith("/.well-known/") || p.startsWith("/ui/")) {
+      return h.json({ error: { code: "not_found", message: "not found", requestId: h.get("requestId") } }, 404);
+    }
+    if (!ctx.assets) {
+      return h.json({ error: { code: "not_found", message: "not found", requestId: h.get("requestId") } }, 404);
+    }
+    const direct = await ctx.assets.fetch(c.req.raw);
+    if (direct.status !== 404) return direct;
+    const shell = await ctx.assets.fetch(new Request(new URL("/index.html", url), { headers: { accept: "text/html" } }));
+    if (shell.status === 200) {
+      const body = await shell.arrayBuffer();
+      return new Response(body, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "no-store",
+          "Content-Security-Policy":
+            "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'",
+          "Referrer-Policy": "no-referrer",
+        },
+      });
+    }
+    return h.json({ error: { code: "not_found", message: "not found", requestId: h.get("requestId") } }, 404);
   });
 
   return app;

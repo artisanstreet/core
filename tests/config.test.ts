@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { api, enrollMachine, machineHeaders, setupRig, signup } from "./helpers.js";
+import { api, b64url, enrollMachine, machineHeaders, setupRig, sha256HexStr, signup } from "./helpers.js";
 
 const ORIGIN = { origin: "http://localhost" };
 const manifest = {
@@ -104,6 +104,43 @@ describe("editor config bundles", () => {
       rawBody: rold,
     });
     expect(reg.status).toBe(409);
+
+    // Bundle with an embedded skill installs onto new machines.
+    const skillMd = "# Test Skill\n\nA bundled skill.\n";
+    const skillBytes = new TextEncoder().encode(skillMd);
+    const withSkill = {
+      ...manifest,
+      skills: [
+        {
+          name: "bundled",
+          source: "builtin",
+          bundle: {
+            files: [{ path: "SKILL.md", contentBase64: b64url(skillBytes), sha256: await sha256HexStr(skillBytes) }],
+          },
+        },
+      ],
+    };
+    const pb = await api(rig.app, "POST", "/v1/config/bundles", { headers: cookie, body: { manifest: withSkill } });
+    expect(pb.status).toBe(201);
+    const latest2 = await api(rig.app, "GET", latestPath, {
+      headers: await machineHeaders(machineId, keys, "GET", latestPath, ""),
+    });
+    const got = (latest2.json as { manifest: { skills: Array<{ name: string; bundle: { files: Array<{ path: string }> } }> } }).manifest;
+    expect(got.skills.find((s) => s.name === "bundled")?.bundle.files.map((f) => f.path)).toEqual(["SKILL.md"]);
+
+    // Invalid bundles are rejected: no SKILL.md, escaping path, hash mismatch.
+    const badSkillMd = await sha256HexStr(skillBytes);
+    for (const files of [
+      [{ path: "notes.md", contentBase64: b64url(skillBytes), sha256: badSkillMd }],
+      [{ path: "../evil.md", contentBase64: b64url(skillBytes), sha256: badSkillMd }],
+      [{ path: "SKILL.md", contentBase64: b64url(skillBytes), sha256: "0".repeat(64) }],
+    ]) {
+      const bad = await api(rig.app, "POST", "/v1/config/bundles", {
+        headers: cookie,
+        body: { manifest: { ...manifest, skills: [{ name: "bad", source: "x", bundle: { files } }] } },
+      });
+      expect(bad.status).toBe(400);
+    }
 
     // Unknown bundles and cross-account machines are refused, not regressed.
     const rbogus = JSON.stringify({ bundleId: "bundle_AAAAAAAAAAAAAAAAAAAAAAAAAA", status: "applied" });

@@ -184,7 +184,7 @@ export function registerEditorRoutes(app: Hono<{ Variables: { requestId: string 
         h.header("ETag", etag);
         h.header("Cache-Control", "private, max-age=0, must-revalidate");
         if (s.ifNoneMatch(h, latest.bundle.contentHash)) {
-          return new Response(null, { status: 304, headers: { ETag: etag } });
+          return new Response(null, { status: 304, headers: { ETag: etag, "Cache-Control": "private, max-age=0, must-revalidate" } });
         }
       } else {
         h.header("Cache-Control", "private, max-age=0, must-revalidate");

@@ -11,6 +11,7 @@ interface WorkerEnv {
     put(key: string, body: Uint8Array | string): Promise<unknown>;
     get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
   };
+  readonly ASSETS?: { fetch(request: Request): Promise<Response> };
   readonly DATABASE_URL?: string;
   readonly RESEND_API_KEY?: string;
   readonly CORE_ADMIN_TOKEN?: string;
@@ -62,6 +63,7 @@ function getContext(env: WorkerEnv): RequestContext {
     mailer: (stringVars(env).MAIL_PROVIDER ?? "log") === "resend" ? "resend" : "log",
     resendApiKey: env.RESEND_API_KEY,
     r2: bucket ? r2Adapter(bucket) : memoryR2(),
+    assets: env.ASSETS,
     txRunner: ((fn: (db: Db) => Promise<unknown>) =>
       (cachedDb as unknown as { begin: (f: (tx: unknown) => Promise<unknown>) => Promise<unknown> }).begin((tx) =>
         fn(tx as unknown as Db),

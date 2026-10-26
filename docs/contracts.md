@@ -269,6 +269,26 @@ Config: versioned MCP/skill bundles
 deletion lifecycle. Full request/response/event schemas in Effect Schema with
 strict requests; OpenAPI export; fixtures under `fixtures/v1/`.
 
+### Sign-in UI entry (portal handoff)
+
+- Shipped email links are `GET /v1/auth/magic/confirm?token=…`. When
+  `CORE_SPA_APPROVE_PATH` is set (portal deployed, e.g. `/#/approve`), valid
+  links 302-redirect there with the token preserved (`Location` carries the
+  token; no-store; invalid tokens still 400 and never redirect). Without it,
+  Core serves a minimal backend approval page (safe fallback, tested).
+  Both entries drive the same consume/finalize API, so same-browser/new-tab
+  completion is identical.
+- The Worker hosts the portal build via Workers Assets (`web/dist`,
+  `not_found_handling: "none"`). API (`/v1/*`), UI (`/ui/*`), and metadata
+  (`/.well-known/*`) paths never fall through. Unknown app paths serve the
+  SPA shell (`index.html`) with `no-store` + strict CSP; hashed static
+  assets keep upstream cache headers. Without a deployed build, unknown
+  paths stay JSON 404.
+- Portal asset contract (for the web author via root): `web/dist/index.html`
+  entry; hashed static filenames; all API calls same-origin under `/v1/`;
+  approval route reads `?token=` and calls consume/finalize; CSP notes in
+  `docs/decisions.md`.
+
 ### Config sync (checksum-based invalidation)
 
 - `GET /v1/config/bundles/latest` and `GET /v1/config/bundles/:version/manifest`
@@ -282,6 +302,28 @@ strict requests; OpenAPI export; fixtures under `fixtures/v1/`.
 - Rust client: persist the content hash (and version) per account/machine and
   always revalidate with `If-None-Match` before downloading; treat `304` as
   "local copy current" and `200` as "replace local copy, store new hash".
+
+### Skill bundles (exact schema for Rust/browser)
+
+`SkillRef` keeps `source` (already-installed lookup, still required) and
+gains an optional `bundle` for machines that lack the skill:
+
+```json
+{ "name": "code-review", "source": "builtin",
+  "bundle": { "files": [
+    { "path": "SKILL.md", "contentBase64": "…", "sha256": "…" },
+    { "path": "refs/checklist.md", "contentBase64": "…", "sha256": "…" }
+  ] } }
+```
+
+- `files`: 1–64 entries; total decoded ≤ 1 MiB. Paths are relative to the
+  skill root: non-empty, ≤ 256 chars, no leading `/`, no `..` segments.
+  Every bundle MUST include `SKILL.md` at the root; each file's `sha256`
+  (hex) must match its decoded bytes. Violations are `400`.
+- Bytes live inside the content-hashed R2 manifest — no new service, table,
+  or endpoint. Forge installs bundle files verbatim under the skill root on
+  a new machine; machines that already have the skill keep using `source`.
+  Unchanged bundles are never re-downloaded (manifest `ETag`/`304`).
 
 ## 7. Integration order (ask)
 

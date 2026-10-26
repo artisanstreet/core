@@ -365,15 +365,34 @@ export const ArtifactDownloadResp = Schema.Struct({ envelope: EngineArtifactEnve
 // ---------------------------------------------------------------------------
 
 export const McpServer = Schema.Struct({
-  name: Schema.String,
-  command: Schema.optional(Schema.String),
-  args: Schema.optional(Schema.Array(Schema.String)),
-  url: Schema.optional(Schema.String),
+  name: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(120)),
+  command: Schema.optional(Schema.String.pipe(Schema.maxLength(500))),
+  args: Schema.optional(Schema.Array(Schema.String.pipe(Schema.maxLength(500)))),
+  url: Schema.optional(Schema.String.pipe(Schema.maxLength(2000))),
 });
+export const SkillFile = Schema.Struct({
+  // Path relative to the skill root. Strict: non-empty, no leading slash,
+  // no parent escapes, 256 chars max. Every bundle must include SKILL.md.
+  path: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(256)),
+  contentBase64: Base64url,
+  sha256: Sha256Hex,
+});
+export type SkillFile = typeof SkillFile.Type;
 export const SkillRef = Schema.Struct({
-  name: Schema.String,
-  source: Schema.String,
-  version: Schema.optional(Schema.String),
+  name: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(120)),
+  // Where an already-installed skill lives (local path/URL understood by
+  // the Forge importer). Stays required so existing references keep working.
+  source: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(2000)),
+  version: Schema.optional(Schema.String.pipe(Schema.maxLength(60))),
+  // Optional embedded skill for machines that do not have it installed:
+  // files install onto the new machine verbatim under the skill root.
+  // Bytes live inside the content-hashed R2 manifest (no new service/SQL);
+  // the manifest ETag prevents re-downloading unchanged bundles.
+  bundle: Schema.optional(
+    Schema.Struct({
+      files: Schema.Array(SkillFile).pipe(Schema.minItems(1), Schema.maxItems(64)),
+    }),
+  ),
 });
 export const EditorManifest = Schema.Struct({
   format: Schema.Literal("ast-editor-config/1"),

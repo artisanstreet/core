@@ -106,6 +106,20 @@ Owner: Core. Coordinated via root; Relay/Rust contributors read
   per-account/per-IP/global; enrollment per-IP. Wrong/absent codes map to
   no target, so budgets never key on unknown enrollments/requests.
 
+## Portal handoff (2026-10-27)
+
+- Email links (`/v1/auth/magic/confirm?token=`) redirect to the SPA
+  approval route when `CORE_SPA_APPROVE_PATH` is set, else serve the
+  minimal backend page. Flip the var when the portal build is confirmed;
+  backend behavior is tested both ways.
+- Worker hosts `web/dist` via Workers Assets; `web/` is portal-owned and
+  untouched by Core. CSP: SPA shell is strict self-based; backend
+  auth-confirm pages allow their own inline style/script only; credential
+  responses are no-store. Asset contract for the web author: `index.html`
+  entry, hashed static names, same-origin `/v1/` API, `?token=` approval
+  param driving consume/finalize.
+- Local smoke needs no mail credentials (log mailer + mail sink in tests).
+
 ## Not built / not claimed
 
 - No real deployment performed (dry-run only); Hyperdrive ID, R2 bucket,

@@ -4,11 +4,6 @@
   "main": "./src/index.ts",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
-  // Wrangler's default text-module rule, WITHOUT .sql: .sql imports must
-  // reach Reylo (vite plugin / esbuild), never become raw text modules.
-  "rules": [
-    { "type": "Text", "globs": ["**/*.txt", "**/*.text", "**/*.html"] }
-  ],
   "vars": {
     "CORE_ENV": "production",
     "CORE_PUBLIC_BASE_URL": "https://core.artisanstreet.dev",
@@ -18,7 +13,8 @@
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",
-      "id": "replace-with-hyperdrive-id"
+      "id": "replace-with-hyperdrive-id",
+      "localConnectionString": "postgres://core:core@127.0.0.1:55432/core"
     }
   ],
   "r2_buckets": [
@@ -26,5 +22,9 @@
       "binding": "CONFIG_BUCKET",
       "bucket_name": "ast-core-config"
     }
-  ]
+  ],
+  "assets": {
+    "directory": "./web/dist",
+    "not_found_handling": "none"
+  }
 }

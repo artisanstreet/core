@@ -6909,19 +6909,32 @@
                           ],
                           "properties": {
                             "name": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "a string at most 120 character(s) long",
+                              "title": "maxLength(120)",
+                              "minLength": 1,
+                              "maxLength": 120
                             },
                             "command": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "a string at most 500 character(s) long",
+                              "title": "maxLength(500)",
+                              "maxLength": 500
                             },
                             "args": {
                               "type": "array",
                               "items": {
-                                "type": "string"
+                                "type": "string",
+                                "description": "a string at most 500 character(s) long",
+                                "title": "maxLength(500)",
+                                "maxLength": 500
                               }
                             },
                             "url": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "a string at most 2000 character(s) long",
+                              "title": "maxLength(2000)",
+                              "maxLength": 2000
                             }
                           },
                           "additionalProperties": false
@@ -6937,13 +6950,68 @@
                           ],
                           "properties": {
                             "name": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "a string at most 120 character(s) long",
+                              "title": "maxLength(120)",
+                              "minLength": 1,
+                              "maxLength": 120
                             },
                             "source": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "a string at most 2000 character(s) long",
+                              "title": "maxLength(2000)",
+                              "minLength": 1,
+                              "maxLength": 2000
                             },
                             "version": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "a string at most 60 character(s) long",
+                              "title": "maxLength(60)",
+                              "maxLength": 60
+                            },
+                            "bundle": {
+                              "type": "object",
+                              "required": [
+                                "files"
+                              ],
+                              "properties": {
+                                "files": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "required": [
+                                      "path",
+                                      "contentBase64",
+                                      "sha256"
+                                    ],
+                                    "properties": {
+                                      "path": {
+                                        "type": "string",
+                                        "description": "a string at most 256 character(s) long",
+                                        "title": "maxLength(256)",
+                                        "minLength": 1,
+                                        "maxLength": 256
+                                      },
+                                      "contentBase64": {
+                                        "type": "string",
+                                        "description": "a string matching the pattern ^[A-Za-z0-9_-]+$",
+                                        "pattern": "^[A-Za-z0-9_-]+$"
+                                      },
+                                      "sha256": {
+                                        "type": "string",
+                                        "description": "a string matching the pattern ^[0-9a-f]{64}$",
+                                        "pattern": "^[0-9a-f]{64}$"
+                                      }
+                                    },
+                                    "additionalProperties": false
+                                  },
+                                  "description": "an array of at most 64 item(s)",
+                                  "title": "maxItems(64)",
+                                  "minItems": 1,
+                                  "maxItems": 64
+                                }
+                              },
+                              "additionalProperties": false
                             }
                           },
                           "additionalProperties": false
@@ -7060,19 +7128,32 @@
                                 ],
                                 "properties": {
                                   "name": {
-                                    "type": "string"
+                                    "type": "string",
+                                    "description": "a string at most 120 character(s) long",
+                                    "title": "maxLength(120)",
+                                    "minLength": 1,
+                                    "maxLength": 120
                                   },
                                   "command": {
-                                    "type": "string"
+                                    "type": "string",
+                                    "description": "a string at most 500 character(s) long",
+                                    "title": "maxLength(500)",
+                                    "maxLength": 500
                                   },
                                   "args": {
                                     "type": "array",
                                     "items": {
-                                      "type": "string"
+                                      "type": "string",
+                                      "description": "a string at most 500 character(s) long",
+                                      "title": "maxLength(500)",
+                                      "maxLength": 500
                                     }
                                   },
                                   "url": {
-                                    "type": "string"
+                                    "type": "string",
+                                    "description": "a string at most 2000 character(s) long",
+                                    "title": "maxLength(2000)",
+                                    "maxLength": 2000
                                   }
                                 },
                                 "additionalProperties": false
@@ -7088,13 +7169,68 @@
                                 ],
                                 "properties": {
                                   "name": {
-                                    "type": "string"
+                                    "type": "string",
+                                    "description": "a string at most 120 character(s) long",
+                                    "title": "maxLength(120)",
+                                    "minLength": 1,
+                                    "maxLength": 120
                                   },
                                   "source": {
-                                    "type": "string"
+                                    "type": "string",
+                                    "description": "a string at most 2000 character(s) long",
+                                    "title": "maxLength(2000)",
+                                    "minLength": 1,
+                                    "maxLength": 2000
                                   },
                                   "version": {
-                                    "type": "string"
+                                    "type": "string",
+                                    "description": "a string at most 60 character(s) long",
+                                    "title": "maxLength(60)",
+                                    "maxLength": 60
+                                  },
+                                  "bundle": {
+                                    "type": "object",
+                                    "required": [
+                                      "files"
+                                    ],
+                                    "properties": {
+                                      "files": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "required": [
+                                            "path",
+                                            "contentBase64",
+                                            "sha256"
+                                          ],
+                                          "properties": {
+                                            "path": {
+                                              "type": "string",
+                                              "description": "a string at most 256 character(s) long",
+                                              "title": "maxLength(256)",
+                                              "minLength": 1,
+                                              "maxLength": 256
+                                            },
+                                            "contentBase64": {
+                                              "type": "string",
+                                              "description": "a string matching the pattern ^[A-Za-z0-9_-]+$",
+                                              "pattern": "^[A-Za-z0-9_-]+$"
+                                            },
+                                            "sha256": {
+                                              "type": "string",
+                                              "description": "a string matching the pattern ^[0-9a-f]{64}$",
+                                              "pattern": "^[0-9a-f]{64}$"
+                                            }
+                                          },
+                                          "additionalProperties": false
+                                        },
+                                        "description": "an array of at most 64 item(s)",
+                                        "title": "maxItems(64)",
+                                        "minItems": 1,
+                                        "maxItems": 64
+                                      }
+                                    },
+                                    "additionalProperties": false
                                   }
                                 },
                                 "additionalProperties": false

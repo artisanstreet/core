@@ -19,12 +19,16 @@ export interface TestRig {
   db: PGlite;
   mail: SentMail[];
   tokenForEmail(email: string): string;
-  /** Pin the rig clock (test-only CORE_TEST_NOW_MS). */
+  /** Pin the rig clock (mutable fake time for deterministic tests). */
   setNow(ms: number): void;
   now(): number;
+  setVar(key: string, value: string | undefined): void;
 }
 
-export async function setupRig(): Promise<TestRig> {
+export async function setupRig(opts: {
+  vars?: Record<string, string | undefined>;
+  assets?: { fetch(request: Request): Promise<Response> };
+} = {}): Promise<TestRig> {
   const db = new PGlite();
   await db.exec(await readFile(new URL("../db/schema.sql", import.meta.url), "utf8"));
   const mail: SentMail[] = [];
@@ -36,6 +40,7 @@ export async function setupRig(): Promise<TestRig> {
     CORE_JWT_ISSUER: "http://test.invalid",
     CORE_MASTER_KEY: MASTER_KEY,
     MAIL_PROVIDER: "log",
+    ...(opts.vars ?? {}),
   };
   const ctx: RequestContext = {
     db: db as unknown as Db,
@@ -54,6 +59,7 @@ export async function setupRig(): Promise<TestRig> {
       )) as RequestContext["txRunner"],
     mailSink: (m) => void mail.push(m),
     now: () => nowMs,
+    ...(opts.assets ? { assets: opts.assets } : {}),
   };
   return {
     app: createApp(ctx),
@@ -69,6 +75,10 @@ export async function setupRig(): Promise<TestRig> {
     },
     now() {
       return nowMs;
+    },
+    setVar(key: string, value: string | undefined) {
+      if (value === undefined) delete vars[key];
+      else vars[key] = value;
     },
   };
 }
