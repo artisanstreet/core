@@ -1,0 +1,30 @@
+{
+  "$schema": "https://developers.cloudflare.com/schemas/config/wrangler.jsonc",
+  "name": "ast-core",
+  "main": "./src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // Wrangler's default text-module rule, WITHOUT .sql: .sql imports must
+  // reach Reylo (vite plugin / esbuild), never become raw text modules.
+  "rules": [
+    { "type": "Text", "globs": ["**/*.txt", "**/*.text", "**/*.html"] }
+  ],
+  "vars": {
+    "CORE_ENV": "production",
+    "CORE_PUBLIC_BASE_URL": "https://core.artisanstreet.dev",
+    "CORE_JWT_ISSUER": "https://core.artisanstreet.dev",
+    "MAIL_PROVIDER": "resend"
+  },
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "replace-with-hyperdrive-id"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "CONFIG_BUCKET",
+      "bucket_name": "ast-core-config"
+    }
+  ]
+}

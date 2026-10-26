@@ -1,0 +1,5 @@
+# Reylo points at the development database for SQL type inference.
+# Local: real PostgreSQL 18 in Docker (see README). CI: postgres service.
+# Production parity: same Postgres dialect via Hyperdrive at runtime.
+direct_url: ${DATABASE_URL}
+env: [.env, .env.local]

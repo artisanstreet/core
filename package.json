@@ -1,0 +1,41 @@
+{
+  "name": "ast-core",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "AST account authority: identity, sessions, machine enrollment, grants, vault, config.",
+  "scripts": {
+    "db:setup": "node scripts/db-migrate.mjs",
+    "typecheck": "tsc --noEmit --runExternalCode",
+    "test": "vitest run",
+    "dev": "vite dev --port 8787",
+    "build": "vite build",
+    "contracts:emit": "EMIT_CONTRACTS=1 vitest run tests/emit.test.ts",
+    "contracts:check": "vitest run tests/emit.test.ts",
+    "preview": "vite preview --port 8787"
+  },
+  "dependencies": {
+    "@oslojs/otp": "1.1.0",
+    "@reylosql/postgres": "0.5.0",
+    "effect": "3.22.4",
+    "hono": "4.13.14",
+    "jose": "6.2.13",
+    "postgres": "3.4.9",
+    "reylo": "0.5.0",
+    "ulid": "3.0.2"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1.65.0",
+    "@cloudflare/workers-types": "5.20261026.1",
+    "@electric-sql/pglite": "0.5.12",
+    "@oslojs/encoding": "^1.1.0",
+    "@types/node": "^24.0.0",
+    "typescript": "7.1.0-beta",
+    "vite": "8.3.5",
+    "vitest": "5.0.5",
+    "wrangler": "4.153.0"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

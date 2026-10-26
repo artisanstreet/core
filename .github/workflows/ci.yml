@@ -1,0 +1,33 @@
+name: core-ci
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: core
+          POSTGRES_PASSWORD: core
+          POSTGRES_DB: core
+        ports: ["55432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U core"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: cp .env.example .env
+        if: hashFiles('.env') == ''
+      - run: npm run db:setup
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run build
+      - run: npx wrangler deploy --dry-run

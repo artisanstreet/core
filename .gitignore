@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.data/
+.dev.vars
+.env
+.env.local
+.reylo/
+.wrangler/
+coverage/
+wrangler.json
+*.log
+.DS_Store

@@ -1,0 +1,7 @@
+# Local Worker dev vars (wrangler/vite dev). Never commit real secrets.
+CORE_ENV=dev
+DATABASE_URL=postgres://core:core@127.0.0.1:55432/core
+CORE_PUBLIC_BASE_URL=http://127.0.0.1:8787
+CORE_JWT_ISSUER=http://127.0.0.1:8787
+CORE_MASTER_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+MAIL_PROVIDER=log

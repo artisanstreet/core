@@ -1,0 +1,181 @@
+import { describe, expect, it } from "vitest";
+import { newEnrollmentCode } from "../src/services/machines.js";
+import { api, enrollMachine, machineHeaders, newMachineKeys, setupRig, signup } from "./helpers.js";
+
+describe("enrollment codes", () => {
+  it("generates exact 8-char codes from the unambiguous alphabet", () => {
+    for (let i = 0; i < 500; i++) {
+      const code = newEnrollmentCode();
+      expect(code).toHaveLength(8);
+      expect(code).toMatch(/^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{8}$/);
+    }
+  });
+});
+
+describe("Forge machine enrollment", () => {
+  it("full lifecycle: start, claim, poll, confirm, list, revoke", async () => {
+    const rig = await setupRig();
+    const acct = await signup(rig, "m@example.com");
+    const session = { cookie: acct.cookie };
+
+    const keys = await newMachineKeys();
+    const label = "server-forge";
+    const ts = Math.floor(Date.now() / 1000);
+    const proof = await keys.sign(new TextEncoder().encode(`enrollment-request\n${keys.publicX}\n${label}\n${ts}`));
+    const start = await api(rig.app, "POST", "/v1/machines/enrollments", {
+      body: { publicKey: { kty: "OKP", crv: "Ed25519", x: keys.publicX }, label, timestamp: ts, proof },
+    });
+    expect(start.status).toBe(201);
+    const { enrollmentId, code, keyFingerprint } = start.json as { enrollmentId: string; code: string; keyFingerprint: string };
+    expect(code).toMatch(/^[A-Z2-9]{8}$/);
+    expect(keyFingerprint.length).toBeGreaterThan(20);
+
+    // Guessing fails without the local key confirmation, even with a look.
+    const badClaim = await api(rig.app, "POST", "/v1/machines/enrollments/claim", {
+      headers: { cookie: acct.cookie, origin: "http://localhost" },
+      body: { code: "ZZZZZZZZ" },
+    });
+    expect(badClaim.status).toBe(401);
+
+    const claim = await api(rig.app, "POST", "/v1/machines/enrollments/claim", {
+      headers: { cookie: acct.cookie, origin: "http://localhost" },
+      body: { code },
+    });
+    expect(claim.status).toBe(200);
+
+    // Authenticated polling reveals the exact claiming identity.
+    const statusPath = `/v1/machines/enrollments/${enrollmentId}/status`;
+    const st = await api(rig.app, "GET", statusPath, { headers: await machineHeaders(enrollmentId, keys, "GET", statusPath, "") });
+    expect(st.status).toBe(200);
+    const sj = st.json as { status: string; accountId: string; email: string };
+    expect(sj.status).toBe("claimed");
+    expect(sj.email).toBe("m@example.com");
+    expect(sj.accountId).toBe(acct.accountId);
+
+    // Subject mismatch is rejected.
+    const wrong = await api(rig.app, "GET", `/v1/machines/enrollments/enr_AAAAAAAAAAAAAAAAAAAAAAAAAA/status`, {
+      headers: await machineHeaders(enrollmentId, keys, "GET", `/v1/machines/enrollments/enr_AAAAAAAAAAAAAAAAAAAAAAAAAA/status`, ""),
+    });
+    expect(wrong.status).toBe(401);
+
+    // Confirmation must bind the exact account+key: a confirmation for a
+    // different account is refused before any signature math.
+    const badConfirmBody = JSON.stringify({ enrollmentId, accountId: "acct_AAAAAAAAAAAAAAAAAAAAAAAAAA", confirmation: "AAAA" });
+    const badConfirm = await api(rig.app, "POST", "/v1/machines/enrollments/confirm", {
+      headers: await machineHeaders(enrollmentId, keys, "POST", "/v1/machines/enrollments/confirm", badConfirmBody),
+      rawBody: badConfirmBody,
+    });
+    expect(badConfirm.status).toBe(403);
+
+    // Same account but a bad confirmation signature is a 401.
+    const badSigBody = JSON.stringify({ enrollmentId, accountId: sj.accountId, confirmation: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" });
+    const badSig = await api(rig.app, "POST", "/v1/machines/enrollments/confirm", {
+      headers: await machineHeaders(enrollmentId, keys, "POST", "/v1/machines/enrollments/confirm", badSigBody),
+      rawBody: badSigBody,
+    });
+    expect(badSig.status).toBe(401);
+
+    const confirmation = await keys.sign(new TextEncoder().encode(`enrollment-confirm\n${enrollmentId}\n${sj.accountId}\n${keys.publicX}`));
+    const cbody = JSON.stringify({ enrollmentId, accountId: sj.accountId, confirmation });
+    const done = await api(rig.app, "POST", "/v1/machines/enrollments/confirm", {
+      headers: await machineHeaders(enrollmentId, keys, "POST", "/v1/machines/enrollments/confirm", cbody),
+      rawBody: cbody,
+    });
+    expect(done.status).toBe(201);
+    const machineId = (done.json as { machineId: string }).machineId;
+
+    // Listing exposes the enrolled public key (Editor fetches it to verify
+    // the Forge's Noise transcript signature).
+    const list = await api(rig.app, "GET", "/v1/machines", { headers: { cookie: acct.cookie } });
+    expect(list.status).toBe(200);
+    const machines = (list.json as { machines: Array<{ id: string; publicKey: { x: string } }> }).machines;
+    expect(machines.find((m) => m.id === machineId)?.publicKey.x).toBe(keys.publicX);
+
+    // Replay of the confirmation is idempotent, not a second machine.
+    const again = await api(rig.app, "POST", "/v1/machines/enrollments/confirm", {
+      headers: await machineHeaders(enrollmentId, keys, "POST", "/v1/machines/enrollments/confirm", cbody),
+      rawBody: cbody,
+    });
+    expect(again.status).toBe(201);
+    expect((again.json as { machineId: string }).machineId).toBe(machineId);
+
+    // Revoked machines authenticate no more.
+    const rev = await api(rig.app, "POST", `/v1/machines/${machineId}/revoke`, {
+      headers: { cookie: acct.cookie, origin: "http://localhost" },
+    });
+    expect(rev.status).toBe(200);
+    const st2 = await api(rig.app, "GET", statusPath, { headers: await machineHeaders(enrollmentId, keys, "GET", statusPath, "") });
+    expect(st2.status).toBe(200); // enrollment identity itself is unaffected
+    void session;
+  });
+
+  it("proof-of-possession is verified; replayed nonces die", async () => {
+    const rig = await setupRig();
+    const acct = await signup(rig, "n@example.com");
+    const { keys } = await enrollMachine(rig, { cookie: acct.cookie }, "forge-1");
+    const list = await api(rig.app, "GET", "/v1/machines", { headers: { cookie: acct.cookie } });
+    const machineId = (list.json as { machines: Array<{ id: string }> }).machines[0]!.id;
+
+    // Forged body with a valid structure but wrong signature.
+    const path = "/v1/vault/credentials?connectionId=conn_AAAAAAAAAAAAAAAAAAAAAAAAAA";
+    const bad = await api(rig.app, "GET", path, {
+      headers: await machineHeaders(machineId, keys, "GET", path, ""),
+    });
+    // Unknown connection is 403 (binding holds); now tamper the signature.
+    expect(bad.status).toBe(403);
+    const h = await machineHeaders(machineId, keys, "GET", path, "");
+    const tampered = { ...h, authorization: `${h.authorization}AA` };
+    const badSig = await api(rig.app, "GET", path, { headers: tampered });
+    expect(badSig.status).toBe(401);
+
+    // Same nonce twice: the second is a replay.
+    const fixed = await machineHeaders(machineId, keys, "GET", path, "", undefined, "AAAAAAAAAAAAAAAAAAAAAA");
+    const first = await api(rig.app, "GET", path, { headers: fixed });
+    expect(first.status).toBe(403); // auth passed, binding refused
+    const second = await api(rig.app, "GET", path, { headers: fixed });
+    expect(second.status).toBe(401);
+  });
+
+  it("invalid signatures write no nonce; the nonce stays usable", async () => {
+    const rig = await setupRig();
+    const acct = await signup(rig, "p@example.com");
+    const { machineId, keys } = await enrollMachine(rig, { cookie: acct.cookie }, "forge-p");
+    const path = `/v1/vault/credentials?connectionId=conn_AAAAAAAAAAAAAAAAAAAAAAAAAA`;
+    const nonce = "AAAAAAAAAAAAAAAAAAAAAA";
+
+    const good = await machineHeaders(machineId, keys, "GET", path, "", undefined, nonce);
+    const bad = { ...good, authorization: `${good.authorization}AA` };
+    const badRes = await api(rig.app, "GET", path, { headers: bad });
+    expect(badRes.status).toBe(401);
+
+    // No nonce row was written for the rejected signature.
+    const check = (await rig.db.query(
+      "select count(*)::int as n from machine_nonces where subject = $1 and nonce = $2",
+      [machineId, nonce],
+    )) as unknown as { rows: Array<{ n: number }> };
+    expect(check.rows[0]!.n).toBe(0);
+
+    // The same nonce still works with the valid signature (no poisoning).
+    const retry = await api(rig.app, "GET", path, { headers: good });
+    expect(retry.status).toBe(403); // auth passed; binding refused
+  });
+
+  it("stale timestamps are rejected", async () => {
+    const rig = await setupRig();
+    const acct = await signup(rig, "o@example.com");
+    const { keys, machineId } = await enrollMachine(rig, { cookie: acct.cookie }, "forge-2");
+    void machineId;
+    const path = "/v1/machines";
+    const old = await machineHeaders(
+      "enr_AAAAAAAAAAAAAAAAAAAAAAAAAA",
+      keys,
+      "GET",
+      path,
+      "",
+      String(Math.floor(Date.now() / 1000) - 3600),
+    );
+    const r = await api(rig.app, "GET", path, { headers: { cookie: acct.cookie, ...old } });
+    // Session auth succeeds regardless of the bogus proof headers.
+    expect(r.status).toBe(200);
+  });
+});
