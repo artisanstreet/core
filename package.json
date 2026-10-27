@@ -5,26 +5,26 @@
   "type": "module",
   "description": "AST account authority: identity, sessions, machine enrollment, grants, vault, config.",
   "scripts": {
-    "db:setup": "node scripts/db-migrate.mjs",
-    "typecheck": "tsc --noEmit --runExternalCode",
-    "test": "vitest run",
-    "dev": "vite dev --port 8787",
-    "build": "vite build",
-    "build:web": "npm --prefix web run build --",
-    "contracts:emit": "EMIT_CONTRACTS=1 vitest run tests/emit.test.ts",
-    "contracts:check": "vitest run tests/emit.test.ts",
-    "preview": "vite preview --port 8787",
-    "infra:build": "npm --prefix infra run build --",
-    "infra:check": "npm --prefix infra run check --",
-    "infra:plan": "npm --prefix infra run plan --",
-    "infra:deploy": "npm --prefix infra run deploy --",
-    "infra:verify": "npm --prefix infra run verify:bundle --"
+    "db:setup": "node scripts/db-migrate.ts",
+    "typecheck": "tsrs --noEmit --runExternalCode",
+    "test": "vp test",
+    "dev": "vp dev . --port 8787",
+    "build": "vp build .",
+    "build:web": "pnpm --dir web run build --",
+    "contracts:emit": "EMIT_CONTRACTS=1 vp test run tests/contracts/emit.test.ts",
+    "contracts:check": "vp test run tests/contracts/emit.test.ts",
+    "preview": "vp preview . --port 8787",
+    "infra:build": "pnpm --dir infra run build --",
+    "infra:check": "pnpm --dir infra run check --",
+    "infra:plan": "pnpm --dir infra run plan --",
+    "infra:deploy": "pnpm --dir infra run deploy --",
+    "infra:verify": "pnpm --dir infra run verify:bundle --"
   },
   "dependencies": {
+    "@effect/platform": "0.97.2",
     "@oslojs/otp": "1.1.0",
     "@reylosql/postgres": "0.5.0",
     "effect": "3.22.4",
-    "hono": "4.13.14",
     "jose": "6.2.13",
     "postgres": "3.4.9",
     "reylo": "0.5.0",
@@ -36,12 +36,14 @@
     "@electric-sql/pglite": "0.5.12",
     "@oslojs/encoding": "^1.1.0",
     "@types/node": "^24.0.0",
+    "tsrs": "0.20.0-ts7.1.0-beta",
     "typescript": "7.1.0-beta",
-    "vite": "8.3.5",
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.4.0",
+    "vite-plus": "1.4.0",
     "vitest": "5.0.5",
     "wrangler": "4.153.0"
   },
   "engines": {
-    "node": ">=24"
+    "node": "^24.11.0"
   }
 }

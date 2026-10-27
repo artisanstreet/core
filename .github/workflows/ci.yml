@@ -19,22 +19,19 @@ jobs:
           --health-interval 5s --health-timeout 3s --health-retries 10
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.13.0
       - uses: actions/setup-node@v4
         with:
           node-version: 24.11.1
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            web/package-lock.json
-            infra/package-lock.json
-      - run: npm ci
-      - run: npm ci --prefix web
-      - run: npm ci --prefix infra
+          cache: pnpm
+      - run: pnpm install
       - run: cp .env.example .env
         if: hashFiles('.env') == ''
-      - run: npm run db:setup
-      - run: npm run typecheck
-      - run: npm run test
-      - run: npm run build:web
-      - run: npm run build
-      - run: npm run infra:check --
+      - run: pnpm run db:setup
+      - run: pnpm run typecheck
+      - run: pnpm run test
+      - run: pnpm --dir web run build --
+      - run: pnpm run build
+      - run: pnpm --dir infra run check --

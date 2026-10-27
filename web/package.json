@@ -5,16 +5,17 @@
   "type": "module",
   "description": "AST account browser UI: sign-in, machines, sessions, vault, config, and remote-Forge threads over the Relay Noise channel.",
   "scripts": {
-    "vendor:relay": "node scripts/vendor-relay.mjs",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "build": "vite build",
-    "dev": "vite dev --port 5173"
+    "vendor:relay": "node --experimental-strip-types scripts/vendor-relay.ts",
+    "typecheck": "tsrs --noEmit",
+    "test": "vp test run",
+    "build": "vp build",
+    "dev": "vp dev --port 5173"
   },
   "dependencies": {
     "@noble/ciphers": "2.4.0",
     "@noble/curves": "2.4.0",
     "@noble/hashes": "2.4.0",
+    "@effect/platform": "0.97.2",
     "b4a": "1.9.0",
     "colorjs.io": "^0.7.1",
     "effect": "3.22.4",
@@ -29,12 +30,14 @@
     "axe-core": "^4.14.0",
     "happy-dom": "^21.0.4",
     "playwright-core": "^1.64.1",
+    "tsrs": "0.20.0-ts7.1.0-beta",
     "typescript": "7.1.0-beta",
-    "vite": "8.3.5",
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.4.0",
+    "vite-plus": "1.4.0",
     "vitest": "5.0.5",
     "ws": "^8.22.0"
   },
   "engines": {
-    "node": ">=24"
+    "node": "^24.11.0"
   }
 }

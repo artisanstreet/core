@@ -15,5 +15,5 @@
     "resolveJsonModule": true,
     "types": ["node"]
   },
-  "include": ["src", "tests", "vendor/relay/*.d.ts", "scripts/vendor-relay.mjs", "vite.config.ts", "vitest.config.ts"]
+  "include": ["src", "tests", "vendor/relay/*.d.ts", "scripts/*.ts", "vite.config.ts"]
 }

@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vite-plus";
 
 // Dev proxy: the browser UI talks same-origin `/v1/*` (session cookies are
 // HttpOnly + SameSite=Lax, so cross-origin fetch would drop them). In dev,
@@ -54,5 +54,11 @@ export default defineConfig({
     outDir: "dist",
     sourcemap: true,
     target: "es2022",
+  },
+  test: {
+    environment: "node",
+    include: ["tests/**/*.test.ts"],
+    testTimeout: 30000,
+    hookTimeout: 30000,
   },
 });

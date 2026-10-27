@@ -5,15 +5,15 @@
   "type": "module",
   "description": "Alchemy IaC for ast-core (isolated deploy tooling; Effect 4 per Alchemy peers; service stays on Effect 3).",
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsrs --noEmit",
     "test": "vitest run",
-    "build:worker": "npm --prefix .. run build --",
-    "build:web": "npm --prefix ../web run build --",
-    "build": "npm run build:web -- && npm run build:worker --",
-    "check": "npm run build -- && npm run typecheck -- && npm run test -- && npm run verify:bundle --",
-    "verify:bundle": "node ./scripts/verify-bundle.mjs",
-    "deploy": "npm run build -- && npm run verify:bundle -- && npx --no-install alchemy deploy --config alchemy.run.ts",
-    "plan": "npm run build -- && npm run verify:bundle -- && npx --no-install alchemy deploy --dry-run --config alchemy.run.ts",
+    "build:worker": "pnpm --dir .. run build --",
+    "build:web": "pnpm --dir ../web run build --",
+    "build": "pnpm run build:web -- && pnpm run build:worker --",
+    "check": "pnpm run build -- && pnpm run typecheck -- && pnpm run test -- && pnpm run verify:bundle --",
+    "verify:bundle": "node ./scripts/verify-bundle.ts",
+    "deploy": "pnpm run build -- && pnpm run verify:bundle -- && npx --no-install alchemy deploy --config alchemy.run.ts",
+    "plan": "pnpm run build -- && pnpm run verify:bundle -- && npx --no-install alchemy deploy --dry-run --config alchemy.run.ts",
     "destroy": "npx --no-install alchemy destroy --config alchemy.run.ts"
   },
   "dependencies": {
@@ -26,10 +26,11 @@
   },
   "devDependencies": {
     "@types/node": "24.10.1",
+    "tsrs": "0.20.0-ts7.1.0-beta",
     "typescript": "7.1.0-beta",
     "vitest": "5.0.5"
   },
   "engines": {
-    "node": ">=24.11.1"
+    "node": "^24.11.0"
   }
 }

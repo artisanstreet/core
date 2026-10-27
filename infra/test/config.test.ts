@@ -176,16 +176,15 @@ describe("composition root wires single declarations (offline graph check)", () 
 });
 
 describe("prebuilt bundle seam (deploy exact collector, cloud-free)", () => {
-  it("collects the exact deploy modules (entry first, chunks, no sourcemaps)", async () => {
+  it("collects the exact deploy modules (entry first, single-file Vite+ output, no sourcemaps)", async () => {
     const out = await Effect.runPromise(
       readPrebuiltWorkerBundle({ main: ENTRY_ABS }).pipe(Effect.provide(NodeLayer)),
     );
     const names = out.files.map((f) => f.path);
     expect(names[0]).toBe("index.js");
-    expect(names.some((n) => n.startsWith("assets/"))).toBe(true);
     expect(names.some((n) => n.endsWith(".map"))).toBe(false);
     expect(out.hash).toMatch(/^[0-9a-f]{64}$/);
-    expect(out.files.length).toBeGreaterThanOrEqual(2);
+    expect(out.files.length).toBeGreaterThanOrEqual(1);
   }, 30000);
 
   it("prebuilt entry executes to a Worker with fetch + scheduled (import execution, not substring)", async () => {
