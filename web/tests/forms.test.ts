@@ -24,9 +24,10 @@ function ctxWith(api: CoreApi): PageContext {
 function stubApi(handler: (url: string, init: RequestInit) => unknown) {
   const calls: Array<{ url: string; body: unknown }> = [];
   const fetchImpl = (async (url: string, init: RequestInit) => {
-    const body = init.body ? JSON.parse(init.body as string) : {};
-    calls.push({ url, body });
-    return new Response(JSON.stringify(handler(url, init)), { status: 200, headers: { "content-type": "application/json" } });
+    const raw = init.body;
+    const body = raw ? JSON.parse(typeof raw === "string" ? raw : new TextDecoder().decode(raw as Uint8Array)) : {};
+    calls.push({ url: String(url), body });
+    return new Response(JSON.stringify(handler(String(url), init)), { status: 200, headers: { "content-type": "application/json" } });
   }) as typeof fetch;
   return { api: new CoreApi("", { fetchImpl }), calls };
 }

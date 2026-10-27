@@ -11,25 +11,34 @@
 //   the server's same-origin Origin check for cookie calls.
 // - Ownership is server-derived: this client never sends accountId to
 //   claim scope, and never puts tokens in URLs or logs.
-
-// Product error formatting: validation failures become concise,
-// field-level human messages — never Effect Schema internals. ParseError
-// trees stay in debug logs, not on screen.
+//
+// Effect lies underneath (`./core/api-effect.ts`): `get`/`post` run an
+// Effect (`api_get`/`api_post` with typed `ApiFailure`/`TransportFailure`/
+// `DecodeFailure` + `Schedule` retry on idempotent GETs) and collapse to a
+// Promise ONLY here — the single `Effect.runPromise` boundary for pages.
+// Product error formatting stays concise and field-level.
 
 import { Schema } from "effect";
 import { ArrayFormatter, isParseError } from "effect/ParseResult";
 import * as C from "../../src/contracts/v1.ts";
+import { ApiError, ApiFailure } from "./core/api-error.ts";
+import { run_promise } from "./core/run-promise.ts";
+import { api_get, api_post, decode_lenient as decode_lenient_eff, encode_strict as encode_strict_eff, issue_grant_effect, login_status_effect, strict_options, type FetchLike, type HttpSeam } from "./core/api-effect.ts";
 
-export const strictOptions = { onExcessProperty: "error" } as const;
+export { ApiError };
+export type { FetchLike, HttpSeam } from "./core/api-effect.ts";
+export type { ApiErrorShape } from "./core/api-error.ts";
+
+export const strictOptions = strict_options;
 
 /** Encode a request body strictly; throws on unknown fields. */
 export function encodeStrict<A, I>(schema: Schema.Schema<A, I>, value: A): I {
-  return Schema.encodeUnknownSync(schema, strictOptions)(value) as I;
+  return encode_strict_eff(schema, value);
 }
 
 /** Decode a response forward-compatibly (unknown fields ignored). */
 export function decodeLenient<A, I>(schema: Schema.Schema<A, I>, input: unknown): A {
-  return Schema.decodeUnknownSync(schema)(input);
+  return decode_lenient_eff(schema, input);
 }
 
 /** Decode a request-shaped value strictly (used in tests + validation). */
@@ -92,63 +101,28 @@ function shorten(message: string): string {
   return "That value is not valid here.";
 }
 
-export interface ApiErrorShape {
-  code: string;
-  message: string;
-  requestId: string;
-}
-
-export class ApiError extends Error {
-  readonly code: string;
-  readonly status: number;
-  readonly requestId: string;
-  constructor(status: number, body: ApiErrorShape) {
-    // The message comes from the server and is already secret-free by
-    // contract (messages never carry secrets, tokens, or hashes).
-    super(body.message || body.code);
-    this.name = "ApiError";
-    this.code = body.code;
-    this.status = status;
-    this.requestId = body.requestId;
-  }
-}
-
-export type FetchLike = typeof fetch;
-
 export interface ApiOptions {
-  fetchImpl?: FetchLike;
-}
-
-function errorShape(input: unknown): ApiErrorShape {
-  if (typeof input === "object" && input !== null && "error" in input) {
-    const e = (input as { error: Record<string, unknown> }).error;
-    if (typeof e?.code === "string" && typeof e?.message === "string") {
-      return { code: e.code, message: e.message, requestId: typeof e?.requestId === "string" ? e.requestId : "" };
-    }
-  }
-  return { code: "bad_response", message: "Unexpected response from the account service.", requestId: "" };
+  fetchImpl?: typeof fetch;
 }
 
 /**
  * Minimal Core client. `base` is "" for same-origin (production + dev
  * proxy). A fully-qualified override is allowed only for local fixture
  * servers used in tests; cookie sessions still require same-origin.
+ *
+ * Promise methods ONLY — pages call these. Internals run Effect.
  */
-export class CoreApi {
-  private readonly fetchImpl: FetchLike;
+export class CoreApi implements HttpSeam {
+  readonly fetch_impl: FetchLike;
   readonly base: string;
 
   constructor(base = "", opts: ApiOptions = {}) {
     this.base = base;
-    this.fetchImpl = opts.fetchImpl ?? fetch.bind(globalThis);
+    this.fetch_impl = opts.fetchImpl ?? fetch.bind(globalThis);
   }
 
   async get<A, I>(path: string, responseSchema: Schema.Schema<A, I>): Promise<A> {
-    const res = await this.fetchImpl(this.base + path, {
-      credentials: "include",
-      headers: { accept: "application/json" },
-    });
-    return this.read(res, responseSchema);
+    return run_promise(api_get(this.fetch_impl, this.base, path, responseSchema));
   }
 
   async post<A, I, RA, RI>(
@@ -157,38 +131,23 @@ export class CoreApi {
     requestBody: RA | null,
     responseSchema: Schema.Schema<A, I>,
   ): Promise<A> {
-    let encoded = "{}";
-    if (requestSchema && requestBody !== null) {
-      try {
-        encoded = JSON.stringify(encodeStrict(requestSchema, requestBody));
-      } catch (error) {
-        // Client-side strict validation failed: never send a malformed
-        // request, and show a concise field-level message instead of
-        // schema internals.
-        throw new ApiError(400, { code: "bad_request", message: humanizeValidationError(error), requestId: "" });
-      }
-    }
-    const res = await this.fetchImpl(this.base + path, {
-      method: "POST",
-      credentials: "include",
-      headers: { "content-type": "application/json", accept: "application/json" },
-      body: encoded,
-    });
-    return this.read(res, responseSchema);
-  }
-
-  private async read<A, I>(res: Response, responseSchema: Schema.Schema<A, I>): Promise<A> {    let json: unknown = null;
-    try {
-      json = await res.json();
-    } catch {
-      throw new ApiError(res.status, { code: "bad_response", message: `Account service answered ${res.status}.`, requestId: "" });
-    }
-    if (!res.ok) throw new ApiError(res.status, errorShape(json));
-    try {
-      return decodeLenient(responseSchema, json);
-    } catch {
-      throw new ApiError(res.status, { code: "bad_response", message: "Account service answered with an unreadable shape.", requestId: "" });
-    }
+    return run_promise(
+      api_post(
+        this.fetch_impl,
+        this.base,
+        path,
+        requestSchema,
+        requestBody,
+        responseSchema,
+        (encode_err) =>
+          new ApiFailure({
+            status: 400,
+            code: "bad_request",
+            message: humanizeValidationError(encode_err),
+            request_id: "",
+          }),
+      ),
+    );
   }
 
   // -- auth ---------------------------------------------------------------
@@ -198,7 +157,7 @@ export class CoreApi {
   }
 
   loginStatus(requestId: string, requestSecret: string) {
-    return this.post("/v1/auth/magic/status", C.MagicStatusReq, { requestId, requestSecret }, C.MagicStatusResp);
+    return run_promise(login_status_effect(this.fetch_impl, this.base, requestId, requestSecret));
   }
 
   /** Approve an emailed link. Always POST: link GETs never consume. */
@@ -266,7 +225,7 @@ export class CoreApi {
   // -- grants ----------------------------------------------------------------
 
   issueGrant(body: typeof C.GrantIssueReq.Type) {
-    return this.post("/v1/grants/issue", C.GrantIssueReq, body, C.GrantIssueResp);
+    return run_promise(issue_grant_effect(this.fetch_impl, this.base, body));
   }
 
   // -- vault ------------------------------------------------------------------

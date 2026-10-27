@@ -7,6 +7,7 @@
 
 import { ApiError, type CoreApi } from "../api.ts";
 import { finalizePayload, loadRequestSecret, clearRequestSecret, nextLoginState, storeRequestSecret, type LoginState } from "../auth.ts";
+import { start_login_poll } from "../core/login-poll.ts";
 import { clear, el } from "../ui.ts";
 import type { PageContext } from "../main.ts";
 
@@ -91,7 +92,6 @@ function showProgress(api: CoreApi, initial: LoginState, signal: AbortSignal): v
   box.append(status, totpWrap, finish, done);
 
   let stopped = false;
-  let transientFailures = 0;
   signal.addEventListener("abort", () => {
     stopped = true; // route gone: no more polls, no detached DOM writes
   });
@@ -115,6 +115,7 @@ function showProgress(api: CoreApi, initial: LoginState, signal: AbortSignal): v
         clearRequestSecret(state.requestId);
         state = { ...state, phase: "completed" };
         stopped = true;
+        stop_poll();
         done.textContent = "Signed in. Opening your account…";
         location.hash = "#/account";
       } catch (err) {
@@ -125,55 +126,36 @@ function showProgress(api: CoreApi, initial: LoginState, signal: AbortSignal): v
     })();
   });
 
-  const poll = async (): Promise<void> => {
-    if (stopped || signal.aborted || !box.isConnected) return;
-    const secret = loadRequestSecret(state.requestId);
-    if (!secret) {
-      status.textContent = "This browser lost the request secret (storage was cleared). Start over.";
-      return;
-    }
-    try {
-      const s = await api.loginStatus(state.requestId, secret);
-      state = nextLoginState(state, { status: s.status, totpRequired: s.totpRequired, email: s.email, expiresAt: s.expiresAt });
-      if (state.phase === "email_approved") {
-        status.textContent = "Approved. Finish sign-in below.";
-        status.className = "status ok";
-        finish.hidden = false;
-        totpWrap.hidden = !state.totpRequired;
-        return; // stop polling; the finish button completes the flow.
-      }
-      if (state.phase === "completed") {
-        status.textContent = "Already signed in on this request.";
-        return;
-      }
-      if (state.phase === "expired") {
-        status.textContent = "This request expired. Start over with a fresh link.";
-        status.className = "status err";
-        return;
-      }
-      status.textContent = "Waiting for approval…";
-    } catch (err) {
-      // Transient service/network hiccups must not kill the wait: keep
-      // polling with backoff. Terminal answers (unknown request, rate
-      // limits) stop and say so.
-      const transient = err instanceof ApiError ? err.status >= 500 : true;
-      if (transient) {
-        transientFailures += 1;
-        if (transientFailures <= 10 && !signal.aborted) {
-          status.textContent = "Connection hiccup — still waiting…";
-          status.className = "status muted";
-          setTimeout(() => void poll(), 3000 + transientFailures * 1000);
-          return;
-        }
-      }
-      status.textContent = friendly(err);
+  const stop_poll = start_login_poll(api, state.requestId, () => loadRequestSecret(state.requestId), {
+    on_approved: (s) => {
+      state = nextLoginState(state, s);
+      status.textContent = "Approved. Finish sign-in below.";
+      status.className = "status ok";
+      finish.hidden = false;
+      totpWrap.hidden = !state.totpRequired;
+    },
+    on_completed: (s) => {
+      state = nextLoginState(state, s);
+      status.textContent = "Already signed in on this request.";
+    },
+    on_expired: () => {
+      state = { ...state, phase: "expired" };
+      status.textContent = "This request expired. Start over with a fresh link.";
       status.className = "status err";
-      return;
-    }
-    transientFailures = 0;
-    if (!signal.aborted) setTimeout(() => void poll(), 3000);
-  };
-  void poll();
+    },
+    on_transient: () => {
+      status.textContent = "Connection hiccup — still waiting…";
+      status.className = "status muted";
+    },
+    on_terminal: (message) => {
+      status.textContent = message;
+      status.className = "status err";
+    },
+    is_cancelled: () => stopped || signal.aborted || !box.isConnected,
+    format_error: (err) => friendly(err),
+  }, signal);
+  // The finish button completes the flow; the poll stops on approve.
+  signal.addEventListener("abort", () => stop_poll(), { once: true });
 }
 
 export function friendly(err: unknown): string {

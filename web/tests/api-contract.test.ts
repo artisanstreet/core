@@ -13,11 +13,19 @@ function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
+/** Platform `HttpClient` passes `URL` + `Uint8Array` bodies to the fetch
+ * seam; normalize here so assertions stay on stable strings. */
+export function text_body(body: unknown): string {
+  if (typeof body === "string") return body;
+  if (body instanceof Uint8Array) return new TextDecoder().decode(body);
+  return "";
+}
+
 function stubApi(handler: (url: string, init: RequestInit) => Response | Promise<Response>) {
   const seen: Array<{ url: string; init: RequestInit }> = [];
   const fetchImpl = (async (url: string, init: RequestInit) => {
-    seen.push({ url, init });
-    return handler(url, init);
+    seen.push({ url: String(url), init });
+    return handler(String(url), init);
   }) as typeof fetch;
   return { api: new CoreApi("", { fetchImpl }), seen };
 }
@@ -81,7 +89,7 @@ describe("magic-link client", () => {
     expect(seen).toHaveLength(1);
     expect(seen[0]!.init.method).toBe("POST");
     expect(seen[0]!.url).toContain("/v1/auth/magic/consume");
-    const body = JSON.parse(seen[0]!.init.body as string) as Record<string, unknown>;
+    const body = JSON.parse(text_body(seen[0]!.init.body)) as Record<string, unknown>;
     expect(body.token).toBe("tok123");
   });
 
@@ -90,7 +98,7 @@ describe("magic-link client", () => {
       jsonResponse(200, { requestId: REQUEST_ID, status: "pending", totpRequired: false }),
     );
     await api.consumeMagicLink("tok123");
-    const body = JSON.parse(seen[0]!.init.body as string) as Record<string, unknown>;
+    const body = JSON.parse(text_body(seen[0]!.init.body)) as Record<string, unknown>;
     expect("requestSecret" in body).toBe(false);
   });
 
@@ -112,7 +120,7 @@ describe("magic-link client", () => {
       }),
     );
     await api.finalizeMagicLink(REQUEST_ID, "shh", { totpCode: "123456" });
-    const body = JSON.parse(seen[0]!.init.body as string) as Record<string, unknown>;
+    const body = JSON.parse(text_body(seen[0]!.init.body)) as Record<string, unknown>;
     expect(body).toEqual({ requestId: REQUEST_ID, requestSecret: "shh", totpCode: "123456" });
   });
 
@@ -125,7 +133,7 @@ describe("magic-link client", () => {
     await api.claimEnrollment("ABCDEFGH");
     await api.issueGrant({ audience: "ast-relay", scope: ["relay:connect"], targetMachineId: MACHINE_ID, cnf: { kty: "OKP", crv: "Ed25519", x: "x".repeat(43) } });
     for (const s of seen) {
-      const body = JSON.parse((s.init.body as string) || "{}") as Record<string, unknown>;
+      const body = JSON.parse(text_body(s.init.body) || "{}") as Record<string, unknown>;
       expect(body).not.toHaveProperty("accountId");
       expect(body).not.toHaveProperty("sub");
     }

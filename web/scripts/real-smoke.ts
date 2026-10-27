@@ -16,14 +16,13 @@ mkdirSync(shots, { recursive: true });
 const UI = "http://127.0.0.1:5173";
 const EMAIL = "cafe-smoke@example.com";
 
-async function main() {
-  // 1. Contract surface on the real service.
-  const version = await (await fetch(`${UI}/v1/version`)).json();
+async function main(): Promise<void> {
+  const version = (await (await fetch(`${UI}/v1/version`)).json()) as { api?: unknown };
   console.log("version:", JSON.stringify(version));
   if (version.api !== "1") throw new Error("bad version");
-  const meAnon = await fetch(`${UI}/v1/me`);
-  console.log("me-anon:", meAnon.status);
-  if (meAnon.status !== 401) throw new Error("me must 401 without a session");
+  const me_anon = await fetch(`${UI}/v1/me`);
+  console.log("me-anon:", me_anon.status);
+  if (me_anon.status !== 401) throw new Error("me must 401 without a session");
   const strict = await fetch(`${UI}/v1/auth/magic/request`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -32,7 +31,6 @@ async function main() {
   console.log("strict-unknown-field:", strict.status);
   if (strict.status !== 400) throw new Error("strict requests must 400");
 
-  // 2. Real mailed link through the browser.
   const browser = await chromium.launch({ executablePath: "/home/sander/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome" });
   const ctx = await browser.newContext();
   const tab1 = await ctx.newPage();
@@ -41,7 +39,6 @@ async function main() {
   await tab1.click("form button[type=submit]");
   await tab1.waitForSelector("#signin-progress:not([hidden])", { timeout: 15000 });
 
-  // The log mailer prints the confirm URL to Core's stdout.
   const log = readFileSync("/tmp/opencode/core-dev.log", "utf8");
   const urls = [...log.matchAll(/https?:\/\/[^\s"']*\/v1\/auth\/magic\/confirm\?token=[A-Za-z0-9_-]+/g)].map((m) => m[0]);
   if (urls.length === 0) throw new Error("no mailed link in Core log");
@@ -50,10 +47,6 @@ async function main() {
   console.log("mailed-link:", mailed.replace(/token=.*/, "token=<redacted>").replace("http://127.0.0.1:5173", "<ui>"));
   if (!mailed.startsWith("http://127.0.0.1:5173")) throw new Error("mailed link must point at the UI origin under test");
 
-  // Email opens in a NEW tab: the real confirm URL (Core 302s to the SPA).
-  // The dev DB flakes intermittently (reported); approve/finalize retry
-  // bounded times — consume only marks approval, finalize success is
-  // verified by session state, not by the click response.
   const tab2 = await ctx.newPage();
   const resp = await tab2.goto(mailed);
   console.log("confirm-status:", resp?.status(), "landed:", tab2.url().replace(/token=.*/, "token=<redacted>"));
@@ -82,8 +75,6 @@ async function main() {
     const hash = await tab1.evaluate(() => location.hash);
     let done = "";
     if (!hash.startsWith("#/account")) {
-      // Finalize may have succeeded server-side despite a flaky response:
-      // session state is the truth, not the click response.
       const status = tab1.locator("#signin-progress .status").last();
       if (await status.count()) done = (await status.textContent()) ?? "";
       console.log("tab1 hash:", hash, "| done:", JSON.stringify(done.slice(0, 120)));
@@ -102,7 +93,6 @@ async function main() {
   if (!who || !who.includes(EMAIL)) throw new Error("signed-in account mismatch");
   await tab1.screenshot({ path: join(shots, "real-10-account.png"), fullPage: true });
 
-  // 3. Sessions + sign-out against the real service.
   await tab1.goto(`${UI}/#/sessions`);
   await tab1.waitForSelector("text=Sessions", { timeout: 15000 });
   await tab1.screenshot({ path: join(shots, "real-11-sessions.png") });
