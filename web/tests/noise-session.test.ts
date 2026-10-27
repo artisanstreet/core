@@ -9,7 +9,7 @@ import { importJWK, SignJWT, jwtVerify } from "jose";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { randomBytes } from "@noble/hashes/utils.js";
 import { SecureChannel } from "../vendor/relay/client.ts";
-import { b64uDecode, b64uEncode } from "../vendor/relay/jwt.ts";
+import { b64uDecode, b64uEncode } from "../vendor/relay/b64u.ts";
 import { staticKeypairFromSecret } from "../vendor/relay/channel.ts";
 import type { VerifyChannelJwt } from "../vendor/relay/channel.ts";
 import {

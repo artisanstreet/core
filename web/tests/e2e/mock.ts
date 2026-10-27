@@ -13,7 +13,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { importJWK, SignJWT, jwtVerify } from "jose";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { NoiseChannel, staticKeypairFromSecret, type VerifyChannelJwt } from "../../vendor/relay/channel.ts";
-import { b64uDecode, b64uEncode } from "../../vendor/relay/jwt.ts";
+import { b64uDecode, b64uEncode } from "../../vendor/relay/b64u.ts";
 import { popVerify } from "../../vendor/relay/e2e.ts";
 import { ChunkReassembly, chunkBytes, SINGLE_FRAME_BYTES } from "../../src/forge.ts";
 

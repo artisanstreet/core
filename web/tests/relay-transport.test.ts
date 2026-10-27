@@ -9,7 +9,7 @@ import { importJWK, SignJWT } from "jose";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { randomBytes } from "@noble/hashes/utils.js";
 import { NoiseChannel, staticKeypairFromSecret, type VerifyChannelJwt } from "../vendor/relay/channel.ts";
-import { b64uDecode, b64uEncode } from "../vendor/relay/jwt.ts";
+import { b64uDecode, b64uEncode } from "../vendor/relay/b64u.ts";
 import { ChunkReassembly, SINGLE_FRAME_BYTES, chunkBytes } from "../src/forge.ts";
 import { CoreApi } from "../src/api.ts";
 import {
@@ -270,7 +270,8 @@ function stubCore(coreSk: Uint8Array, sub: string, mid: string): CoreApi {
     if (u.pathname === "/v1/grants/issue") {
       // Mint per request against the caller-supplied cnf, like real Core:
       // the session always proves possession of the exact granted key.
-      const body = JSON.parse((init.body as string) ?? "{}") as { cnf?: { x?: unknown } };
+      const raw_body = init.body;
+      const body = JSON.parse((typeof raw_body === "string" ? raw_body : new TextDecoder().decode(raw_body as Uint8Array)) ?? "{}") as { cnf?: { x?: unknown } };
       const x = body.cnf?.x;
       if (typeof x !== "string") throw new Error("mock: cnf required");
       const jwt = await mintJwt(b64uDecode(x), coreSk, sub, mid);

@@ -12,8 +12,14 @@
 // those fields land in the wire doc, a `StreamFeed` implementing the same
 // `LiveFeed` interface replaces the polling feed without touching pages.
 // This module documents the seam; it does not pretend the stream exists.
+//
+// Effect underneath: polling uses `Schedule.spaced` cadence + `Fiber`
+// scoped cancellation (no raw `setTimeout` poll loops). Pages see only
+// the synchronous `LiveFeed` (`start`/`stop`).
 
-import type { LiveEnvelope } from "./forge.ts";
+import { Effect, Fiber } from "effect";
+import { run_effect } from "./core/run-promise.ts";
+import type { LiveEnvelope } from "./forge/stream-frames.ts";
 
 export interface LiveFeed {
   readonly transport: "polling" | "stream";
@@ -35,43 +41,48 @@ export interface PollingFeedOptions<T extends { position?: number }> {
 }
 
 export function createPollingFeed<T extends { position?: number }>(opts: PollingFeedOptions<T>): LiveFeed {
-  let timer: ReturnType<typeof setTimeout> | null = null;
+  let fiber: Fiber.RuntimeFiber<void> | null = null;
   let stopped = false;
-  let inFlight = false;
 
-  const cadence = () => (typeof document !== "undefined" && document.visibilityState === "hidden" ? (opts.hiddenMs ?? 20000) : (opts.visibleMs ?? 4000));
+  const cadence_ms = (): number =>
+    typeof document !== "undefined" && document.visibilityState === "hidden" ? (opts.hiddenMs ?? 20000) : (opts.visibleMs ?? 4000);
 
-  const tick = async (): Promise<void> => {
-    timer = null;
+  const poll_once: Effect.Effect<void> = Effect.gen(function* () {
     if (stopped) return;
-    if (!inFlight) {
-      inFlight = true;
-      try {
-        const items = await opts.threadPoll(opts.getAfter());
-        if (!stopped && items.length > 0) opts.onItems(items);
-      } catch {
-        // Transient (grant mid-refresh, offline Forge): keep the last
-        // rendered state and try again next cadence. The page surfaces
-        // hard failures from its own explicit loads, not from the feed.
-      } finally {
-        inFlight = false;
-      }
+    // Transient (grant mid-refresh, offline Forge): keep the last
+    // rendered state and try again next cadence. The page surfaces
+    // hard failures from its own explicit loads, not from the feed.
+    const items = yield* Effect.orElseSucceed(
+      Effect.promise(() => opts.threadPoll(opts.getAfter())),
+      () => [] as Array<T>,
+    );
+    if (!stopped && items.length > 0) {
+      yield* Effect.sync(() => opts.onItems(items));
     }
-    if (!stopped) timer = setTimeout(() => void tick(), cadence());
-  };
+  });
+
+  // Dynamic cadence: re-read visibility each round via Schedule driven
+  // by Effect.sleep (no raw setTimeout in this module).
+  const loop: Effect.Effect<void> = Effect.forever(
+    Effect.gen(function* () {
+      yield* poll_once;
+      yield* Effect.sleep(`${cadence_ms()} millis`);
+    }),
+  );
 
   return {
     transport: "polling",
     start() {
-      if (!stopped && timer !== null) return;
+      if (!stopped && fiber !== null) return;
       stopped = false;
-      void tick();
+      fiber = Effect.runFork(loop.pipe(Effect.catchAll(() => Effect.void)));
     },
     stop() {
       stopped = true;
-      if (timer !== null) {
-        clearTimeout(timer);
-        timer = null;
+      const f = fiber;
+      fiber = null;
+      if (f !== null) {
+        void run_effect(Fiber.interrupt(f)).catch(() => undefined);
       }
     },
   };
@@ -120,7 +131,7 @@ export function createStreamFeed(opts: StreamFeedOptions): LiveFeed {
   let stream: StreamHandle | null = null;
   let stopped = false;
   let resets = 0;
-  let resetWindowStart = 0;
+  let reset_window_start = 0;
 
   const lost = (message: string) => {
     if (stopped) return;
@@ -143,8 +154,8 @@ export function createStreamFeed(opts: StreamFeedOptions): LiveFeed {
         if (stopped || stream !== handle) return;
         opts.onResetNotice?.();
         const now = Date.now();
-        if (now - resetWindowStart > 30_000) {
-          resetWindowStart = now;
+        if (now - reset_window_start > 30_000) {
+          reset_window_start = now;
           resets = 0;
         }
         resets++;
@@ -193,7 +204,7 @@ export function createStreamFeed(opts: StreamFeedOptions): LiveFeed {
     start() {
       stopped = false;
       resets = 0;
-      resetWindowStart = 0;
+      reset_window_start = 0;
       void subscribe();
     },
     stop,
