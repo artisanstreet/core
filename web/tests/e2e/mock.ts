@@ -393,6 +393,23 @@ export async function startMock(distDir: string, port = 0): Promise<MockHandles>
     ["thread_short", [...(shortTranscript.items as Array<Record<string, unknown>>)].map((i) => ({ ...i }))],
     ["thread_long", [...(longTranscript.items as Array<Record<string, unknown>>)].map((i) => ({ ...i }))],
   ]);
+  // Valid 1x1 WebP fixture (generated with ImageMagick, not hand bytes):
+  // the transcript's Image item references it by sha256, and GET /blobs/<hash>
+  // serves the exact bytes as a $bytes envelope.
+  const webpBytes = await readFile(new URL("./fixtures/dot-1x1.webp", import.meta.url));
+  const webpHash = createHash("sha256").update(webpBytes).digest("hex");
+  threadItems.get("thread_short")?.push({
+    id: "item_img1",
+    thread_id: "thread_short",
+    position: 3,
+    seq: 4,
+    run_id: null,
+    parent_id: null,
+    status: "done",
+    created_at: "2026-10-26T20:00:00.000Z",
+    updated_at: "2026-10-26T20:00:00.000Z",
+    kind: { type: "image", blob: webpHash, caption: "Mock: 1x1 test image" },
+  });
   const itemEventSeq = new Map<string, number>();
   const nextEventSeq = (itemId: string): number => {
     const s = ++roomEventSeq;
@@ -461,6 +478,16 @@ export async function startMock(distDir: string, port = 0): Promise<MockHandles>
     }
     if (method === "POST" && /\/threads\/[^/]+\/(cancel|continue)$/.exec(path)) return { id, status: 204, body: null };
     if (method === "POST" && /^\/items\/[^/]+\/answer$/.exec(path)) return { id, status: 204, body: null };
+    const mBlob = /^\/blobs\/([0-9a-f]{64})$/.exec(path);
+    if (method === "GET" && mBlob) {
+      if (mBlob[1] !== webpHash) return { id, status: 404, body: { error: { code: "not_found", message: "no such blob" } } };
+      return {
+        id,
+        status: 200,
+        body: { $bytes: { content_type: "image/webp", b64u: Buffer.from(webpBytes).toString("base64url") } },
+        content_type: "image/webp",
+      };
+    }
     const mSub = /^\/events\?/.exec(path);
     if (method === "SUBSCRIBE" && mSub) {
       const u = new URL(path, "http://mock");

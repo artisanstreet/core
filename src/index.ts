@@ -2,6 +2,7 @@ import { Effect, Layer } from "effect";
 import postgres from "postgres";
 import { createApp, type RequestContext } from "./http.js";
 import type { Db, R2Like } from "./db.js";
+import { prepareDb, type UnsafeLike } from "./db/prepared.js";
 
 // Cloudflare Worker entry. Local dev (vite dev / wrangler dev) reads
 // .dev.vars; production uses Hyperdrive + R2 bindings + secrets.
@@ -28,6 +29,7 @@ function stringVars(env: WorkerEnv): Record<string, string | undefined> {
     MAIL_PROVIDER: pick(env.MAIL_PROVIDER),
     MAIL_FROM: pick(env.MAIL_FROM),
     CORE_SPA_APPROVE_PATH: pick(env.CORE_SPA_APPROVE_PATH),
+    CORE_RELAY_ORIGIN: pick(env.CORE_RELAY_ORIGIN),
   };
 }
 
@@ -67,7 +69,7 @@ function openDb(env: WorkerEnv) {
 
 function getContext(env: WorkerEnv): { ctx: RequestContext; done: () => Promise<unknown> } {
   const client = openDb(env);
-  const db = client as unknown as Db;
+  const db = prepareDb(client);
   const bucket = env.CONFIG_BUCKET;
   const ctx: RequestContext = {
     db,
@@ -78,7 +80,7 @@ function getContext(env: WorkerEnv): { ctx: RequestContext; done: () => Promise<
     assets: env.ASSETS,
     txRunner: ((fn: (db: Db) => Promise<unknown>) =>
       (client as unknown as { begin: (f: (tx: unknown) => Promise<unknown>) => Promise<unknown> }).begin((tx) =>
-        fn(tx as unknown as Db),
+        fn(prepareDb(tx as unknown as UnsafeLike)),
       )) as RequestContext["txRunner"],
   };
   return { ctx, done: () => client.end() };

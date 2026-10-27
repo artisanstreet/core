@@ -13,6 +13,12 @@
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",
+      // Server-side caching MUST be disabled on this Hyperdrive config
+      // (wrangler hyperdrive create/update ... --caching-disabled; verify
+      // with `wrangler hyperdrive get <id>`). There is no caching flag in
+      // this file — it lives on the Hyperdrive config itself. See
+      // docs/deployment.md "One-time provisioning". Local dev ignores this
+      // binding and uses localConnectionString instead (no cache there).
       "id": "replace-with-hyperdrive-id",
       "localConnectionString": "postgres://core:core@127.0.0.1:55432/core"
     }

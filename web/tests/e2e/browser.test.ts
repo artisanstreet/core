@@ -187,6 +187,12 @@ describe("rendered browser flows (mock backend, labeled)", () => {
     await tab1.waitForSelector("text=Waiting on your decision.");
     await tab1.click("text=Allow once");
     await tab1.waitForSelector("text=Answered: allow_once.");
+    // Image item: blob: URL renders under the page CSP (img-src allows blob:).
+    await tab1.click("text=Load image");
+    const img = tab1.locator(".thread-item img");
+    await expect.poll(async () => img.count()).toBe(1);
+    await expect.poll(async () => tab1.evaluate((el) => (el as HTMLImageElement | null)?.naturalWidth ?? 0, await img.elementHandle())).toBe(1);
+    expect(await img.getAttribute("src")).toMatch(/^blob:/);
     await tab1.screenshot({ path: join(shots, "07-thread-short.png"), fullPage: true });
     await ctx.close();
   }, 180_000);

@@ -694,9 +694,60 @@ export function createApp(ctx: RequestContext) {
 
   // -- portal SPA hosting (optional) -------------------------------------------------
   // Serves the portal build (web/dist) when the ASSETS binding is present.
-  // API, UI, and metadata paths never fall through. Unknown app paths serve
-  // the SPA shell (index.html) with no-store + strict CSP so routing stays
-  // client-side; hashed static assets keep their upstream cache headers.
+  // API, UI, and metadata paths never fall through. The SPA shell
+  // ("/" and unknown app paths) serves index.html with no-store + strict
+  // CSP so routing stays client-side; hashed static assets keep their
+  // upstream cache headers.
+  //
+  // Relay cross-origin access: the SPA opens WebSockets and fetches
+  // presence from the Relay service, which lives on its own origin.
+  // CORE_RELAY_ORIGIN allowlists exactly one Relay origin
+  // (e.g. "https://relay.artisanstreet.dev"): no wildcards, no credentials.
+  // It is emitted as both the https: and wss: forms (Relay fetch uses
+  // https:, the socket uses wss:). Unset/invalid => connect-src 'self'
+  // only (fail closed, documented in docs/browser.md).
+  // img-src carries blob: alongside 'self' data: because transcript
+  // images render from same-origin-created blob: URLs; object URLs are
+  // revoked by the UI on route disposal (never logged, never persisted).
+  // script-src carries 'wasm-unsafe-eval' (and NOT 'unsafe-eval'): the
+  // bundled sodium-javascript dependency compiles WebAssembly at startup;
+  // without it Chromium blocks startup with a CompileError and the SPA
+  // never renders. Scope stays narrow: no 'unsafe-eval', no 'unsafe-inline'
+  // in script-src.
+  // Computed per request: env vars may change between requests (tests
+  // set them after startup; production reads the deployed vars each time).
+  const shellHeadersFor = (): Record<string, string> => {
+    const raw = (ctx.env.vars.CORE_RELAY_ORIGIN ?? "").trim().replace(/\/+$/, "");
+    let allowlist = "";
+    if (raw && !raw.includes("*")) {
+      try {
+        const u = new URL(raw);
+        if (
+          (u.protocol === "https:" || u.protocol === "http:") &&
+          !u.username && !u.password &&
+          (u.pathname === "/" || u.pathname === "") &&
+          !u.search && !u.hash &&
+          u.hostname
+        ) {
+          const host = u.hostname.toLowerCase();
+          const defPort = u.protocol === "https:" ? "443" : "80";
+          const port = u.port && u.port !== defPort ? `:${u.port}` : "";
+          const secure = u.protocol === "https:";
+          allowlist = ` ${secure ? "https" : "http"}://${host}${port} ${secure ? "wss" : "ws"}://${host}${port}`;
+        }
+      } catch {
+        // Invalid origin: fall through with no allowlist entries.
+      }
+    }
+    return {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Content-Security-Policy":
+        `default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:;` +
+        ` connect-src 'self'${allowlist}; frame-ancestors 'none'; base-uri 'none'`,
+      "Referrer-Policy": "no-referrer",
+    };
+  };
   app.get("*", async (c) => {
     const h = c as unknown as H;
     const url = new URL(h.req.url);
@@ -707,6 +758,13 @@ export function createApp(ctx: RequestContext) {
     if (!ctx.assets) {
       return h.json({ error: { code: "not_found", message: "not found", requestId: h.get("requestId") } }, 404);
     }
+    if (p === "/" || p === "/index.html") {
+      const shell = await ctx.assets.fetch(new Request(new URL("/index.html", url), { headers: { accept: "text/html" } }));
+      if (shell.status === 200) {
+        return new Response(await shell.arrayBuffer(), { status: 200, headers: shellHeadersFor() });
+      }
+      return h.json({ error: { code: "not_found", message: "not found", requestId: h.get("requestId") } }, 404);
+    }
     const direct = await ctx.assets.fetch(c.req.raw);
     if (direct.status !== 404) return direct;
     const shell = await ctx.assets.fetch(new Request(new URL("/index.html", url), { headers: { accept: "text/html" } }));
@@ -714,13 +772,7 @@ export function createApp(ctx: RequestContext) {
       const body = await shell.arrayBuffer();
       return new Response(body, {
         status: 200,
-        headers: {
-          "Content-Type": "text/html; charset=utf-8",
-          "Cache-Control": "no-store",
-          "Content-Security-Policy":
-            "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'",
-          "Referrer-Policy": "no-referrer",
-        },
+        headers: shellHeadersFor(),
       });
     }
     return h.json({ error: { code: "not_found", message: "not found", requestId: h.get("requestId") } }, 404);

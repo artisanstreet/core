@@ -267,22 +267,49 @@ async function openThread(ctl: ConnCtl, detail: HTMLElement, thread: ForgeThread
   const itemsBox = el("div", {});
   let lastPos = 0;
   let lastEventSeq: number | null = null;
+  // Object URLs created for transcript content (blob: images, downloads).
+  // Blob bytes would otherwise be retained for the tab lifetime; every URL
+  // below is revoked on replace, on load error, and on route disposal.
+  const objectUrls = new Set<string>();
+  const tracker: ObjectUrlTracker = {
+    track: (u: string): void => {
+      objectUrls.add(u);
+    },
+    release: (u: string | null): void => {
+      if (u && objectUrls.delete(u)) {
+        try {
+          URL.revokeObjectURL(u);
+        } catch {
+          // Already revoked or never created: nothing retained either way.
+        }
+      }
+    },
+  };
+  const releaseSubtreeUrls = (root: Element): void => {
+    for (const img of root.querySelectorAll('img[src^="blob:"],a[href^="blob:"]')) {
+      const src = img.getAttribute("src") ?? img.getAttribute("href");
+      if (src) tracker.release(src);
+    }
+  };
   const renderNew = (items: ForgeItem[], session: ForgeSession) => {
     const fresh = items.filter((i) => (i.position ?? 0) > lastPos).sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
     for (const item of fresh) {
       lastPos = Math.max(lastPos, item.position ?? lastPos);
-      const node = renderItem(session, thread.id, item);
+      const node = renderItem(session, thread.id, item, tracker);
       node.id = `item-${item.id}`;
       const prev = itemsBox.querySelector(`#${CSS.escape(node.id)}`);
-      if (prev) prev.replaceWith(node);
-      else itemsBox.append(node);
+      if (prev) {
+        releaseSubtreeUrls(prev);
+        prev.replaceWith(node);
+      } else itemsBox.append(node);
     }
   };
   const renderReplace = (item: ForgeItem, session: ForgeSession) => {
-    const node = renderItem(session, thread.id, item);
+    const node = renderItem(session, thread.id, item, tracker);
     node.id = `item-${item.id}`;
     const prev = itemsBox.querySelector(`#${CSS.escape(node.id)}`);
     if (prev) {
+      releaseSubtreeUrls(prev);
       prev.replaceWith(node);
       lastPos = Math.max(lastPos, item.position ?? lastPos);
     } else {
@@ -449,7 +476,15 @@ async function openThread(ctl: ConnCtl, detail: HTMLElement, thread: ForgeThread
   }, 10_000);
 }
 
-function renderItem(session: ForgeSession, threadId: string, item: ForgeItem): HTMLElement {
+/** Tracks blob: object URLs created for one open thread so they can be
+ * revoked on replace, on load error, and on route disposal instead of
+ * pinning transcript bytes for the tab lifetime. */
+export interface ObjectUrlTracker {
+  track(url: string): void;
+  release(url: string | null): void;
+}
+
+function renderItem(session: ForgeSession, threadId: string, item: ForgeItem, onObjectUrl: ObjectUrlTracker): HTMLElement {
   const { kind, text } = itemSummary(item);
   const wrap = el("div", { class: "thread-item" });
   const head = el("div", { class: "kind" }, `${kind} · #${item.position ?? "?"} · `, idSpan(item.id));
@@ -457,9 +492,9 @@ function renderItem(session: ForgeSession, threadId: string, item: ForgeItem): H
   // Full contract-faithful body: every message part in defined order.
   // Over the render cap the rest hides behind an explicit Show-rest
   // control (in-DOM) or a download — never a silent cut.
-  wrap.append(transcriptBody(session, threadId, item));
+  wrap.append(transcriptBody(session, threadId, item, onObjectUrl));
   void text;
-  if (kind === "image") wrap.append(imageLoader(session, item.kind));
+  if (kind === "image") wrap.append(imageLoader(session, item.kind, onObjectUrl));
   const approval = pendingApproval(item.kind);
   if (approval) wrap.append(approvalBox(session, item.id, approval));
   const questions = pendingQuestions(item.kind);
@@ -469,7 +504,12 @@ function renderItem(session: ForgeSession, threadId: string, item: ForgeItem): H
 }
 
 /** Item body: full contract text with explicit expansion, never a silent cut. */
-function transcriptBody(session: ForgeSession, threadId: string, item: ForgeItem): HTMLElement {
+function transcriptBody(
+  session: ForgeSession,
+  threadId: string,
+  item: ForgeItem,
+  onObjectUrl: ObjectUrlTracker,
+): HTMLElement {
   void threadId;
   const wrap = el("div", {});
   const t = transcriptText(item.kind);
@@ -484,15 +524,17 @@ function transcriptBody(session: ForgeSession, threadId: string, item: ForgeItem
         rest.hidden = false;
         show.remove();
       });
+      let dlUrl: string | null = null;
       const dl = el("a", { href: "#", download: `thread-item-${item.id}.txt` }, "Download full text");
       dl.addEventListener("click", (e) => {
         e.preventDefault();
-        const url = URL.createObjectURL(new Blob([t.text], { type: "text/plain;charset=utf-8" }));
-        const a = el("a", { href: url, download: `thread-item-${item.id}.txt` }) as unknown as HTMLAnchorElement;
+        onObjectUrl.release(dlUrl);
+        dlUrl = URL.createObjectURL(new Blob([t.text], { type: "text/plain;charset=utf-8" }));
+        onObjectUrl.track(dlUrl);
+        const a = el("a", { href: dlUrl, download: `thread-item-${item.id}.txt` }) as unknown as HTMLAnchorElement;
         document.body.append(a);
         a.click();
         a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 10_000);
       });
       wrap.append(shown, el("p", { class: "small" }, show, " · ", dl));
       wrap.append(rest);
@@ -543,7 +585,7 @@ function storedLoader(session: ForgeSession, ref: StoredRef): HTMLElement {
 }
 
 /** `Image` items carry a blob hash; bytes load on explicit press ($bytes). */
-function imageLoader(session: ForgeSession, kind: unknown): HTMLElement {
+function imageLoader(session: ForgeSession, kind: unknown, onObjectUrl: ObjectUrlTracker): HTMLElement {
   const wrap = el("div", {});
   const k = kind as Record<string, unknown>;
   const hash = typeof k.blob === "string" ? k.blob : null;
@@ -554,6 +596,7 @@ function imageLoader(session: ForgeSession, kind: unknown): HTMLElement {
   }
   const btn = el("button", { class: "secondary", type: "button" }, "Load image");
   const msg = el("p", { class: "status small", role: "status" });
+  let currentUrl: string | null = null;
   btn.addEventListener("click", () => {
     void (async () => {
       try {
@@ -562,13 +605,17 @@ function imageLoader(session: ForgeSession, kind: unknown): HTMLElement {
         const env = asTunnelBytes(ok.body);
         if (!env) throw new Error("Forge did not return image bytes.");
         const bytes = base64urlDecode(env.b64u);
-        const url = URL.createObjectURL(new Blob([bytes as unknown as BlobPart], { type: env.content_type }));
-        const img = el("img", { src: url, alt: "Forge image" }) as HTMLImageElement;
+        onObjectUrl.release(currentUrl);
+        currentUrl = URL.createObjectURL(new Blob([bytes as unknown as BlobPart], { type: env.content_type }));
+        onObjectUrl.track(currentUrl);
+        const img = el("img", { src: currentUrl, alt: "Forge image" }) as HTMLImageElement;
         img.style.maxWidth = "100%";
         wrap.append(img);
         btn.remove();
         msg.textContent = "";
       } catch (err) {
+        onObjectUrl.release(currentUrl);
+        currentUrl = null;
         msg.textContent = friendly(err);
       }
     })();

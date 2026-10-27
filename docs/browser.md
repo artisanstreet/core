@@ -94,21 +94,38 @@ body ceiling), per-file SHA-256 via SubtleCrypto, strict re-validation
 before publish. `source: "bundle"` default is provisional until
 Core/Rust confirm the embedded-only source value.
 
-## Needed wiring (for root / Emily — not edited here except noted)
+## Needed wiring (final configuration)
 
-1. **DONE (mine, core/src/index.ts):** forward `CORE_SPA_APPROVE_PATH`
+1. **DONE (core/src/index.ts):** forward `CORE_SPA_APPROVE_PATH`
    through `stringVars` (confirm endpoint 302s to the SPA), and per-request
-   `postgres()` clients (max 5, fetch_types false, prepare true) closed via
-   waitUntil — the global cache caused alternating query failures. Typecheck
-   clean. .env (gitignored, dev-local): quoted
+   `postgres()` clients (max 5, fetch_types false, prepare true) via the
+   `prepareDb` adapter (`{ prepare: true, simple: false }` on every
+   `unsafe()`; txRunner wraps the tx client the same way) closed via
+   waitUntil — the global cache caused alternating query failures.
+   Hyperdrive caching stays DISABLED (`--caching-disabled`; verified via
+   `wrangler hyperdrive get`): authority reads (sessions/keys/vault/
+   revocation) must never serve stale cached rows. Typecheck clean.
+   `.env` (gitignored, dev-local): quoted
    `CORE_SPA_APPROVE_PATH="/#/approve"` (unquoted `#` gets truncated by
    env parsing — keep it quoted or move the `#` into code).
-2. **CSP (Emily, core/src/http.ts):** the portal shell CSP
-   (`connect-src 'self'`) will block Relay WSS. Add the Relay origin
-   (e.g. via `CORE_RELAY_ORIGIN`) when Relay deploys.
-3. **Relay deployment** (Celina): presence + WSS route for real Forge
-   reachability. Forge tunnel serving incl. production grant URL unified
-   path (Vilde fixing).
+2. **DONE (core/src/http.ts):** portal shell CSP allowlists the exact Relay
+   origin via `CORE_RELAY_ORIGIN` (single `https://host[:port]`, no
+   wildcards/credentials; emitted as both `https:`+`wss:` forms, `http:`+
+   `ws:` for loopback harnesses; unset/invalid fails closed to
+   `connect-src 'self'`). `script-src 'self' 'wasm-unsafe-eval'` (NO bare
+   `'unsafe-eval'`): the bundled sodium-javascript compiles WebAssembly at
+   startup — without it Chromium throws CompileError and the SPA never
+   renders. `img-src 'self' data: blob:` covers transcript image blob: URLs
+   (revoked on replace/error/route disposal). Dev parity via
+   `VITE_DEV_CSP_RELAY_ORIGIN` in `web/vite.config.ts` (same shape).
+3. **DONE (relay/src/index.ts + src/cors.ts):** `RELAY_PORTAL_ORIGIN`
+   (exact portal origin) gates cross-origin browser access. Presence/health
+   answer CORS preflights and reflect the origin (`Access-Control-Allow-
+   Origin` exact echo + `Vary: Origin`; allow-list `GET` + `Authorization`);
+   disallowed origins get no ACAO (browser blocks). WS upgrades with a
+   mismatched `Origin` are refused pre-upgrade (403); absent `Origin`
+   (native clients, curl) proceeds to grant+PoP. No wildcards, no
+   `Access-Control-Allow-Credentials` ever (Bearer grants, never cookies).
 4. No new service endpoints were needed for any UI above.
 
 ## Deployment notes (portal)
@@ -145,18 +162,31 @@ Core/Rust confirm the embedded-only source value.
   mailed link via log mailer): version/me-401/strict-400, confirm 302 →
   SPA approve → cross-tab approve → finalize → account → sessions →
   sign-out. PASS. (One dev-DB row: `cafe-smoke@example.com`.)
+- Real production cross-origin browser smoke
+  (`relay/integration/browser-smoke.test.ts`, real Chromium + real Core
+  CSP/workerd Relay + production Rust Forge): mailed-link sign-in on the
+  harness account, machine discovery, cross-origin presence WITH CORS
+  preflight (allowed in), evil-origin fetch + WebSocket refused, Noise E2E
+  `/state` read, Node SUBSCRIBE/`$stream` start + `$event` + UNSUBSCRIBE.
+  CSP asserted per actual scheme pair (`http`+`ws` loopback,
+  `https`+`wss` prod) with `wasm-unsafe-eval` and no bare `unsafe-eval`.
+- Relay units: 15 files, 117 pass + 1 artifact-absent sentinel skip
+  (artifact-present path runs). Relay CORS unit/worker tests: 10 pass.
 - Real production Core+Relay+Forge smoke (root-run): GREEN, incl. exact
   2 MiB roundtrip/concurrent stream/revocation
   (`/tmp/opencode/root-forge-smoke5.log`).
 
 ## Genuine gaps (not claimed)
 
-- Live Forge data (threads/transcript/send over a real Relay+Forge) is
-  verified against the mock + production harness runs by root; this UI has
-  not yet read a production Forge thread (needs deployed Relay + Vilde's
-  tunnel endpoint).
+- Live Forge thread/send UI against a DEPLOYED Relay+Forge (production
+  origins, TLS): proven on loopback (workerd + Rust binary) here and in
+  root-run harnesses; no deployed-production Forge UI evidence claimed.
 - Stream Reset / 64 MiB-aggregate paths are unit-tested, not live-fired.
-- Image blobs render via a manual loader (tested shape-only); no live blob
-  pixels verified.
 - Mobile is verified at 390px for sign-in; full-page mobile passes have
   screenshots pending re-capture after the latest copy changes.
+- Relay `npm test` (full include) also runs Vilde-owned integration
+  (`forge-smoke` native-chunk fix in progress, `forge-daemon`) plus the
+  `smoke` stand-in harness: those are NOT green here and are NOT hidden —
+  tracked separately; this repo's authored integration (`browser-smoke` +
+  `cors`) is green. Hyperdrive caching-disabled is a genuine external
+  provisioning prerequisite (not verified without production creds).

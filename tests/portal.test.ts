@@ -69,6 +69,9 @@ describe("portal asset hosting", () => {
     expect(shell.status).toBe(200);
     expect(shell.text).toBe(INDEX);
     expect(shell.headers.get("content-security-policy")).toContain("script-src 'self'");
+    expect(shell.headers.get("content-security-policy")).toContain("'wasm-unsafe-eval'");
+    // Narrow scope: Wasm compilation allowed, string-eval stays blocked.
+    expect(shell.headers.get("content-security-policy")).not.toMatch(/'unsafe-eval'(?!.*wasm)/);
     expect(shell.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
     expect(shell.headers.get("cache-control")).toContain("no-store");
 
