@@ -35,8 +35,8 @@ const setup_effect = (api: CoreApi, conn: HTMLElement, status: HTMLElement, view
     const me = yield* Effect.tryPromise({ try: () => api.me(), catch: (e) => e });
     yield* Effect.sync(() => {
       const targets: ForgeTarget[] = me.machines
-        .filter((m) => !m.revokedAt)
-        .map((m) => ({ id: m.id, label: m.label || "Forge", cnf_x: m.publicKey.x }));
+        .filter((m) => !m.revoked_at)
+        .map((m) => ({ id: m.id, label: m.label || "Forge", cnf_x: m.public_key.x }));
       clear(conn);
       conn.append(el("h2", {}, "Reach a Forge"));
       if (targets.length === 0) {
@@ -83,7 +83,7 @@ const setup_effect = (api: CoreApi, conn: HTMLElement, status: HTMLElement, view
             catch: (e) => e,
           });
           const { http } = relay_defaults();
-          const p: Presence = yield* Effect.tryPromise({ try: () => fetch_presence(http, me.accountId, t.id, grant.token), catch: (e) => e });
+          const p: Presence = yield* Effect.tryPromise({ try: () => fetch_presence(http, me.account_id, t.id, grant.token), catch: (e) => e });
           yield* Effect.sync(() => {
             transport.textContent = p.forge_online
               ? `Forge is online (${p.clients} browser${p.clients === 1 ? "" : "s"} connected).`
@@ -118,7 +118,7 @@ const setup_effect = (api: CoreApi, conn: HTMLElement, status: HTMLElement, view
               core: api,
               relay_ws_url: ws,
               relay_http_url: http,
-              account_id: me.accountId,
+              account_id: me.account_id,
               machine_id: t.id,
               forge_cnf_x: t.cnf_x,
               on_event: (ev) => {

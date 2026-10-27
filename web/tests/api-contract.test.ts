@@ -47,12 +47,12 @@ describe("strict requests", () => {
 
   it("decodes responses forward-compatibly (unknown fields ignored)", () => {
     const decoded = decode_lenient(C.MagicRequestResp, {
-      requestId: REQUEST_ID,
-      requestSecret: "s",
-      expiresAt: "2026-10-26T20:00:00.000Z",
+      request_id: REQUEST_ID,
+      request_secret: "s",
+      expires_at: "2026-10-26T20:00:00.000Z",
       future_field: "ignored",
     });
-    expect(decoded.requestId).toBe(REQUEST_ID);
+    expect(decoded.request_id).toBe(REQUEST_ID);
   });
 
   it("rejects unknown request fields on decode too", () => {
@@ -83,7 +83,7 @@ describe("strict requests", () => {
 describe("magic-link client", () => {
   it("consume always uses POST (link GETs never consume)", async () => {
     const { api, seen } = stub_api(() =>
-      json_response(200, { requestId: REQUEST_ID, status: "email_approved", totpRequired: false }),
+      json_response(200, { request_id: REQUEST_ID, status: "email_approved", totp_required: false }),
     );
     await api.consume_magic_link("tok123");
     expect(seen).toHaveLength(1);
@@ -95,7 +95,7 @@ describe("magic-link client", () => {
 
   it("consume works without a request secret (approving browser may differ)", async () => {
     const { api, seen } = stub_api(() =>
-      json_response(200, { requestId: REQUEST_ID, status: "pending", totpRequired: false }),
+      json_response(200, { request_id: REQUEST_ID, status: "pending", totp_required: false }),
     );
     await api.consume_magic_link("tok123");
     const body = JSON.parse(text_body(seen[0]!.init.body)) as Record<string, unknown>;
@@ -113,10 +113,10 @@ describe("magic-link client", () => {
   it("finalize sends secret + second factor together", async () => {
     const { api, seen } = stub_api(() =>
       json_response(200, {
-        sessionId: `sess_01K${"A".repeat(23)}`,
-        accountId: ACCOUNT_ID,
-        expiresAt: "2026-10-26T20:00:00.000Z",
-        totpVerified: true,
+        session_id: `sess_01K${"A".repeat(23)}`,
+        account_id: ACCOUNT_ID,
+        expires_at: "2026-10-26T20:00:00.000Z",
+        totp_verified: true,
       }),
     );
     await api.finalize_magic_link(REQUEST_ID, "shh", { totp_code: "123456" });
@@ -126,8 +126,8 @@ describe("magic-link client", () => {
 
   it("no request body ever carries accountId (ownership is server-derived)", async () => {
     const { api, seen } = stub_api((url) => {
-      if (url.includes("/grants/issue")) return json_response(200, { token: "t", expiresAt: "2026-10-26T20:00:00.000Z" });
-      if (url.includes("/enrollments/claim")) return json_response(200, { enrollmentId: `enr_01K${"A".repeat(23)}`, status: "claimed" });
+      if (url.includes("/grants/issue")) return json_response(200, { token: "t", expires_at: "2026-10-26T20:00:00.000Z" });
+      if (url.includes("/enrollments/claim")) return json_response(200, { enrollment_id: `enr_01K${"A".repeat(23)}`, status: "claimed" });
       return json_response(200, {});
     });
     await api.claim_enrollment("ABCDEFGH");
@@ -143,7 +143,7 @@ describe("magic-link client", () => {
 describe("errors", () => {
   it("maps rate limits and server faults to safe messages", async () => {
     const { api } = stub_api(() =>
-      json_response(429, { error: { code: "rate_limited", message: "slow down", requestId: "r1" } }),
+      json_response(429, { error: { code: "rate_limited", message: "slow down", request_id: "r1" } }),
     );
     const err = await api.request_magic_link("a@b.co").catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiError);

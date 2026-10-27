@@ -89,9 +89,9 @@ const load_latest_effect = (api: CoreApi, box: HTMLElement): Effect.Effect<void,
         return;
       }
       box.append(
-        el("p", {}, `Version ${res.bundle.version} · published ${when(res.bundle.createdAt)}`),
-        el("p", { class: "small mono" }, `sha256 ${res.bundle.contentHash}`),
-        el("p", {}, `MCP servers: ${res.manifest.mcpServers.length} · Skills: ${res.manifest.skills.length}`),
+        el("p", {}, `Version ${res.bundle.version} · published ${when(res.bundle.created_at)}`),
+        el("p", { class: "small mono" }, `sha256 ${res.bundle.content_hash}`),
+        el("p", {}, `MCP servers: ${res.manifest.mcp_servers.length} · Skills: ${res.manifest.skills.length}`),
       );
     });
   }).pipe(
@@ -121,8 +121,8 @@ const machine_state_form = (api: CoreApi): HTMLElement => {
       const s = yield* Effect.tryPromise({ try: () => api.config_state(machine_id), catch: (e) => e });
       yield* Effect.sync(() => {
         clear(out);
-        out.append(el("p", {}, `Bundle ${s.bundleId}: ${s.status}`, el("br", {}),
-          el("span", { class: "small muted" }, `applied ${when(s.appliedAt)}`)));
+        out.append(el("p", {}, `Bundle ${s.bundle_id}: ${s.status}`, el("br", {}),
+          el("span", { class: "small muted" }, `applied ${when(s.applied_at)}`)));
       });
     }).pipe(
       Effect.catchAll((err: unknown) =>

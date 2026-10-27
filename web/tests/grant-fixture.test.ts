@@ -21,17 +21,17 @@ import { b64u_decode } from "../vendor/relay/b64u.ts";
 const root = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 const fixture = JSON.parse(readFileSync(join(root, "core-issued.json"), "utf8")) as {
   note: string;
-  issuedAt: string;
+  issued_at: string;
   issuer: string;
   audience: string;
-  accountId: string;
-  machineId: string;
+  account_id: string;
+  machine_id: string;
   grant: string;
   jwks: { keys: unknown[] };
-  revocations: { revokedMachineIds: unknown[]; revokedKeyIds: unknown[]; asOf: string };
+  revocations: { revoked_machine_ids: unknown[]; revoked_key_ids: unknown[]; as_of: string };
 };
 
-const now_sec = () => Math.floor(Date.parse(fixture.issuedAt) / 1000);
+const now_sec = () => Math.floor(Date.parse(fixture.issued_at) / 1000);
 
 describe("core-issued grant fixture (real issue_grant output)", () => {
   it("is test-only synthetic material", () => {
@@ -44,8 +44,8 @@ describe("core-issued grant fixture (real issue_grant output)", () => {
     const claims = Schema.decodeUnknownSync(C.GrantClaims, { onExcessProperty: "error" })(payload);
     expect(claims.v).toBe(1);
     expect(claims.iss).toBe(fixture.issuer);
-    expect(claims.sub).toBe(fixture.accountId);
-    expect(claims.mid).toBe(fixture.machineId);
+    expect(claims.sub).toBe(fixture.account_id);
+    expect(claims.mid).toBe(fixture.machine_id);
     expect(claims.role).toBe("forge");
     expect([...claims.scope]).toEqual(expect.arrayContaining(["relay:connect", "forge:execute"]));
     expect(claims.exp - claims.iat).toBeLessThanOrEqual(300);
@@ -69,8 +69,8 @@ describe("core-issued grant fixture (real issue_grant output)", () => {
       audience: fixture.audience,
       currentDate: new Date(now_sec() * 1000),
     });
-    expect(payload.sub).toBe(fixture.accountId);
-    expect(payload.mid).toBe(fixture.machineId);
+    expect(payload.sub).toBe(fixture.account_id);
+    expect(payload.mid).toBe(fixture.machine_id);
   });
 
   /**
@@ -115,7 +115,7 @@ describe("core-issued grant fixture (real issue_grant output)", () => {
     // is the rule working, not drift. Positive channel paths run
     // with client grants in tests/relay-transport.test.ts + noise-session.
     await expect(
-      verify_channel_grant(fixture.grant, { account: fixture.accountId, machine: fixture.machineId }, now_sec()),
+      verify_channel_grant(fixture.grant, { account: fixture.account_id, machine: fixture.machine_id }, now_sec()),
     ).rejects.toThrow(/role client/);
   });
 
@@ -126,7 +126,7 @@ describe("core-issued grant fixture (real issue_grant output)", () => {
     await expect(
       verify_channel_grant(
         fixture.grant,
-        { account: fixture.accountId, machine: "mch_01M5X881AAAAAAAAAAAAAAAAAAAAA" },
+        { account: fixture.account_id, machine: "mch_01M5X881AAAAAAAAAAAAAAAAAAAAA" },
         now_sec(),
       ),
     ).rejects.toThrow(/role client/);
@@ -135,7 +135,7 @@ describe("core-issued grant fixture (real issue_grant output)", () => {
     const [, payload_b64] = fixture.grant.split(".");
     const payload = JSON.parse(new TextDecoder().decode(b64u_decode(payload_b64 ?? "")));
     const claims = Schema.decodeUnknownSync(C.GrantClaims, { onExcessProperty: "error" })(payload);
-    expect(claims.mid).toBe(fixture.machineId);
+    expect(claims.mid).toBe(fixture.machine_id);
     expect(claims.mid).not.toBe("mch_01M5X881AAAAAAAAAAAAAAAAAAAAA");
   });
 
@@ -144,7 +144,7 @@ describe("core-issued grant fixture (real issue_grant output)", () => {
     expect(jwks.keys).toHaveLength(1);
     expect(jwks.keys[0]).toMatchObject({ kty: "OKP", crv: "Ed25519", use: "sig", alg: "EdDSA" });
     const rev = Schema.decodeUnknownSync(C.RevocationsResp)(fixture.revocations);
-    expect(rev.revokedMachineIds).toEqual([]);
+    expect(rev.revoked_machine_ids).toEqual([]);
     expect(fixture.grant.split(".")).toHaveLength(3);
   });
 });

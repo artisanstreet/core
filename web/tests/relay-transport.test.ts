@@ -275,7 +275,7 @@ function stub_core(core_sk: Uint8Array, sub: string, mid: string): CoreApi {
       const x = body.cnf?.x;
       if (typeof x !== "string") throw new Error("mock: cnf required");
       const jwt = await mint_jwt(b64u_decode(x), core_sk, sub, mid);
-      return new Response(JSON.stringify({ token: jwt, expiresAt: new Date(Date.now() + 300_000).toISOString() }), { status: 200 });
+      return new Response(JSON.stringify({ token: jwt, expires_at: new Date(Date.now() + 300_000).toISOString() }), { status: 200 });
     }
     throw new Error(`unexpected ${u.pathname}`);
   }) as typeof fetch;

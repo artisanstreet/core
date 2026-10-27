@@ -34,12 +34,12 @@ export class ApiError extends Error {
   readonly code: string;
   readonly status: number;
   readonly request_id: string;
-  constructor(status: number, body: { code: string; message: string; requestId: string }) {
+  constructor(status: number, body: { code: string; message: string; request_id: string }) {
     super(body.message || body.code);
     this.name = "ApiError";
     this.code = body.code;
     this.status = status;
-    this.request_id = body.requestId;
+    this.request_id = body.request_id;
   }
 }
 
@@ -47,23 +47,23 @@ export class ApiError extends Error {
 export function to_legacy_error(err: unknown): ApiError {
   if (err instanceof ApiError) return err;
   if (err instanceof ApiFailure) {
-    return new ApiError(err.status, { code: err.code, message: err.message, requestId: err.request_id });
+    return new ApiError(err.status, { code: err.code, message: err.message, request_id: err.request_id });
   }
   if (err instanceof TransportFailure) {
-    return new ApiError(0, { code: "transport_error", message: "The account service is unreachable. Try again in a bit.", requestId: "" });
+    return new ApiError(0, { code: "transport_error", message: "The account service is unreachable. Try again in a bit.", request_id: "" });
   }
   if (err instanceof DecodeFailure) {
-    return new ApiError(0, { code: "bad_response", message: "Account service answered with an unreadable shape.", requestId: "" });
+    return new ApiError(0, { code: "bad_response", message: "Account service answered with an unreadable shape.", request_id: "" });
   }
-  return new ApiError(0, { code: "internal", message: err instanceof Error ? err.message : "Something went wrong.", requestId: "" });
+  return new ApiError(0, { code: "internal", message: err instanceof Error ? err.message : "Something went wrong.", request_id: "" });
 }
 
-export function error_shape(input: unknown): { code: string; message: string; requestId: string } {
+export function error_shape(input: unknown): { code: string; message: string; request_id: string } {
   if (typeof input === "object" && input !== null && "error" in input) {
     const e = (input as { error: Record<string, unknown> }).error;
     if (typeof e?.code === "string" && typeof e?.message === "string") {
-      return { code: e.code, message: e.message, requestId: typeof e?.requestId === "string" ? e.requestId : "" };
+      return { code: e.code, message: e.message, request_id: typeof e?.request_id === "string" ? e.request_id : "" };
     }
   }
-  return { code: "bad_response", message: "Unexpected response from the account service.", requestId: "" };
+  return { code: "bad_response", message: "Unexpected response from the account service.", request_id: "" };
 }

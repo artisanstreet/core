@@ -62,7 +62,7 @@ const check_status = (status: number, json: unknown) => {
     return Effect.fail(new DecodeFailure({ reason: `status ${status}` }));
   }
   return Effect.fail(
-    new ApiFailure({ status, code: shape.code, message: shape.message, request_id: shape.requestId }),
+    new ApiFailure({ status, code: shape.code, message: shape.message, request_id: shape.request_id }),
   );
 };
 

@@ -8,9 +8,9 @@ import QRCode from "qrcode";
 
 type QrState = { readonly _tag: "Rendered"; readonly node: HTMLElement } | { readonly _tag: "Fallback" };
 
-const qr_effect = (otpauthUrl: string): Effect.Effect<QrState, never> =>
+const qr_effect = (otpauth_url: string): Effect.Effect<QrState, never> =>
   Effect.tryPromise({
-    try: () => QRCode.toString(otpauthUrl, { type: "svg", margin: 1, width: 180 }),
+    try: () => QRCode.toString(otpauth_url, { type: "svg", margin: 1, width: 180 }),
     catch: () => new Error("qr failed"),
   }).pipe(
     Effect.catchAll(() => Effect.succeed(null as string | null)),
@@ -75,14 +75,14 @@ export function render_account(ctx: PageContext): void {
       const dl = el("div", {});
       dl.append(
         el("p", {}, "Email: ", el("strong", {}, me.email)),
-        el("p", {}, "Name: ", el("strong", {}, me.displayName || "—")),
-        el("p", {}, "Two-step sign-in: ", me.totpEnrolled ? el("strong", { class: "ok" }, "on") : el("span", { class: "warn" }, "off")),
-        el("p", {}, `Machines on this account: ${me.machines.length} · Provider connections: ${me.providerConnections.length} · Latest config: `,
-          me.latestConfigVersion === null ? "none published" : `v${me.latestConfigVersion}`),
+        el("p", {}, "Name: ", el("strong", {}, me.display_name || "—")),
+        el("p", {}, "Two-step sign-in: ", me.totp_enrolled ? el("strong", { class: "ok" }, "on") : el("span", { class: "warn" }, "off")),
+        el("p", {}, `Machines on this account: ${me.machines.length} · Provider connections: ${me.provider_connections.length} · Latest config: `,
+          me.latest_config_version === null ? "none published" : `v${me.latest_config_version}`),
       );
       box.append(dl);
       const details = el("details", { class: "small muted" });
-      details.append(el("summary", {}, "Account details"), el("p", {}, id_span(me.accountId)));
+      details.append(el("summary", {}, "Account details"), el("p", {}, id_span(me.account_id)));
       box.append(details);
       box.append(el("p", { class: "small" },
         el("a", { href: "#/machines" }, "Machines"), " · ",
@@ -124,10 +124,10 @@ export function render_sessions(ctx: PageContext): void {
       table.append(el("tr", {}, el("th", {}, "Device"), el("th", {}, "Signed in"), el("th", {}, "Expires"), el("th", {}, "State")));
       for (const s of list.sessions) {
         table.append(el("tr", {},
-          el("td", {}, s.deviceName || "unnamed browser", el("br", {}), id_span(s.id)),
-          el("td", {}, when(s.createdAt)),
-          el("td", {}, when(s.expiresAt)),
-          el("td", {}, s.revokedAt ? `revoked ${when(s.revokedAt)}` : "active"),
+          el("td", {}, s.device_name || "unnamed browser", el("br", {}), id_span(s.id)),
+          el("td", {}, when(s.created_at)),
+          el("td", {}, when(s.expires_at)),
+          el("td", {}, s.revoked_at ? `revoked ${when(s.revoked_at)}` : "active"),
         ));
       }
       box.append(table);
@@ -176,7 +176,7 @@ export function render_security(ctx: PageContext): void {
     yield* Effect.sync(() => {
       clear(box);
       box.append(el("h2", {}, "Security"));
-      if (!me.totpEnrolled) {
+      if (!me.totp_enrolled) {
         box.append(enroll_box(api));
       } else {
         box.append(disable_box(api));
@@ -201,8 +201,8 @@ const enroll_box = (api: CoreApi): HTMLElement => {
   start.addEventListener("click", () => {
     const enroll: Effect.Effect<void, unknown> = Effect.gen(function* () {
       const res = yield* Effect.tryPromise({ try: () => api.enroll_totp(), catch: (e) => e });
-      const qr = yield* qr_effect(res.otpauthUrl);
-      const { account, secret } = parse_otpauth(res.otpauthUrl);
+      const qr = yield* qr_effect(res.otpauth_url);
+      const { account, secret } = parse_otpauth(res.otpauth_url);
       yield* Effect.sync(() => {
         clear(out);
         out.append(
@@ -212,7 +212,7 @@ const enroll_box = (api: CoreApi): HTMLElement => {
             "Secret: ", el("span", { class: "mono" }, secret), el("br", {}),
             el("span", { class: "muted" }, "Time-based, 6 digits. Keep the secret where only you can find it.")),
           el("p", { class: "warn" }, "Recovery codes — write these down now. Each works once, instead of a code:"),
-          el("ul", {}, ...res.recoveryCodes.map((c) => el("li", { class: "mono" }, c))),
+          el("ul", {}, ...res.recovery_codes.map((c) => el("li", { class: "mono" }, c))),
         );
         const label = el("label", { for: "totp-confirm" }, "Code from your authenticator");
         const input = el("input", { id: "totp-confirm", type: "text", inputmode: "numeric", autocomplete: "one-time-code" }) as HTMLInputElement;
@@ -295,9 +295,9 @@ export function render_activity(ctx: PageContext): void {
       table.append(el("tr", {}, el("th", {}, "When"), el("th", {}, "Event"), el("th", {}, "Machine")));
       for (const e of res.events) {
         table.append(el("tr", {},
-          el("td", {}, when(e.createdAt)),
+          el("td", {}, when(e.created_at)),
           el("td", {}, e.kind),
-          el("td", {}, e.machineId ?? "—"),
+          el("td", {}, e.machine_id ?? "—"),
         ));
       }
       box.append(table);
@@ -325,7 +325,7 @@ export function render_danger(ctx: PageContext): void {
   const program: Effect.Effect<void, unknown> = Effect.gen(function* () {
     const s = yield* Effect.tryPromise({ try: () => api.deletion_status(), catch: (e) => e });
     const view: DeletionView = s.status === "pending"
-      ? { _tag: "Pending", requested_at: s.requestedAt, purge_after: s.purgeAfter }
+      ? { _tag: "Pending", requested_at: s.requested_at, purge_after: s.purge_after }
       : { _tag: "None" };
     const me = view._tag === "None" ? yield* Effect.tryPromise({ try: () => api.me(), catch: (e) => e }) : null;
     yield* Effect.sync(() => {
@@ -355,7 +355,7 @@ export function render_danger(ctx: PageContext): void {
           box.append(cancel, msg);
         }),
         Match.tag("None", () => {
-          if (me !== null && me.totpEnrolled) {
+          if (me !== null && me.totp_enrolled) {
             const label = el("label", { for: "del-totp" }, "Authenticator code (required while two-step is on)");
             const input = el("input", { id: "del-totp", type: "text", inputmode: "numeric" }) as HTMLInputElement;
             box.append(label, input);

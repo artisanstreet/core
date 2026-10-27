@@ -57,9 +57,9 @@ export function start_login_poll(
         const s = settled.right;
         const mapped: LoginPollResult = {
           status: s.status,
-          totp_required: s.totpRequired,
+          totp_required: s.totp_required,
           email: s.email,
-          expires_at: s.expiresAt,
+          expires_at: s.expires_at,
         };
         attempt = 0;
         if (s.status === "email_approved") {

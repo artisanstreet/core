@@ -45,15 +45,15 @@ describe("sign-in form", () => {
   it("requests a link, polls to approved, and finishes with secret + TOTP code", async () => {
     let polls = 0;
     const { api, calls } = stub_api((url) => {
-      if (url.includes("/magic/request")) return { requestId: REQUEST_ID, requestSecret: "shh", expiresAt: "2026-10-26T20:00:00.000Z" };
+      if (url.includes("/magic/request")) return { request_id: REQUEST_ID, request_secret: "shh", expires_at: "2026-10-26T20:00:00.000Z" };
       if (url.includes("/magic/status")) {
         polls++;
         return polls >= 1
-          ? { requestId: REQUEST_ID, status: "email_approved", totpRequired: true, email: "a@example.com", expiresAt: "2026-10-26T20:00:00.000Z" }
-          : { requestId: REQUEST_ID, status: "pending", totpRequired: false, email: "a@example.com", expiresAt: "2026-10-26T20:00:00.000Z" };
+          ? { request_id: REQUEST_ID, status: "email_approved", totp_required: true, email: "a@example.com", expires_at: "2026-10-26T20:00:00.000Z" }
+          : { request_id: REQUEST_ID, status: "pending", totp_required: false, email: "a@example.com", expires_at: "2026-10-26T20:00:00.000Z" };
       }
       if (url.includes("/magic/finalize")) {
-        return { sessionId: `sess_01K${"A".repeat(23)}`, accountId: ACCOUNT_ID, expiresAt: "2026-10-26T20:00:00.000Z", totpVerified: true };
+        return { session_id: `sess_01K${"A".repeat(23)}`, account_id: ACCOUNT_ID, expires_at: "2026-10-26T20:00:00.000Z", totp_verified: true };
       }
       throw new Error(`unexpected ${url}`);
     });
@@ -104,7 +104,7 @@ describe("sign-in form", () => {
   });
 
   it("stays on the form with a readable error when the server rejects the email", async () => {
-    const fetch_impl = (async () => new Response(JSON.stringify({ error: { code: "bad_request", message: "that address cannot receive mail", requestId: "r" } }), { status: 400 })) as typeof fetch;
+    const fetch_impl = (async () => new Response(JSON.stringify({ error: { code: "bad_request", message: "that address cannot receive mail", request_id: "r" } }), { status: 400 })) as typeof fetch;
     const ctx = ctx_with(new CoreApi("", { fetch_impl }));
     render_signin(ctx);
     (document.getElementById("signin-email") as HTMLInputElement).value = "a@example.com";
@@ -116,10 +116,10 @@ describe("sign-in form", () => {
 
   it("shows who-started help and skips finalize when the secret is gone after approval", async () => {
     const { api, calls } = stub_api((url) => {
-      if (url.includes("/magic/request")) return { requestId: REQUEST_ID, requestSecret: "shh", expiresAt: "2026-10-26T20:00:00.000Z" };
-      if (url.includes("/magic/status")) return { requestId: REQUEST_ID, status: "email_approved", totpRequired: false, email: "a@example.com", expiresAt: "2026-10-26T20:00:00.000Z" };
+      if (url.includes("/magic/request")) return { request_id: REQUEST_ID, request_secret: "shh", expires_at: "2026-10-26T20:00:00.000Z" };
+      if (url.includes("/magic/status")) return { request_id: REQUEST_ID, status: "email_approved", totp_required: false, email: "a@example.com", expires_at: "2026-10-26T20:00:00.000Z" };
       if (url.includes("/magic/finalize")) {
-        return { sessionId: `sess_01K${"A".repeat(23)}`, accountId: ACCOUNT_ID, expiresAt: "2026-10-26T20:00:00.000Z", totpVerified: false };
+        return { session_id: `sess_01K${"A".repeat(23)}`, account_id: ACCOUNT_ID, expires_at: "2026-10-26T20:00:00.000Z", totp_verified: false };
       }
       throw new Error(`unexpected ${url}`);
     });
@@ -143,10 +143,10 @@ describe("sign-in form", () => {
 
   it("shows authenticator help and skips finalize when TOTP is required but empty", async () => {
     const { api, calls } = stub_api((url) => {
-      if (url.includes("/magic/request")) return { requestId: REQUEST_ID, requestSecret: "shh", expiresAt: "2026-10-26T20:00:00.000Z" };
-      if (url.includes("/magic/status")) return { requestId: REQUEST_ID, status: "email_approved", totpRequired: true, email: "a@example.com", expiresAt: "2026-10-26T20:00:00.000Z" };
+      if (url.includes("/magic/request")) return { request_id: REQUEST_ID, request_secret: "shh", expires_at: "2026-10-26T20:00:00.000Z" };
+      if (url.includes("/magic/status")) return { request_id: REQUEST_ID, status: "email_approved", totp_required: true, email: "a@example.com", expires_at: "2026-10-26T20:00:00.000Z" };
       if (url.includes("/magic/finalize")) {
-        return { sessionId: `sess_01K${"A".repeat(23)}`, accountId: ACCOUNT_ID, expiresAt: "2026-10-26T20:00:00.000Z", totpVerified: false };
+        return { session_id: `sess_01K${"A".repeat(23)}`, account_id: ACCOUNT_ID, expires_at: "2026-10-26T20:00:00.000Z", totp_verified: false };
       }
       throw new Error(`unexpected ${url}`);
     });
@@ -171,9 +171,9 @@ describe("approve form (email link target)", () => {
   it("approves via POST and finishes when this browser holds the secret", async () => {
     store_request_secret(REQUEST_ID, "shh");
     const { api, calls } = stub_api((url) => {
-      if (url.includes("/magic/consume")) return { requestId: REQUEST_ID, status: "email_approved", totpRequired: false };
+      if (url.includes("/magic/consume")) return { request_id: REQUEST_ID, status: "email_approved", totp_required: false };
       if (url.includes("/magic/finalize")) {
-        return { sessionId: `sess_01K${"A".repeat(23)}`, accountId: ACCOUNT_ID, expiresAt: "2026-10-26T20:00:00.000Z", totpVerified: false };
+        return { session_id: `sess_01K${"A".repeat(23)}`, account_id: ACCOUNT_ID, expires_at: "2026-10-26T20:00:00.000Z", totp_verified: false };
       }
       throw new Error(`unexpected ${url}`);
     });
@@ -195,7 +195,7 @@ describe("approve form (email link target)", () => {
   it("tells a different browser to finish on the originator instead", async () => {
     clear_request_secret(REQUEST_ID);
     const { api } = stub_api((url) => {
-      if (url.includes("/magic/consume")) return { requestId: REQUEST_ID, status: "email_approved", totpRequired: false };
+      if (url.includes("/magic/consume")) return { request_id: REQUEST_ID, status: "email_approved", totp_required: false };
       throw new Error(`unexpected ${url}`);
     });
     location.hash = "#/approve?token=emailtok";
@@ -224,10 +224,10 @@ describe("approve form (email link target)", () => {
 
   it("signin offers a recovery-code alternate that reaches finalize", async () => {
     const { api, calls } = stub_api((url) => {
-      if (url.includes("/magic/request")) return { requestId: REQUEST_ID, requestSecret: "shh", expiresAt: "2026-10-26T20:00:00.000Z" };
-      if (url.includes("/magic/status")) return { requestId: REQUEST_ID, status: "email_approved", totpRequired: true, email: "a@example.com", expiresAt: "2026-10-26T20:00:00.000Z" };
+      if (url.includes("/magic/request")) return { request_id: REQUEST_ID, request_secret: "shh", expires_at: "2026-10-26T20:00:00.000Z" };
+      if (url.includes("/magic/status")) return { request_id: REQUEST_ID, status: "email_approved", totp_required: true, email: "a@example.com", expires_at: "2026-10-26T20:00:00.000Z" };
       if (url.includes("/magic/finalize")) {
-        return { sessionId: `sess_01K${"A".repeat(23)}`, accountId: `acct_01K${"A".repeat(23)}`, expiresAt: "2026-10-26T20:00:00.000Z", totpVerified: false };
+        return { session_id: `sess_01K${"A".repeat(23)}`, account_id: `acct_01K${"A".repeat(23)}`, expires_at: "2026-10-26T20:00:00.000Z", totp_verified: false };
       }
       throw new Error(`unexpected ${url}`);
     });
@@ -257,9 +257,9 @@ describe("machines form", () => {
     const enrollment_id = `enr_01K${"A".repeat(23)}`;
     const { api, calls } = stub_api((url) => {
       if (url.includes("/machines") && !url.includes("claim")) return { machines: [] };
-      if (url.includes("/enrollments/claim")) return { enrollmentId: enrollment_id, status: "claimed" };
-      if (url.includes("/me")) return { accountId: ACCOUNT_ID, email: "a@example.com", displayName: "", totpEnrolled: false, machines: [], providerConnections: [], latestConfigVersion: null };
-      if (url.includes("/grants/issue")) return { token: "t", expiresAt: "2026-10-26T20:00:00.000Z" };
+      if (url.includes("/enrollments/claim")) return { enrollment_id, status: "claimed" };
+      if (url.includes("/me")) return { account_id: ACCOUNT_ID, email: "a@example.com", display_name: "", totp_enrolled: false, machines: [], provider_connections: [], latest_config_version: null };
+      if (url.includes("/grants/issue")) return { token: "t", expires_at: "2026-10-26T20:00:00.000Z" };
       throw new Error(`unexpected ${url}`);
     });
     const ctx = ctx_with(api);
@@ -276,8 +276,8 @@ describe("machines form", () => {
 describe("accessibility of rendered forms", () => {
   it("every input has a label, buttons are named", async () => {
     const { api } = stub_api((url) => {
-      if (url.includes("/magic/request")) return { requestId: REQUEST_ID, requestSecret: "shh", expiresAt: "2026-10-26T20:00:00.000Z" };
-      if (url.includes("/magic/status")) return { requestId: REQUEST_ID, status: "pending", totpRequired: false, email: "a@example.com", expiresAt: "2026-10-26T20:00:00.000Z" };
+      if (url.includes("/magic/request")) return { request_id: REQUEST_ID, request_secret: "shh", expires_at: "2026-10-26T20:00:00.000Z" };
+      if (url.includes("/magic/status")) return { request_id: REQUEST_ID, status: "pending", totp_required: false, email: "a@example.com", expires_at: "2026-10-26T20:00:00.000Z" };
       throw new Error(`unexpected ${url}`);
     });
     render_signin(ctx_with(api));

@@ -267,7 +267,7 @@ export class CoreApi implements HttpSeam {
       "/v1/engine-artifacts/assignments",
       C.ArtifactAssignReq,
       { artifactId: artifact_id, machineId: machine_id },
-      Schema.Struct({ artifactId: C.ArtifactId, machineId: C.MachineId }),
+      C.ArtifactAssignResp,
     );
   }
 

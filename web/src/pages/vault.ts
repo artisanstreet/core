@@ -58,14 +58,14 @@ const render_connections = (
     id: string;
     provider: string;
     label: string | null;
-    revokedAt: string | null;
-    assignedMachineIds: ReadonlyArray<string>;
+    revoked_at: string | null;
+    assigned_machine_ids: ReadonlyArray<string>;
   }>,
-  machines: ReadonlyArray<{ id: string; label: string | null; revokedAt: string | null }>,
+  machines: ReadonlyArray<{ id: string; label: string | null; revoked_at: string | null }>,
 ): void => {
   clear(list);
   list.append(el("h2", {}, "Connections"));
-  const live = machines.filter((m) => !m.revokedAt);
+  const live = machines.filter((m) => !m.revoked_at);
   if (connections.length === 0) {
     list.append(el("p", { class: "muted" }, "No provider connections yet."));
     return;
@@ -74,7 +74,7 @@ const render_connections = (
   table.append(el("tr", {}, el("th", {}, "Connection"), el("th", {}, "Assigned Forges"), el("th", {}, "")));
   for (const c of connections) {
     const assign_cell = el("td", {});
-    if (!c.revokedAt) {
+    if (!c.revoked_at) {
       const sel = el("select", { "aria-label": `Assign ${c.label || c.provider} to a Forge` }) as HTMLSelectElement;
       sel.append(el("option", { value: "" }, "choose a Forge…"));
       for (const m of live) sel.append(el("option", { value: m.id }, `${m.label || "Forge"} (${m.id.slice(0, 13)}…)`));
@@ -99,7 +99,7 @@ const render_connections = (
         void run_promise(assign);
       });
       assign_cell.append(sel, go, msg);
-      for (const mid of c.assignedMachineIds) {
+      for (const mid of c.assigned_machine_ids) {
         const chip = el("div", { class: "small" }, id_span(mid), " ");
         const un = el("button", { class: "secondary", type: "button" }, "remove");
         un.addEventListener("click", () => {
@@ -121,8 +121,8 @@ const render_connections = (
     } else {
       assign_cell.textContent = "—";
     }
-    const revoke = c.revokedAt
-      ? el("span", { class: "muted small" }, `revoked ${when(c.revokedAt)}`)
+    const revoke = c.revoked_at
+      ? el("span", { class: "muted small" }, `revoked ${when(c.revoked_at)}`)
       : (() => {
           const b = el("button", { class: "danger", type: "button" }, "Revoke");
           b.addEventListener("click", () => {
@@ -199,7 +199,7 @@ const refresh_artifacts_effect = (ctx: PageContext, box: HTMLElement, status: HT
     const res = yield* Effect.tryPromise({ try: () => api.artifacts(), catch: (e) => e });
     const machines = yield* Effect.orElseSucceed(
       Effect.tryPromise({ try: () => api.machines(), catch: () => null }),
-      () => ({ machines: [] as Array<{ id: string; label: string | null; revokedAt: string | null }> }),
+      () => ({ machines: [] as Array<{ id: string; label: string | null; revoked_at: string | null }> }),
     );
     yield* Effect.sync(() => {
       render_artifacts(ctx, box, status, res.artifacts, machines.machines);
@@ -222,11 +222,11 @@ const render_artifacts = (
     engine: string;
     kind: string;
     label: string | null;
-    revokedAt: string | null;
-    exportedAt: string;
-    assignedMachineIds: ReadonlyArray<string>;
+    revoked_at: string | null;
+    exported_at: string;
+    assigned_machine_ids: ReadonlyArray<string>;
   }>,
-  machines: ReadonlyArray<{ id: string; label: string | null; revokedAt: string | null }>,
+  machines: ReadonlyArray<{ id: string; label: string | null; revoked_at: string | null }>,
 ): void => {
   const { api } = ctx;
   clear(box);
@@ -237,12 +237,12 @@ const render_artifacts = (
     box.append(el("p", { class: "muted" }, "No artifacts stored."));
     return;
   }
-  const live = machines.filter((m) => !m.revokedAt);
+  const live = machines.filter((m) => !m.revoked_at);
   const table = el("table", {});
   table.append(el("tr", {}, el("th", {}, "Artifact"), el("th", {}, "Assigned Forges"), el("th", {}, "")));
   for (const a of artifacts) {
     const cell = el("td", {});
-    for (const mid of a.assignedMachineIds) {
+    for (const mid of a.assigned_machine_ids) {
       const chip = el("div", { class: "small" }, id_span(mid), " ");
       const un = el("button", { class: "secondary", type: "button" }, "remove");
       un.addEventListener("click", () => {
@@ -264,7 +264,7 @@ const render_artifacts = (
       chip.append(un);
       cell.append(chip);
     }
-    if (!a.revokedAt) {
+    if (!a.revoked_at) {
       const sel = el("select", { "aria-label": `Assign artifact ${a.id} to a Forge` }) as HTMLSelectElement;
       sel.append(el("option", { value: "" }, "assign to…"));
       for (const m of live) sel.append(el("option", { value: m.id }, `${m.label || "Forge"} (${m.id.slice(0, 13)}…)`));
@@ -289,8 +289,8 @@ const render_artifacts = (
       });
       cell.append(sel, go);
     }
-    const revoke = a.revokedAt
-      ? el("span", { class: "muted small" }, `revoked ${when(a.revokedAt)}`)
+    const revoke = a.revoked_at
+      ? el("span", { class: "muted small" }, `revoked ${when(a.revoked_at)}`)
       : (() => {
           const b = el("button", { class: "danger", type: "button" }, "Revoke");
           b.addEventListener("click", () => {
@@ -313,7 +313,7 @@ const render_artifacts = (
         })();
     table.append(el("tr", {},
       el("td", {}, `${a.engine} / ${a.kind} — ${a.label || "unnamed"}`, el("br", {}), id_span(a.id), el("br", {}),
-        el("span", { class: "small muted" }, `exported ${when(a.exportedAt)}`)),
+        el("span", { class: "small muted" }, `exported ${when(a.exported_at)}`)),
       cell,
       el("td", {}, revoke),
     ));

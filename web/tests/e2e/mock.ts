@@ -44,6 +44,37 @@ interface LoginRequest {
   expiresAt: string;
 }
 
+// MOCK-ONLY explicit camel request manifest -> snake response manifest.
+// Mirrors Core's Req/Resp split (no weak normalize, no Core import).
+const to_manifest_resp = (manifest: unknown): unknown => {
+  const m = (manifest ?? {}) as Record<string, unknown>;
+  const skills = (Array.isArray(m["skills"]) ? m["skills"] : []) as Array<Record<string, unknown>>;
+  return {
+    format: "ast-editor-config/1",
+    mcp_servers: (m["mcpServers"] ?? []) as unknown,
+    skills: skills.map((s) => {
+      const b = (s["bundle"] ?? null) as { files?: Array<Record<string, unknown>> } | null;
+      return {
+        name: s["name"],
+        source: s["source"],
+        ...(s["version"] === undefined ? {} : { version: s["version"] }),
+        ...(b?.files === undefined
+          ? {}
+          : {
+            bundle: {
+              files: (b.files ?? []).map((f) => ({
+                path: f["path"],
+                content_base64: f["contentBase64"],
+                sha256: f["sha256"],
+              })),
+            },
+          }),
+      };
+    }),
+    ...(m["globalPrompt"] === undefined ? {} : { global_prompt: m["globalPrompt"] }),
+  };
+};
+
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -65,7 +96,7 @@ export async function start_mock(dist_dir: string, port = 0): Promise<MockHandle
   const logins = new Map<string, LoginRequest>(); // by request_id
   const outbox: string[] = []; // MOCK-ONLY: issued email tokens
   const sessions = new Set<string>();
-  let last_bundle: { info: { id: string; version: number; contentHash: string; r2Key: string; createdAt: string }; manifest: unknown } | null = null;
+  let last_bundle: { info: { id: string; version: number; content_hash: string; r2_key: string; created_at: string }; manifest: unknown } | null = null;
 
   const core_key = await importJWK({ kty: "OKP", crv: "Ed25519", d: b64u(core_sk), x: b64u(core_pk) }, "EdDSA");
   const core_pub_key = await importJWK({ kty: "OKP", crv: "Ed25519", x: b64u(core_pk) }, "EdDSA");
@@ -120,7 +151,7 @@ export async function start_mock(dist_dir: string, port = 0): Promise<MockHandle
     res.end(JSON.stringify(body));
   };
   const err = (res: ServerResponse, status: number, code: string, message: string) =>
-    json(res, status, { error: { code, message, requestId: new_id("req").slice(0, 18) } });
+    json(res, status, { error: { code, message, request_id: new_id("req").slice(0, 18) } });
 
   const cookie_of = (req: IncomingMessage): string | null => {
     const m = /ast_session=([^;]+)/.exec(req.headers.cookie ?? "");
@@ -168,12 +199,12 @@ export async function start_mock(dist_dir: string, port = 0): Promise<MockHandle
       if (path === "/mock/info" && req.method === "GET") {
         return json(res, 200, { mock: true, accountId: account_id, machineId: machine_id, forge_cnf_x: b64u(forge_cnf_pk), iss: MOCK_ISS });
       }
-      if (path === "/v1/version") return json(res, 200, { api: "1", contracts: "1.0.0", jwksUri: "/.well-known/jwks.json", openapi: "/v1/openapi.json" });
+      if (path === "/v1/version") return json(res, 200, { api: "1", contracts: "1.0.0", jwks_uri: "/.well-known/jwks.json", openapi: "/v1/openapi.json" });
       if (path === "/.well-known/jwks.json") {
         return json(res, 200, { keys: [{ kty: "OKP", crv: "Ed25519", x: b64u(core_pk), kid: "mock-core-1", use: "sig", alg: "EdDSA" }] });
       }
       if (path === "/v1/grants/revocations") {
-        return json(res, 200, { revokedMachineIds: [], revokedKeyIds: [], asOf: new Date().toISOString() });
+        return json(res, 200, { revoked_machine_ids: [], revoked_key_ids: [], as_of: new Date().toISOString() });
       }
       if (path === "/v1/auth/magic/request" && req.method === "POST") {
         const body = JSON.parse((await read_body(req)) || "{}") as { email?: string; displayName?: string; deviceName?: string };
@@ -189,20 +220,20 @@ export async function start_mock(dist_dir: string, port = 0): Promise<MockHandle
         };
         logins.set(request_id, login);
         outbox.push(login.token);
-        return json(res, 200, { requestId: request_id, requestSecret: login.secret, expiresAt: login.expiresAt });
+        return json(res, 200, { request_id, request_secret: login.secret, expires_at: login.expiresAt });
       }
       if (path === "/v1/auth/magic/status" && req.method === "POST") {
         const body = JSON.parse((await read_body(req)) || "{}") as { requestId?: string; requestSecret?: string };
         const l = logins.get(body.requestId ?? "");
         if (!l || l.secret !== body.requestSecret) return err(res, 404, "not_found", "Unknown sign-in request.");
-        return json(res, 200, { requestId: body.requestId, status: l.status, totpRequired: l.totpRequired, email: l.email, expiresAt: l.expiresAt });
+        return json(res, 200, { request_id: body.requestId, status: l.status, totp_required: l.totpRequired, email: l.email, expires_at: l.expiresAt });
       }
       if (path === "/v1/auth/magic/consume" && req.method === "POST") {
         const body = JSON.parse((await read_body(req)) || "{}") as { token?: string };
         const entry = [...logins.entries()].find(([, l]) => l.token === body.token);
         if (!entry) return err(res, 404, "not_found", "This link is invalid or expired.");
         entry[1].status = "email_approved";
-        return json(res, 200, { requestId: entry[0], status: "email_approved", totpRequired: entry[1].totpRequired });
+        return json(res, 200, { request_id: entry[0], status: "email_approved", totp_required: entry[1].totpRequired });
       }
       if (path === "/v1/auth/magic/finalize" && req.method === "POST") {
         const body = JSON.parse((await read_body(req)) || "{}") as { requestId?: string; requestSecret?: string; totpCode?: string; recoveryCode?: string };
@@ -219,7 +250,7 @@ export async function start_mock(dist_dir: string, port = 0): Promise<MockHandle
           "content-type": "application/json",
           "set-cookie": `ast_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000`,
         });
-        return res.end(JSON.stringify({ sessionId: new_id("sess"), accountId: account_id, expiresAt: new Date(Date.now() + 30 * 86400_000).toISOString(), totpVerified: l.totpRequired }));
+        return res.end(JSON.stringify({ session_id: new_id("sess"), account_id: account_id, expires_at: new Date(Date.now() + 30 * 86400_000).toISOString(), totp_verified: l.totpRequired }));
       }
       if (!authed(req)) {
         if (path.startsWith("/v1/") && !path.startsWith("/v1/auth/") && path !== "/v1/version" && !path.startsWith("/v1/presence/")) {
@@ -228,23 +259,23 @@ export async function start_mock(dist_dir: string, port = 0): Promise<MockHandle
       }
       const machine_info = (label: string) => ({
         id: machine_id,
-        publicKey: { kty: "OKP", crv: "Ed25519", x: b64u(forge_cnf_pk) },
+        public_key: { kty: "OKP", crv: "Ed25519", x: b64u(forge_cnf_pk) },
         label,
-        createdAt: "2026-10-26T20:00:00.000Z",
-        revokedAt: null,
-        lastSeenAt: new Date().toISOString(),
+        created_at: "2026-10-26T20:00:00.000Z",
+        revoked_at: null,
+        last_seen_at: new Date().toISOString(),
       });
       if (path === "/v1/me") {
-        return json(res, 200, { accountId: account_id, email: "cafe@example.com", displayName: "Cafe User", totpEnrolled: false, machines: [machine_info("cafe-forge")], providerConnections: [], latestConfigVersion: null });
+        return json(res, 200, { account_id, email: "cafe@example.com", display_name: "Cafe User", totp_enrolled: false, machines: [machine_info("cafe-forge")], provider_connections: [], latest_config_version: null });
       }
       if (path === "/v1/machines" && req.method === "GET") return json(res, 200, { machines: [machine_info("cafe-forge")] });
       if (path === "/v1/machines/enrollments/claim" && req.method === "POST") {
         const body = JSON.parse((await read_body(req)) || "{}") as { code?: string };
         if (body.code !== "MOCK1234") return err(res, 404, "not_found", "Wrong or expired code.");
-        return json(res, 200, { enrollmentId: new_id("enr"), status: "claimed" });
+        return json(res, 200, { enrollment_id: new_id("enr"), status: "claimed" });
       }
       if (path === "/v1/sessions" && req.method === "GET") {
-        return json(res, 200, { sessions: [{ id: new_id("sess"), deviceName: "mock browser", totpVerifiedAt: null, createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 30 * 86400_000).toISOString(), revokedAt: null }] });
+        return json(res, 200, { sessions: [{ id: new_id("sess"), device_name: "mock browser", totp_verified_at: null, created_at: new Date().toISOString(), expires_at: new Date(Date.now() + 30 * 86400_000).toISOString(), revoked_at: null }] });
       }
       if (path === "/v1/sessions/current/revoke" && req.method === "POST") {
         const t = cookie_of(req);
@@ -258,7 +289,7 @@ export async function start_mock(dist_dir: string, port = 0): Promise<MockHandle
         return res.end(JSON.stringify({ revoked: true }));
       }
       if (path === "/v1/auth/totp/enroll" && req.method === "POST") {
-        return json(res, 200, { otpauthUrl: "otpauth://totp/mock?secret=MOCK", recoveryCodes: ["mock-recovery-1", "mock-recovery-2"] });
+        return json(res, 200, { otpauth_url: "otpauth://totp/mock?secret=MOCK", recovery_codes: ["mock-recovery-1", "mock-recovery-2"] });
       }
       if ((path === "/v1/auth/totp/verify" || path === "/v1/auth/totp/disable") && req.method === "POST") {
         return json(res, 200, path.endsWith("verify") ? { enrolled: true } : { disabled: true });
@@ -266,7 +297,7 @@ export async function start_mock(dist_dir: string, port = 0): Promise<MockHandle
       if (path === "/v1/vault/connections" && req.method === "GET") return json(res, 200, { connections: [] });
       if (path === "/v1/engine-artifacts" && req.method === "GET") return json(res, 200, { artifacts: [] });
       if (path === "/v1/config/bundles/latest") {
-        return json(res, 200, last_bundle ? { bundle: last_bundle.info, manifest: last_bundle.manifest } : { bundle: null, manifest: null });
+        return json(res, 200, last_bundle ? { bundle: last_bundle.info, manifest: to_manifest_resp(last_bundle.manifest) } : { bundle: null, manifest: null });
       }
       if (path === "/v1/config/bundles" && req.method === "POST") {
         const raw = await read_body(req);
@@ -280,9 +311,9 @@ export async function start_mock(dist_dir: string, port = 0): Promise<MockHandle
         const info = {
           id: new_id("bundle"),
           version: (last_bundle?.info.version ?? 0) + 1,
-          contentHash: createHash("sha256").update(raw).digest("hex"),
-          r2Key: "mock/bundles/latest",
-          createdAt: new Date().toISOString(),
+          content_hash: createHash("sha256").update(raw).digest("hex"),
+          r2_key: "mock/bundles/latest",
+          created_at: new Date().toISOString(),
         };
         last_bundle = { info, manifest: body.manifest };
         return json(res, 201, info);
@@ -295,7 +326,7 @@ export async function start_mock(dist_dir: string, port = 0): Promise<MockHandle
         if (!body.cnf) return err(res, 400, "bad_request", "cnf is required.");
         const ttl = Math.min(body.ttlSeconds ?? 300, 300);
         const token = await mint_grant({ sub: account_id, mid: body.targetMachineId, role: "client", scope: body.scope ?? ["relay:connect"], cnf: body.cnf, ttl });
-        return json(res, 200, { token, expiresAt: new Date(Date.now() + ttl * 1000).toISOString() });
+        return json(res, 200, { token, expires_at: new Date(Date.now() + ttl * 1000).toISOString() });
       }
       if (path.startsWith("/v1/presence/") && req.method === "GET") {
         const auth = req.headers.authorization ?? "";

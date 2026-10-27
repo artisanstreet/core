@@ -33,7 +33,7 @@ export const mint_channel_grant_effect = (
       targetMachineId: machine_id,
       cnf: cnf.jwk,
     });
-    let grant_expires_at_ms = Date.parse(issued.expiresAt);
+    let grant_expires_at_ms = Date.parse(issued.expires_at);
     if (!Number.isFinite(grant_expires_at_ms)) grant_expires_at_ms = Date.now() + 300_000;
     const jti = yield* Either.match(grant_jti(issued.token), {
       onLeft: (e) => Effect.fail(e),

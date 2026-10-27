@@ -105,12 +105,12 @@ const load_machines_effect = (api: CoreApi, list: HTMLElement, status: HTMLEleme
         const revoke_btn = el("button", { class: "danger", type: "button" }, "Revoke");
         const row = el("tr", {},
           el("td", {}, m.label || "unnamed Forge", el("br", {}), id_span(m.id)),
-          el("td", {}, m.revokedAt ? `revoked ${when(m.revokedAt)}` : `last seen ${when(m.lastSeenAt)}`),
+          el("td", {}, m.revoked_at ? `revoked ${when(m.revoked_at)}` : `last seen ${when(m.last_seen_at)}`),
           presence_cell,
-          el("td", {}, m.revokedAt ? el("span", { class: "muted" }, "revoked") : revoke_btn),
+          el("td", {}, m.revoked_at ? el("span", { class: "muted" }, "revoked") : revoke_btn),
         );
         table.append(row);
-        if (!m.revokedAt) {
+        if (!m.revoked_at) {
           revoke_btn.addEventListener("click", () => {
             const revoke_one: Effect.Effect<void, unknown> = Effect.gen(function* () {
               yield* Effect.tryPromise({ try: () => api.revoke_machine(m.id), catch: (e) => e });
@@ -159,7 +159,7 @@ const check_presence_effect = (api: CoreApi, machineId: string, cell: HTMLElemen
       catch: (e) => e,
     });
     const { http } = relay_defaults();
-    const p = yield* Effect.tryPromise({ try: () => fetch_presence(http, me.accountId, machineId, grant.token), catch: (e) => e });
+    const p = yield* Effect.tryPromise({ try: () => fetch_presence(http, me.account_id, machineId, grant.token), catch: (e) => e });
     yield* Effect.sync(() => {
       cell.textContent = p.forge_online ? `online (${p.clients} browser${p.clients === 1 ? "" : "s"})` : "offline";
       cell.className = p.forge_online ? "ok" : "muted";
@@ -192,7 +192,7 @@ const claim_form = (api: CoreApi): HTMLElement => {
       });
       const res = yield* Effect.tryPromise({ try: () => api.claim_enrollment(code), catch: (err) => err });
       yield* Effect.sync(() => {
-        msg.textContent = `Claimed enrollment ${res.enrollmentId}. Confirm it on the Forge — nothing is enrolled until the local operator approves your exact identity.`;
+        msg.textContent = `Claimed enrollment ${res.enrollment_id}. Confirm it on the Forge — nothing is enrolled until the local operator approves your exact identity.`;
         msg.className = "status ok";
       });
     }).pipe(

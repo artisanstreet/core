@@ -51,11 +51,11 @@ const email_form = (api: CoreApi, signal: AbortSignal): HTMLElement => {
       });
       const res = yield* Effect.tryPromise({ try: () => api.request_magic_link(email, undefined, device_name), catch: (err) => err });
       yield* Effect.sync(() => {
-        store_request_secret(res.requestId, res.requestSecret);
+        store_request_secret(res.request_id, res.request_secret);
         const state: LoginState = {
-          request_id: res.requestId,
+          request_id: res.request_id,
           email,
-          expires_at: res.expiresAt,
+          expires_at: res.expires_at,
           phase: "requested",
           totp_required: false,
         };
@@ -276,11 +276,11 @@ const consume_effect = (api: CoreApi, token: string, card: HTMLElement, msg: HTM
       });
       return;
     }
-    const secret = load_request_secret(res.requestId);
+    const secret = load_request_secret(res.request_id);
     if (secret) {
       yield* Effect.sync(() => {
         msg.textContent = "Approved. This tab started the request — you can finish sign-in here.";
-        card.append(finish_here(api, res.requestId, secret, res.totpRequired));
+        card.append(finish_here(api, res.request_id, secret, res.totp_required));
       });
     } else {
       yield* Effect.sync(() => {
