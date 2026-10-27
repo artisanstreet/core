@@ -14,11 +14,26 @@ function checkClaims(payload: Record<string, unknown>, alg: string | undefined) 
 // Mirror of what Relay/Forge implement independently
 // (JWKS + iss/aud/exp + v/role/mid/scope; key binding is the transport's
 // transcript check). Verifies a token against an explicit artifact JWKS.
-export async function verifyGrantWithArtifactJwks(token: string, jwks: unknown, issuer: string, audience: string) {
+// Pass nowSec to verify a stored artifact at ITS OWN time (committed
+// fixtures have short TTLs and naturally expire on the wall clock);
+// omit it for live tokens verified against the wall clock.
+export async function verifyGrantWithArtifactJwks(
+  token: string,
+  jwks: unknown,
+  issuer: string,
+  audience: string,
+  nowSec?: number,
+) {
   const { payload, protectedHeader } = await jwtVerify(
     token,
     createLocalJWKSet(jwks as Parameters<typeof createLocalJWKSet>[0]),
-    { issuer, audience, algorithms: ["EdDSA"], clockTolerance: 60 },
+    {
+      issuer,
+      audience,
+      algorithms: ["EdDSA"],
+      clockTolerance: 60,
+      ...(nowSec !== undefined ? { currentDate: new Date(nowSec * 1000) } : {}),
+    },
   );
   return checkClaims(payload as Record<string, unknown>, protectedHeader.alg);
 }

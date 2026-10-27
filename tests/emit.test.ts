@@ -90,11 +90,16 @@ describe("emit contracts + fixtures", () => {
         jwks: unknown;
         issuer: string;
         audience: string;
+        issuedAt: string;
         expected: { sub: string; mid: string };
       };
       // The stored artifact is self-contained: verify it against ITS OWN
-      // jwks, never against a fresh rig's keys (those rotate per run).
-      const recheck = await verifyGrantWithArtifactJwks(committed.grant, committed.jwks, committed.issuer, committed.audience);
+      // jwks at ITS OWN time (never against a fresh rig's keys, which
+      // rotate per run, and never against the wall clock, which the
+      // short-lived fixture naturally outlives). Live grants keep the
+      // wall clock via verifyGrantWithKeyId above.
+      const artifactNowSec = Math.floor(Date.parse(committed.issuedAt) / 1000);
+      const recheck = await verifyGrantWithArtifactJwks(committed.grant, committed.jwks, committed.issuer, committed.audience, artifactNowSec);
       expect(recheck.sub).toBe(committed.expected.sub);
       expect(recheck.mid).toBe(committed.expected.mid);
     }
