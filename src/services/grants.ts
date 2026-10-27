@@ -39,8 +39,7 @@ function newKid(nowMs: number): string {
   return `core-${ym}-${rand}`;
 }
 
-export function ensureActiveKey() {
-  return Effect.gen(function* () {
+export const ensureActiveKey = Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
     const cache = yield* KeyCacheTag.pipe(Effect.orElseSucceed(() => null));
@@ -76,10 +75,9 @@ export function ensureActiveKey() {
     if (cache) yield* cache.set(kid, privateKey).pipe(Effect.orElseSucceed(() => undefined));
     return { kid, privateKey };
   });
-}
 
-function importSeed(seed: Uint8Array, x: string) {
-  return Effect.tryPromise({
+const importSeed = (seed: Uint8Array, x: string) =>
+  Effect.tryPromise({
     try: () =>
       crypto.subtle.importKey(
         "jwk",
@@ -90,7 +88,6 @@ function importSeed(seed: Uint8Array, x: string) {
       ),
     catch: () => unauthorized("signing key unavailable"),
   });
-}
 
 export interface IssueGrantInput {
   readonly accountId: string;
@@ -102,8 +99,8 @@ export interface IssueGrantInput {
   readonly cnf: { kty: "OKP"; crv: "Ed25519"; x: string };
 }
 
-export function issueGrant(input: IssueGrantInput) {
-  return Effect.gen(function* () {
+export const issueGrant = (input: IssueGrantInput) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
     const ttl = input.ttlSeconds ?? GRANT_MAX_TTL_SECONDS;
@@ -141,7 +138,7 @@ export function issueGrant(input: IssueGrantInput) {
       exp: nowSec + ttl,
       jti: newId("tkn"),
     };
-    const { kid, privateKey } = yield* ensureActiveKey();
+    const { kid, privateKey } = yield* ensureActiveKey;
     const token = yield* Effect.tryPromise({
       try: () =>
         new SignJWT(claims)
@@ -156,11 +153,9 @@ export function issueGrant(input: IssueGrantInput) {
       claims,
     };
   });
-}
 
 // JWKS for independent verification (Relay/Forge). Public keys only.
-export function jwks() {
-  return Effect.gen(function* () {
+export const jwks = Effect.gen(function* () {
     const { db } = yield* DbTag;
     const rows = yield* dbRun(() => listRecentKeysForJwks.run(db, {}));
     return {
@@ -174,10 +169,8 @@ export function jwks() {
       })),
     };
   });
-}
 
-export function revocations() {
-  return Effect.gen(function* () {
+export const revocations = Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
     const machines = yield* dbRun(() => listRevokedMachineIds.run(db, { limit: 1000 }));
@@ -188,13 +181,11 @@ export function revocations() {
       asOf: new Date(cfg.now()).toISOString(),
     };
   });
-}
 
 // Admin rotation (deployment credential CORE_ADMIN_TOKEN; endpoint 404s
 // without one). New key issues immediately; retired keys stay in JWKS for
 // the 15-minute grace window.
-export function rotateKeys() {
-  return Effect.gen(function* () {
+export const rotateKeys = Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
     const cache = yield* KeyCacheTag.pipe(Effect.orElseSucceed(() => null));
@@ -216,14 +207,13 @@ export function rotateKeys() {
     }
     return { kid };
   });
-}
 
 // Verification helper mirroring what Relay/Forge implement independently
 // (JWKS + iss/aud/exp/nbf + v/role/mid/scope; key-bound admission is the
 // transport's transcript check). Used by tests to prove issued JWTs verify
 // against the served JWKS.
-export function verifyGrantWithJwks(opts: { jwks: unknown; token: string; issuer: string; audience: string }) {
-  return Effect.tryPromise({
+export const verifyGrantWithJwks = (opts: { jwks: unknown; token: string; issuer: string; audience: string }) =>
+  Effect.tryPromise({
     try: async () => {
       const { createLocalJWKSet } = await import("jose");
       const getKey = createLocalJWKSet(opts.jwks as Parameters<typeof createLocalJWKSet>[0]);
@@ -240,4 +230,3 @@ export function verifyGrantWithJwks(opts: { jwks: unknown; token: string; issuer
     },
     catch: () => unauthorized("invalid grant") as CoreError,
   });
-}

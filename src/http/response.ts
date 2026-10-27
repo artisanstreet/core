@@ -9,9 +9,7 @@ export const max_body_bytes = 1 << 20;
 
 export class RequestIdTag extends Context.Tag("RequestId")<RequestIdTag, string>() {}
 
-export function current_request_id(): Effect.Effect<string, never, RequestIdTag> {
-  return RequestIdTag;
-}
+export const current_request_id: Effect.Effect<string, never, RequestIdTag> = RequestIdTag;
 
 export function encode_ok<A, I>(schema: Schema.Schema<A, I>, value: NoInfer<A>, status: number = 200) {
   const encoded = C.encodeResponse(schema, value);

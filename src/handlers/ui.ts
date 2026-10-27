@@ -22,18 +22,17 @@ function spa_redirect(location: string) {
   );
 }
 
-function shell_is_deployed(
+const shell_is_deployed = (
   fetch_fn: (request: Request) => Promise<Response>,
   url: URL,
-): Effect.Effect<boolean, never> {
-  return Effect.promise(() =>
+) =>
+  Effect.promise(() =>
     fetch_fn(new Request(new URL("/index.html", url), { headers: { accept: "text/html" } })),
   ).pipe(
     Effect.map((res) => res.status === 200),
     Effect.catchAll(() => Effect.succeed(false)),
     Effect.catchAllDefect(() => Effect.succeed(false)),
   );
-}
 
 const default_approve_path = "/#/approve";
 

@@ -3,7 +3,7 @@
 // and R2 layout live here. Storage mechanics (R2 put/get) and activity come
 // from shared services; the generic vault is untouched by editor content.
 
-import { Effect, Schema } from "effect";
+import { Effect, Either, Schema } from "effect";
 import { base64urlDecode, sha256Hex } from "../../crypto.ts";
 import { badRequest, conflict, forbidden, internal, CoreError } from "../../errors.ts";
 import { newId } from "../../ids.ts";
@@ -25,8 +25,8 @@ const MAX_SKILL_BUNDLE_BYTES = 1024 * 1024;
 // Skill bundles install onto machines that lack the skill. Source refs
 // alone only enable already-installed skills, so a bundle carries the
 // files; bytes ride inside the content-hashed manifest (ETag-gated).
-function validate_skill_bundles(manifest: ValidatedManifest) {
-  return Effect.gen(function* () {
+const validate_skill_bundles = (manifest: ValidatedManifest) =>
+  Effect.gen(function* () {
     for (const s of manifest.skills) {
       if (!s.bundle) continue;
       let total = 0;
@@ -35,12 +35,9 @@ function validate_skill_bundles(manifest: ValidatedManifest) {
         if (f.path.length > 256 || f.path.startsWith("/") || /(^|\/)\.\.(\/|$)/.test(f.path)) {
           return yield* Effect.fail(badRequest("invalid skill file path"));
         }
-        let file_bytes: Uint8Array;
-        try {
-          file_bytes = base64urlDecode(f.contentBase64);
-        } catch {
-          return yield* Effect.fail(badRequest("invalid skill file encoding"));
-        }
+        const decoded = Either.try(() => base64urlDecode(f.contentBase64));
+        if (Either.isLeft(decoded)) return yield* Effect.fail(badRequest("invalid skill file encoding"));
+        const file_bytes = decoded.right;
         total += file_bytes.length;
         if (total > MAX_SKILL_BUNDLE_BYTES) return yield* Effect.fail(badRequest("skill bundle too large"));
         const digest = yield* Effect.promise(() => sha256Hex(file_bytes));
@@ -50,17 +47,13 @@ function validate_skill_bundles(manifest: ValidatedManifest) {
       if (!has_skill_md) return yield* Effect.fail(badRequest("skill bundle must include SKILL.md"));
     }
   });
-}
 
-export function publishBundle(accountId: string, manifestInput: unknown) {
-  return Effect.gen(function* () {
+export const publishBundle = (accountId: string, manifestInput: unknown) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
-    let manifest: ValidatedManifest;
-    try {
-      manifest = Schema.decodeUnknownSync(EditorManifest, { onExcessProperty: "error" })(manifestInput);
-    } catch {
-      return yield* Effect.fail(badRequest("invalid manifest"));
-    }
+    const manifest = yield* Schema.decodeUnknown(EditorManifest, { onExcessProperty: "error" })(manifestInput).pipe(
+      Effect.mapError(() => badRequest("invalid manifest")),
+    );
     if (manifest.mcpServers.length > 64 || manifest.skills.length > 256) {
       return yield* Effect.fail(badRequest("manifest too large"));
     }
@@ -93,7 +86,6 @@ export function publishBundle(accountId: string, manifestInput: unknown) {
     }
     return yield* Effect.fail(internal("concurrent publish, retry"));
   });
-}
 
 function sortKeys(v: unknown): unknown {
   if (Array.isArray(v)) return v.map(sortKeys);
@@ -105,21 +97,24 @@ function sortKeys(v: unknown): unknown {
   return v;
 }
 
-export function latestBundle(accountId: string) {
-  return Effect.gen(function* () {
+export const latestBundle = (accountId: string) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const row = yield* dbRun(() => getLatestBundleByAccount.run(db, { accountId }));
     if (!row) return { bundle: null, manifest: null };
-    const manifest = (typeof row.manifest === "string" ? JSON.parse(row.manifest) : row.manifest) as unknown;
+    const manifest = typeof row.manifest === "string"
+      ? yield* Schema.decodeUnknown(Schema.parseJson(Schema.Unknown))(row.manifest).pipe(
+        Effect.mapError(() => internal("bundle manifest corrupt")),
+      )
+      : row.manifest as unknown;
     return {
       bundle: { id: row.id, version: row.version, contentHash: row.content_hash, r2Key: row.r2_key, createdAt: row.created_at },
       manifest,
     };
   });
-}
 
-export function bundleManifestBytes(accountId: string, version: number) {
-  return Effect.gen(function* () {
+export const bundleManifestBytes = (accountId: string, version: number) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const row = yield* dbRun(() => getBundleByVersion.run(db, { accountId, version }));
     if (!row) return yield* Effect.fail(forbidden("no such bundle in this account"));
@@ -132,10 +127,9 @@ export function bundleManifestBytes(accountId: string, version: number) {
     if (hash !== row.content_hash) return yield* Effect.fail(forbidden("manifest object mismatch"));
     return { bytes: raw, contentHash: row.content_hash };
   });
-}
 
-export function reportMachineState(machineId: string, accountId: string, opts: { bundleId: string; status: "applied" | "failed"; detail?: string }) {
-  return Effect.gen(function* () {
+export const reportMachineState = (machineId: string, accountId: string, opts: { bundleId: string; status: "applied" | "failed"; detail?: string }) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     // Zero rows means the mutation's guards refused: either the machine or
     // bundle is unknown/revoked/cross-account, or the report regresses the
@@ -163,10 +157,9 @@ export function reportMachineState(machineId: string, accountId: string, opts: {
     }
     return yield* Effect.fail(forbidden("unknown machine or bundle in this account"));
   });
-}
 
-export function readMachineState(accountId: string, machineId: string) {
-  return Effect.gen(function* () {
+export const readMachineState = (accountId: string, machineId: string) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const row = yield* dbRun(() => getMachineConfigState.run(db, { machineId, accountId }));
     if (!row) return yield* Effect.fail(forbidden("no such machine or state"));
@@ -180,4 +173,3 @@ export function readMachineState(accountId: string, machineId: string) {
       contentHash: row.content_hash,
     };
   });
-}

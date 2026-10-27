@@ -20,8 +20,8 @@ export const router = HttpRouter.empty.pipe(
   register_route(
     R.providerCreate,
       Effect.gen(function* () {
-        const me = yield* session_for_mutation();
-        const { json } = yield* read_json_body();
+        const me = yield* session_for_mutation;
+        const { json } = yield* read_json_body;
         const input = yield* decode_request(C.ProviderCreateReq, json);
         const checked = yield* validateProviderKey(input.provider, input.apiKey);
         const created = yield* Vault.createProviderConnection({
@@ -41,11 +41,11 @@ export const router = HttpRouter.empty.pipe(
       Effect.gen(function* () {
         const req = yield* HttpServerRequest.HttpServerRequest;
         if (has_machine_header(req)) {
-          const { principal } = yield* proof_for_machine();
+          const { principal } = yield* proof_for_machine;
           const data = yield* Vault.listAssignedProviderConnections(principal.accountId, principal.machineId);
           return encode_ok(C.ProviderListResp, data);
         }
-        const { principal: me } = yield* session_of();
+        const { principal: me } = yield* session_of;
         const data = yield* Vault.listProviderConnections(me.accountId);
         return encode_ok(C.ProviderListResp, data);
       }),
@@ -53,7 +53,7 @@ export const router = HttpRouter.empty.pipe(
   register_route(
     R.providerRevoke,
       Effect.gen(function* () {
-        const me = yield* session_for_mutation();
+        const me = yield* session_for_mutation;
         const params = yield* HttpRouter.RouteContext.pipe(Effect.map((c) => c.params));
         const id = params["id"] ?? "";
         const data = yield* Vault.revokeProviderConnectionById(me.accountId, id);
@@ -63,8 +63,8 @@ export const router = HttpRouter.empty.pipe(
   register_route(
     R.providerAssign,
       Effect.gen(function* () {
-        const me = yield* session_for_mutation();
-        const { json } = yield* read_json_body();
+        const me = yield* session_for_mutation;
+        const { json } = yield* read_json_body;
         const input = yield* decode_request(C.AssignReq, json);
         const data = yield* Vault.assignConnection(me.accountId, input.connectionId, input.machineId);
         return encode_ok(C.AssignResp, data);
@@ -73,8 +73,8 @@ export const router = HttpRouter.empty.pipe(
   register_route(
     R.providerUnassign,
       Effect.gen(function* () {
-        const me = yield* session_for_mutation();
-        const { json } = yield* read_json_body();
+        const me = yield* session_for_mutation;
+        const { json } = yield* read_json_body;
         const input = yield* decode_request(C.AssignReq, json);
         const data = yield* Vault.unassignConnection(me.accountId, input.connectionId, input.machineId);
         return encode_ok(R.providerUnassign.responseSchema, data);
@@ -84,7 +84,7 @@ export const router = HttpRouter.empty.pipe(
     R.credentialRelease,
       Effect.gen(function* () {
         const req = yield* HttpServerRequest.HttpServerRequest;
-        const { principal } = yield* proof_for_machine();
+        const { principal } = yield* proof_for_machine;
         const url = new URL(req.originalUrl);
         const connection_id = url.searchParams.get("connectionId") ?? "";
         if (!/^conn_[0-9A-HJKMNP-TV-Z]{26}$/.test(connection_id)) {

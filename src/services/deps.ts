@@ -51,12 +51,11 @@ export interface TxRunner {
 }
 export class TxTag extends Context.Tag("Tx")<TxTag, TxRunner>() {}
 
-export function dbRun<A>(attempt: () => Promise<A>) {
-  return Effect.tryPromise({
+export const dbRun = <A,>(attempt: () => Promise<A>) =>
+  Effect.tryPromise({
     try: attempt,
     // Never leak driver detail to callers or logs: the driver error is
     // preserved opaquely as .cause for internal Cause chains, while HTTP
     // responses and logs only ever carry the redacted code/message.
     catch: (cause) => internal("database unavailable", { cause }),
   });
-}

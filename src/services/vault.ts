@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { decryptWithKey, encryptWithKey } from "../crypto.ts";
 import { badRequest, forbidden } from "../errors.ts";
 import { newId } from "../ids.ts";
@@ -37,13 +37,13 @@ const MAX_ENVELOPE_BYTES = 262144;
 // machines of the same account.
 // ---------------------------------------------------------------------------
 
-export function createProviderConnection(opts: {
+export const createProviderConnection = (opts: {
   accountId: string;
   provider: "anthropic" | "openai" | "openrouter" | "google";
   label: string;
   apiKey: string;
-}) {
-  return Effect.gen(function* () {
+}) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
     const key = opts.apiKey.trim();
@@ -63,10 +63,9 @@ export function createProviderConnection(opts: {
     yield* record(opts.accountId, "vault.connection_created", {});
     return { id: row.id, provider: row.provider, label: row.label, createdAt: row.created_at };
   });
-}
 
-export function listProviderConnections(accountId: string) {
-  return Effect.gen(function* () {
+export const listProviderConnections = (accountId: string) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const conns = yield* dbRun(() => listProviderConnectionsByAccount.run(db, { accountId }));
     const assigns = yield* dbRun(() => listAssignmentsByAccount.run(db, { accountId }));
@@ -81,23 +80,21 @@ export function listProviderConnections(accountId: string) {
       })),
     };
   });
-}
 
-export function revokeProviderConnectionById(accountId: string, connectionId: string) {
-  return Effect.gen(function* () {
+export const revokeProviderConnectionById = (accountId: string, connectionId: string) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const done = yield* dbRun(() => revokeProviderConnection.run(db, { id: connectionId, accountId }));
     if (!done) return yield* Effect.fail(forbidden("no such connection in this account"));
     yield* record(accountId, "vault.connection_revoked", {});
     return { revoked: true };
   });
-}
 
 // Machine discovery for sync: only this machine's own assigned connections.
 // assignedMachineIds is scoped to the caller so one machine never learns
 // which other machines hold the same credential.
-export function listAssignedProviderConnections(accountId: string, machineId: string) {
-  return Effect.gen(function* () {
+export const listAssignedProviderConnections = (accountId: string, machineId: string) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const rows = yield* dbRun(() => listAssignedConnectionsForMachine.run(db, { accountId, machineId }));
     return {
@@ -111,10 +108,9 @@ export function listAssignedProviderConnections(accountId: string, machineId: st
       })),
     };
   });
-}
 
-export function assignConnection(accountId: string, connectionId: string, machineId: string) {
-  return Effect.gen(function* () {
+export const assignConnection = (accountId: string, connectionId: string, machineId: string) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     // Array cardinality is the account binding speaking: zero rows means
     // one of the ends is unknown, revoked, or in another account.
@@ -124,20 +120,18 @@ export function assignConnection(accountId: string, connectionId: string, machin
     yield* record(accountId, "vault.assigned", {});
     return { connectionId: done.connection_id, machineId: done.machine_id };
   });
-}
 
-export function unassignConnection(accountId: string, connectionId: string, machineId: string) {
-  return Effect.gen(function* () {
+export const unassignConnection = (accountId: string, connectionId: string, machineId: string) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const done = yield* dbRun(() => unassignMachine.run(db, { connectionId, machineId, accountId }));
     if (!done) return yield* Effect.fail(forbidden("no such assignment in this account"));
     yield* record(accountId, "vault.unassigned", {});
     return { unassigned: true };
   });
-}
 
-export function releaseCredential(accountId: string, machineId: string, connectionId: string) {
-  return Effect.gen(function* () {
+export const releaseCredential = (accountId: string, machineId: string, connectionId: string) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
     const row = yield* dbRun(() => getCredentialForMachine.run(db, { connectionId, machineId, accountId }));
@@ -148,12 +142,11 @@ export function releaseCredential(accountId: string, machineId: string, connecti
     });
     return { provider: row.provider, secret: new TextDecoder().decode(secret) };
   });
-}
 
 // The envelope arrives validated by the Editor product layer
 // (products/editor/artifacts.ts); this service never reinterprets it.
-export function storeArtifact(opts: { accountId: string; label: string; envelope: ValidatedEnvelope }) {
-  return Effect.gen(function* () {
+export const storeArtifact = (opts: { accountId: string; label: string; envelope: ValidatedEnvelope }) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
     const env = opts.envelope;
@@ -176,10 +169,9 @@ export function storeArtifact(opts: { accountId: string; label: string; envelope
     yield* record(opts.accountId, "artifact.stored", {});
     return { id };
   });
-}
 
-export function listArtifacts(accountId: string) {
-  return Effect.gen(function* () {
+export const listArtifacts = (accountId: string) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const arts = yield* dbRun(() => listEngineArtifactsByAccount.run(db, { accountId }));
     const assigns = yield* dbRun(() => listArtifactAssignmentsByAccount.run(db, { accountId }));
@@ -197,22 +189,20 @@ export function listArtifacts(accountId: string) {
       })),
     };
   });
-}
 
-export function revokeArtifact(accountId: string, artifactId: string) {
-  return Effect.gen(function* () {
+export const revokeArtifact = (accountId: string, artifactId: string) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const done = yield* dbRun(() => revokeEngineArtifact.run(db, { id: artifactId, accountId }));
     if (!done) return yield* Effect.fail(forbidden("no such artifact in this account"));
     yield* record(accountId, "artifact.revoked", {});
     return { revoked: true };
   });
-}
 
 // Machine discovery for sync: only this machine's own assigned artifacts.
 // assignedMachineIds is scoped to the caller; envelopes are never listed.
-export function listAssignedArtifacts(accountId: string, machineId: string) {
-  return Effect.gen(function* () {
+export const listAssignedArtifacts = (accountId: string, machineId: string) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const rows = yield* dbRun(() => listAssignedArtifactsForMachine.run(db, { accountId, machineId }));
     return {
@@ -229,10 +219,9 @@ export function listAssignedArtifacts(accountId: string, machineId: string) {
       })),
     };
   });
-}
 
-export function assignArtifact(accountId: string, artifactId: string, machineId: string) {
-  return Effect.gen(function* () {
+export const assignArtifact = (accountId: string, artifactId: string, machineId: string) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const rows = yield* dbRun(() => assignArtifactMachine.run(db, { artifactId, machineId, accountId }));
     const done = rows[0] ?? null;
@@ -240,20 +229,18 @@ export function assignArtifact(accountId: string, artifactId: string, machineId:
     yield* record(accountId, "artifact.assigned", {});
     return { artifactId: done.artifact_id, machineId: done.machine_id };
   });
-}
 
-export function unassignArtifact(accountId: string, artifactId: string, machineId: string) {
-  return Effect.gen(function* () {
+export const unassignArtifact = (accountId: string, artifactId: string, machineId: string) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const done = yield* dbRun(() => unassignArtifactMachine.run(db, { artifactId, machineId, accountId }));
     if (!done) return yield* Effect.fail(forbidden("no such assignment in this account"));
     yield* record(accountId, "artifact.unassigned", {});
     return { unassigned: true };
   });
-}
 
-export function downloadArtifact(accountId: string, machineId: string, artifactId: string) {
-  return Effect.gen(function* () {
+export const downloadArtifact = (accountId: string, machineId: string, artifactId: string) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
     const row = yield* dbRun(() => getArtifactEnvelopeForMachine.run(db, { artifactId, machineId, accountId }));
@@ -262,7 +249,8 @@ export function downloadArtifact(accountId: string, machineId: string, artifactI
       try: () => decryptWithKey(cfg.masterKey.raw, new Uint8Array(row.envelope_enc), ARTIFACT_PURPOSE),
       catch: () => forbidden("no artifact available to this machine"),
     });
-    const envelope = JSON.parse(new TextDecoder().decode(pt)) as unknown;
+    const envelope = yield* Schema.decodeUnknown(Schema.parseJson(Schema.Unknown))(new TextDecoder().decode(pt)).pipe(
+      Effect.mapError(() => forbidden("no artifact available to this machine")),
+    );
     return { envelope };
   });
-}

@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Either } from "effect";
 import * as HttpRouter from "@effect/platform/HttpRouter";
 import * as HttpServerRequest from "@effect/platform/HttpServerRequest";
 import * as HttpServerResponse from "@effect/platform/HttpServerResponse";
@@ -13,22 +13,21 @@ export function shell_headers_for(relay_origin_raw: string | undefined): Record<
   const raw = (relay_origin_raw ?? "").trim().replace(/\/+$/, "");
   let allowlist = "";
   if (raw && !raw.includes("*")) {
-    try {
-      const u = new URL(raw);
-      if (
-        (u.protocol === "https:" || u.protocol === "http:") &&
-        !u.username && !u.password &&
-        (u.pathname === "/" || u.pathname === "") &&
-        !u.search && !u.hash &&
-        u.hostname
-      ) {
-        const host = u.hostname.toLowerCase();
-        const def_port = u.protocol === "https:" ? "443" : "80";
-        const port = u.port && u.port !== def_port ? `:${u.port}` : "";
-        const secure = u.protocol === "https:";
-        allowlist = ` ${secure ? "https" : "http"}://${host}${port} ${secure ? "wss" : "ws"}://${host}${port}`;
-      }
-    } catch {
+    const parsed = Either.getOrNull(Either.try(() => new URL(raw)));
+    const u = parsed ?? null;
+    if (
+      u &&
+      (u.protocol === "https:" || u.protocol === "http:") &&
+      !u.username && !u.password &&
+      (u.pathname === "/" || u.pathname === "") &&
+      !u.search && !u.hash &&
+      u.hostname
+    ) {
+      const host = u.hostname.toLowerCase();
+      const def_port = u.protocol === "https:" ? "443" : "80";
+      const port = u.port && u.port !== def_port ? `:${u.port}` : "";
+      const secure = u.protocol === "https:";
+      allowlist = ` ${secure ? "https" : "http"}://${host}${port} ${secure ? "wss" : "ws"}://${host}${port}`;
     }
   }
   return {
@@ -39,21 +38,20 @@ export function shell_headers_for(relay_origin_raw: string | undefined): Record<
     "Referrer-Policy": "no-referrer" };
 }
 
-function fetch_asset(
+const fetch_asset = (
   fetch_fn: (request: Request) => Promise<Response>,
   request: Request,
-): Effect.Effect<Response, CoreError> {
-  return Effect.tryPromise({
+) =>
+  Effect.tryPromise({
     try: () => fetch_fn(request),
     catch: () => new CoreError("not_found", "not found") });
-}
 
-function serve_shell(
+const serve_shell = (
   fetch_fn: (request: Request) => Promise<Response>,
   url: URL,
   relay_origin: string | undefined,
-): Effect.Effect<HttpServerResponse.HttpServerResponse, CoreError> {
-  return Effect.gen(function* () {
+) =>
+  Effect.gen(function* () {
     const shell = yield* fetch_asset(fetch_fn, new Request(new URL("/index.html", url), { headers: { accept: "text/html" } }));
     if (shell.status !== 200) {
       return yield* Effect.fail(new CoreError("not_found", "not found"));
@@ -67,7 +65,6 @@ function serve_shell(
     }
     return res;
   });
-}
 
 export const router = HttpRouter.empty.pipe(
   HttpRouter.get(
@@ -76,7 +73,7 @@ export const router = HttpRouter.empty.pipe(
         const req = yield* HttpServerRequest.HttpServerRequest;
         const cfg = yield* AppConfigTag;
         const assets = yield* AssetsTag;
-        const request_id = yield* current_request_id();
+        const request_id = yield* current_request_id;
         const url = new URL(req.originalUrl);
         const p = url.pathname;
         if (p.startsWith("/v1/") || p.startsWith("/.well-known/") || p.startsWith("/ui/")) {

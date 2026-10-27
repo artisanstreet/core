@@ -24,8 +24,8 @@ export const router = HttpRouter.empty.pipe(
       Effect.gen(function* () {
         const req = yield* HttpServerRequest.HttpServerRequest;
         if ((get_header(req, "x-ast-machine") ?? "").trim()) {
-          const { principal, publicKeyX, rawBody } = yield* proof_for_machine();
-          yield* require_json_content_type();
+          const { principal, publicKeyX, rawBody } = yield* proof_for_machine;
+          yield* require_json_content_type;
           const parsed = yield* parse_json_text(rawBody);
           const input = yield* decode_request(C.GrantIssueReq, parsed);
           const issued = yield* Grants.issueGrant({
@@ -38,8 +38,8 @@ export const router = HttpRouter.empty.pipe(
             cnf: { kty: "OKP", crv: "Ed25519", x: publicKeyX } });
           return encode_ok(C.GrantIssueResp, { token: issued.token, expiresAt: issued.expiresAt });
         }
-        const s = yield* session_for_mutation();
-        const { json } = yield* read_json_body();
+        const s = yield* session_for_mutation;
+        const { json } = yield* read_json_body;
         const input = yield* decode_request(C.GrantIssueReq, json);
         if (!input.targetMachineId) return yield* Effect.fail(new CoreError("bad_request", "targetMachineId is required"));
         if (!input.cnf) return yield* Effect.fail(new CoreError("bad_request", "cnf is required"));
@@ -62,7 +62,7 @@ export const router = HttpRouter.empty.pipe(
         if (!cfg.adminToken || !constantTimeEqual(get_header(req, "x-admin-token") ?? "", cfg.adminToken)) {
           return yield* Effect.fail(notFound("not found"));
         }
-        const data = yield* Grants.rotateKeys();
+        const data = yield* Grants.rotateKeys;
         return encode_ok(R.keyRotate.responseSchema, data);
       }),
   ),

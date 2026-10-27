@@ -104,16 +104,15 @@ function request_layers_from_client(
   return make_service_layers(ctx);
 }
 
-function with_request_scope<R, E, A>(
+export const with_request_scope = <R, E, A>(
   env: WorkerEnv,
   use: (layers: ReturnType<typeof make_service_layers>) => Effect.Effect<A, E, R>,
-): Effect.Effect<A, E, R> {
-  return with_scoped_db(
+): Effect.Effect<A, E, R> =>
+  with_scoped_db(
     Effect.sync(() => open_db(env)),
     (client) => use(request_layers_from_client(env, client)),
     (client) => Effect.promise(() => client.end()),
   );
-}
 
 export default {
   async fetch(request: Request, env: WorkerEnv, ctx: { waitUntil(p: Promise<unknown>): void }): Promise<Response> {

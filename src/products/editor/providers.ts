@@ -25,8 +25,8 @@ export const PROVIDER_KEY_HINTS: Record<ProviderKind, string> = {
   google: "AI… (Google AI Studio API key)",
 };
 
-export function validateProviderKey(provider: string, apiKey: string) {
-  return Effect.gen(function* () {
+export const validateProviderKey = (provider: string, apiKey: string) =>
+  Effect.gen(function* () {
     if (!(PROVIDER_KINDS as readonly string[]).includes(provider)) {
       return yield* Effect.fail(badRequest("unsupported provider"));
     }
@@ -37,4 +37,3 @@ export function validateProviderKey(provider: string, apiKey: string) {
     }
     return { provider: provider as ProviderKind, apiKey: key };
   });
-}

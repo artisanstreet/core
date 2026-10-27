@@ -11,7 +11,7 @@ export const router = HttpRouter.empty.pipe(
   register_route(
     R.totpEnroll,
       Effect.gen(function* () {
-        const s = yield* session_for_mutation();
+        const s = yield* session_for_mutation;
         const data = yield* Auth.enrollTotp(s.accountId);
         return encode_ok(C.TotpEnrollResp, data);
       }),
@@ -19,8 +19,8 @@ export const router = HttpRouter.empty.pipe(
   register_route(
     R.totpVerify,
       Effect.gen(function* () {
-        const s = yield* session_for_mutation();
-        const { json } = yield* read_json_body();
+        const s = yield* session_for_mutation;
+        const { json } = yield* read_json_body;
         const input = yield* decode_request(C.TotpVerifyReq, json);
         const data = yield* Auth.verifyTotpEnroll(s.accountId, input.code);
         return encode_ok(C.TotpVerifyResp, data);
@@ -29,8 +29,8 @@ export const router = HttpRouter.empty.pipe(
   register_route(
     R.totpDisable,
       Effect.gen(function* () {
-        const s = yield* session_for_mutation();
-        const { json } = yield* read_json_body();
+        const s = yield* session_for_mutation;
+        const { json } = yield* read_json_body;
         const input = yield* decode_request(C.TotpDisableReq, json);
         const data = yield* Auth.disableTotp(s.accountId, input.code);
         return encode_ok(C.TotpDisableResp, data);

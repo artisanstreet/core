@@ -1,3 +1,5 @@
+import { Match } from "effect";
+
 export type ErrorCode =
   | "bad_request"
   | "unauthorized"
@@ -9,22 +11,26 @@ export type ErrorCode =
   | "gone"
   | "internal";
 
+const status_for_code = Match.type<ErrorCode>().pipe(
+  Match.when("bad_request", () => 400 as const),
+  Match.when("unauthorized", () => 401 as const),
+  Match.when("forbidden", () => 403 as const),
+  Match.when("not_found", () => 404 as const),
+  Match.when("conflict", () => 409 as const),
+  Match.when("rate_limited", () => 429 as const),
+  Match.when("payload_too_large", () => 413 as const),
+  Match.when("gone", () => 410 as const),
+  Match.when("internal", () => 500 as const),
+  Match.exhaustive,
+);
+
 export class CoreError extends Error {
   readonly code: ErrorCode;
   readonly status: number;
   constructor(code: ErrorCode, message: string, options?: { cause?: unknown }) {
     super(message, options);
     this.code = code;
-    this.status =
-      code === "bad_request" ? 400
-      : code === "unauthorized" ? 401
-      : code === "forbidden" ? 403
-      : code === "not_found" ? 404
-      : code === "conflict" ? 409
-      : code === "rate_limited" ? 429
-      : code === "payload_too_large" ? 413
-      : code === "gone" ? 410
-      : 500;
+    this.status = status_for_code(code);
   }
 }
 

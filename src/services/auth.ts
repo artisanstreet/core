@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Either } from "effect";
 import { createTOTPKeyURI, verifyHOTP } from "@oslojs/otp";
 import {
   base64urlEncode,
@@ -54,9 +54,8 @@ export function newSessionToken(): string {
   return `${SESSION_TOKEN_PREFIX}${base64urlEncode(randomBytes(32))}`;
 }
 
-function hashSecret(s: string) {
-  return Effect.promise(() => sha256Hex(`ast-core secret v1:${s}`));
-}
+const hashSecret = (s: string) =>
+  Effect.promise(() => sha256Hex(`ast-core secret v1:${s}`));
 
 // ---------------------------------------------------------------------------
 // Magic link: request → (email) consume → finalize. The emailed token only
@@ -64,13 +63,13 @@ function hashSecret(s: string) {
 // is what completes the login. GET never mutates.
 // ---------------------------------------------------------------------------
 
-export function requestMagicLink(opts: {
+export const requestMagicLink = (opts: {
   email: string;
   displayName?: string;
   deviceName?: string;
   ip?: string | null;
-}) {
-  return Effect.gen(function* () {
+}) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
     const mailer = yield* MailTag;
@@ -127,7 +126,6 @@ export function requestMagicLink(opts: {
     yield* record(account.id, "login.requested", { ip: opts.ip ?? null });
     return { requestId, requestSecret, expiresAt };
   });
-}
 
 function requestStatusOf(row: { status: string; expires_at: string }, nowMs: number) {
   if (row.status === "completed") return "completed" as const;
@@ -136,8 +134,8 @@ function requestStatusOf(row: { status: string; expires_at: string }, nowMs: num
   return "pending" as const;
 }
 
-export function consumeMagicLink(opts: { token: string; requestSecret?: string; ip?: string | null }) {
-  return Effect.gen(function* () {
+export const consumeMagicLink = (opts: { token: string; requestSecret?: string; ip?: string | null }) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
     const nowMs = cfg.now();
@@ -160,10 +158,9 @@ export function consumeMagicLink(opts: { token: string; requestSecret?: string; 
     }
     return { requestId: row.id, status: requestStatusOf({ ...row, status: "expired" }, nowMs), totpRequired: row.totp_required };
   });
-}
 
-export function loginRequestStatus(opts: { requestId: string; requestSecret: string }) {
-  return Effect.gen(function* () {
+export const loginRequestStatus = (opts: { requestId: string; requestSecret: string }) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
     const row = yield* dbRun(() => getLoginRequestById.run(db, { id: opts.requestId }));
@@ -178,9 +175,8 @@ export function loginRequestStatus(opts: { requestId: string; requestSecret: str
       expiresAt: row.expires_at,
     };
   });
-}
 
-export function finalizeMagicLink(opts: {
+export const finalizeMagicLink = (opts: {
   requestId: string;
   requestSecret: string;
   totpCode?: string;
@@ -188,8 +184,8 @@ export function finalizeMagicLink(opts: {
   deviceName?: string;
   ip?: string | null;
   userAgent?: string | null;
-}) {
-  return Effect.gen(function* () {
+}) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
     const nowMs = cfg.now();
@@ -257,7 +253,6 @@ export function finalizeMagicLink(opts: {
       totpVerified,
     };
   });
-}
 
 // Match a 6-digit code against explicit time-steps around now (±2 steps
 // covers the 60 s grace window). Returns the matched step so the caller can
@@ -267,19 +262,17 @@ function matchTotpStep(secret: Uint8Array, code: string, nowMs: number): bigint 
   if (!/^[0-9]{6}$/.test(c)) return null;
   const base = Math.floor(nowMs / 30000);
   for (let k = -2; k <= 2; k++) {
-    try {
-      if (verifyHOTP(secret, BigInt(base + k), 6, c)) return BigInt(base + k);
-    } catch {
-      return null;
-    }
+    const attempt = Either.try(() => verifyHOTP(secret, BigInt(base + k), 6, c));
+    if (Either.isLeft(attempt)) return null;
+    if (attempt.right) return BigInt(base + k);
   }
   return null;
 }
 
 // Attempt budget (durable, per account) + step claim (durable, single-use).
 // Both checks live in the database so every isolate enforces them.
-function consumeTotpAttempt(accountId: string, secret: Uint8Array, code: string | undefined, nowMs: number) {
-  return Effect.gen(function* () {
+const consumeTotpAttempt = (accountId: string, secret: Uint8Array, code: string | undefined, nowMs: number) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     yield* checkBudget(`totp:account:${accountId}`, RATE_WINDOW_SECONDS, 10, nowMs);
     if (!code) return false;
@@ -290,23 +283,21 @@ function consumeTotpAttempt(accountId: string, secret: Uint8Array, code: string 
     const claimed = yield* dbRun(() => claimTotpStep.run(db, { accountId, step }));
     return claimed !== null;
   });
-}
 
-function decryptSecret(enc: Uint8Array, masterKey: Uint8Array) {
-  return Effect.tryPromise({
+const decryptSecret = (enc: Uint8Array, masterKey: Uint8Array) =>
+  Effect.tryPromise({
     try: () => decryptWithKey(masterKey, new Uint8Array(enc), TOTP_PURPOSE),
     catch: () => unauthorized("second factor required"),
   });
-}
 
-function satisfyTotpChallenge(
+const satisfyTotpChallenge = (
   accountId: string,
   totpCode: string | undefined,
   recoveryCode: string | undefined,
   ip: string | null,
   nowMs: number,
-): Effect.Effect<boolean, CoreError, import("./deps.ts").DbTag | AppConfigTag> {
-  return Effect.gen(function* () {
+) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
     if (ip) yield* checkBudget(`totp:ip:${ip}`, RATE_WINDOW_SECONDS, 30, nowMs);
@@ -325,14 +316,13 @@ function satisfyTotpChallenge(
     }
     return false;
   });
-}
 
 // ---------------------------------------------------------------------------
 // Sessions
 // ---------------------------------------------------------------------------
 
-export function requireSession(rawToken: string) {
-  return Effect.gen(function* () {
+export const requireSession = (rawToken: string) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
     const tokenHash = yield* hashSecret(rawToken);
@@ -351,26 +341,23 @@ export function requireSession(rawToken: string) {
     };
     return principal;
   });
-}
 
-export function revokeCurrentSession(rawToken: string) {
-  return Effect.gen(function* () {
+export const revokeCurrentSession = (rawToken: string) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const tokenHash = yield* hashSecret(rawToken);
     yield* dbRun(() => revokeSession.run(db, { tokenHash }));
   });
-}
 
-export function revokeAllSessions(accountId: string) {
-  return Effect.gen(function* () {
+export const revokeAllSessions = (accountId: string) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     yield* dbRun(() => revokeSessionsByAccount.run(db, { accountId }));
     yield* record(accountId, "sessions.revoked_all", {});
   });
-}
 
-export function listSessions(accountId: string, limit: number) {
-  return Effect.gen(function* () {
+export const listSessions = (accountId: string, limit: number) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const rows = yield* dbRun(() => listSessionsByAccount.run(db, { accountId, limit }));
     return {
@@ -384,14 +371,13 @@ export function listSessions(accountId: string, limit: number) {
       })),
     };
   });
-}
 
 // ---------------------------------------------------------------------------
 // TOTP + recovery codes
 // ---------------------------------------------------------------------------
 
-export function enrollTotp(accountId: string) {
-  return Effect.gen(function* () {
+export const enrollTotp = (accountId: string) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
     const existing = yield* dbRun(() => getAccountById.run(db, { id: accountId }));
@@ -416,10 +402,9 @@ export function enrollTotp(accountId: string) {
     yield* record(accountId, "totp.enroll_started", {});
     return { otpauthUrl, recoveryCodes: codes };
   });
-}
 
-export function verifyTotpEnroll(accountId: string, code: string) {
-  return Effect.gen(function* () {
+export const verifyTotpEnroll = (accountId: string, code: string) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
     const account = yield* dbRun(() => getAccountById.run(db, { id: accountId }));
@@ -433,10 +418,9 @@ export function verifyTotpEnroll(accountId: string, code: string) {
     yield* record(accountId, "totp.enrolled", {});
     return { enrolled: true };
   });
-}
 
-export function disableTotp(accountId: string, code: string) {
-  return Effect.gen(function* () {
+export const disableTotp = (accountId: string, code: string) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
     const account = yield* dbRun(() => getAccountById.run(db, { id: accountId }));
@@ -451,23 +435,20 @@ export function disableTotp(accountId: string, code: string) {
     yield* record(accountId, "totp.disabled", {});
     return { disabled: true };
   });
-}
 
-export function countRecoveryCodes(accountId: string) {
-  return Effect.gen(function* () {
+export const countRecoveryCodes = (accountId: string) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const row = yield* dbRun(() => countActiveRecoveryCodes.run(db, { accountId }));
     return row.n;
   });
-}
 
-export function assertSecondFactor(
+export const assertSecondFactor = (
   accountId: string,
   opts: { totpCode?: string; recoveryCode?: string },
-) {
-  return Effect.gen(function* () {
+) =>
+  Effect.gen(function* () {
     const cfg = yield* AppConfigTag;
     const ok = yield* satisfyTotpChallenge(accountId, opts.totpCode, opts.recoveryCode, null, cfg.now());
     if (!ok) return yield* Effect.fail(forbidden("second factor required"));
   });
-}

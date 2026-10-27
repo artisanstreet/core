@@ -18,12 +18,12 @@ export class MailTag extends Context.Tag("Mail")<MailTag, { readonly send: (m: M
 
 const resend_retry_schedule = Schedule.exponential("200 millis").pipe(Schedule.compose(Schedule.recurs(2)));
 
-function send_with_client(
+const send_with_client = (
   cfg: AppConfig,
   client: HttpClient.HttpClient,
   m: Mail,
-): Effect.Effect<void, CoreError> {
-  return Effect.gen(function* () {
+) =>
+  Effect.gen(function* () {
     if (cfg.mailer === "log") {
       return yield* Effect.sync(() => {
         console.log(`[ast-core mail] to=${m.to} subject=${m.subject} confirm=${m.confirmUrl}`);
@@ -48,7 +48,6 @@ function send_with_client(
       return yield* Effect.fail(internal("mail delivery failed"));
     }
   });
-}
 
 export const MailLive = Layer.effect(
   MailTag,

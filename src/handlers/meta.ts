@@ -31,7 +31,7 @@ export const router = HttpRouter.empty.pipe(
   register_route(
     R.jwks,
       Effect.gen(function* () {
-        const data = yield* Grants.jwks();
+        const data = yield* Grants.jwks;
         const ok = encode_ok(C.JwksResp, data);
         return ok.pipe(HttpServerResponse.setHeader("Cache-Control", "public, max-age=600"));
       }),
@@ -39,7 +39,7 @@ export const router = HttpRouter.empty.pipe(
   register_route(
     R.revocations,
       Effect.gen(function* () {
-        const data = yield* Grants.revocations();
+        const data = yield* Grants.revocations;
         const ok = encode_ok(C.RevocationsResp, data);
         return ok.pipe(HttpServerResponse.setHeader("Cache-Control", "public, max-age=60"));
       }),

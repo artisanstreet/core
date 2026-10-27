@@ -21,8 +21,8 @@ export const router = HttpRouter.empty.pipe(
   register_route(
     R.artifactCreate,
       Effect.gen(function* () {
-        const me = yield* session_for_mutation();
-        const { json } = yield* read_json_body();
+        const me = yield* session_for_mutation;
+        const { json } = yield* read_json_body;
         const input = yield* decode_request(C.ArtifactCreateReq, json);
         const env = yield* validateEnvelope(input.envelope);
         const stored = yield* Vault.storeArtifact({ accountId: me.accountId, label: input.label ?? "", envelope: env });
@@ -34,11 +34,11 @@ export const router = HttpRouter.empty.pipe(
       Effect.gen(function* () {
         const req = yield* HttpServerRequest.HttpServerRequest;
         if (has_machine_header(req)) {
-          const { principal } = yield* proof_for_machine();
+          const { principal } = yield* proof_for_machine;
           const data = yield* Vault.listAssignedArtifacts(principal.accountId, principal.machineId);
           return encode_ok(C.ArtifactListResp, data);
         }
-        const { principal: me } = yield* session_of();
+        const { principal: me } = yield* session_of;
         const data = yield* Vault.listArtifacts(me.accountId);
         return encode_ok(C.ArtifactListResp, data);
       }),
@@ -46,7 +46,7 @@ export const router = HttpRouter.empty.pipe(
   register_route(
     R.artifactRevoke,
       Effect.gen(function* () {
-        const me = yield* session_for_mutation();
+        const me = yield* session_for_mutation;
         const params = yield* HttpRouter.RouteContext.pipe(Effect.map((c) => c.params));
         const data = yield* Vault.revokeArtifact(me.accountId, params["id"] ?? "");
         return encode_ok(R.artifactRevoke.responseSchema, data);
@@ -55,8 +55,8 @@ export const router = HttpRouter.empty.pipe(
   register_route(
     R.artifactAssign,
       Effect.gen(function* () {
-        const me = yield* session_for_mutation();
-        const { json } = yield* read_json_body();
+        const me = yield* session_for_mutation;
+        const { json } = yield* read_json_body;
         const input = yield* decode_request(C.ArtifactAssignReq, json);
         const a = yield* Vault.assignArtifact(me.accountId, input.artifactId, input.machineId);
         return encode_ok(R.artifactAssign.responseSchema, { artifactId: a.artifactId, machineId: a.machineId });
@@ -65,8 +65,8 @@ export const router = HttpRouter.empty.pipe(
   register_route(
     R.artifactUnassign,
       Effect.gen(function* () {
-        const me = yield* session_for_mutation();
-        const { json } = yield* read_json_body();
+        const me = yield* session_for_mutation;
+        const { json } = yield* read_json_body;
         const input = yield* decode_request(C.ArtifactAssignReq, json);
         const data = yield* Vault.unassignArtifact(me.accountId, input.artifactId, input.machineId);
         return encode_ok(R.artifactUnassign.responseSchema, data);
@@ -75,7 +75,7 @@ export const router = HttpRouter.empty.pipe(
   register_route(
     R.artifactDownload,
       Effect.gen(function* () {
-        const { principal } = yield* proof_for_machine();
+        const { principal } = yield* proof_for_machine;
         const params = yield* HttpRouter.RouteContext.pipe(Effect.map((c) => c.params));
         const data = yield* Vault.downloadArtifact(principal.accountId, principal.machineId, params["id"] ?? "");
         const envelope = yield* Schema.decodeUnknown(C.EngineArtifactEnvelope)(data.envelope).pipe(

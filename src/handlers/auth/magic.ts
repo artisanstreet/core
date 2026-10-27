@@ -16,9 +16,9 @@ export const router = HttpRouter.empty.pipe(
   register_route(
     R.magicRequest,
       Effect.gen(function* () {
-        const { json } = yield* read_json_body();
+        const { json } = yield* read_json_body;
         const input = yield* decode_request(C.MagicRequest, json);
-        const ip = yield* client_ip();
+        const ip = yield* client_ip;
         const data = yield* Auth.requestMagicLink({ ...input, ip });
         return encode_ok(C.MagicRequestResp, data);
       }),
@@ -26,7 +26,7 @@ export const router = HttpRouter.empty.pipe(
   register_route(
     R.magicStatus,
       Effect.gen(function* () {
-        const { json } = yield* read_json_body();
+        const { json } = yield* read_json_body;
         const input = yield* decode_request(C.MagicStatusReq, json);
         const data = yield* Auth.loginRequestStatus(input);
         return encode_ok(C.MagicStatusResp, data);
@@ -35,9 +35,9 @@ export const router = HttpRouter.empty.pipe(
   register_route(
     R.magicConsume,
       Effect.gen(function* () {
-        const { json } = yield* read_json_body();
+        const { json } = yield* read_json_body;
         const input = yield* decode_request(C.MagicConsumeReq, json);
-        const ip = yield* client_ip();
+        const ip = yield* client_ip;
         const data = yield* Auth.consumeMagicLink({ ...input, ip });
         return encode_ok(C.MagicConsumeResp, data);
       }),
@@ -47,9 +47,9 @@ export const router = HttpRouter.empty.pipe(
       Effect.gen(function* () {
         const req = yield* HttpServerRequest.HttpServerRequest;
         const cfg = yield* AppConfigTag;
-        const { json } = yield* read_json_body();
+        const { json } = yield* read_json_body;
         const input = yield* decode_request(C.MagicFinalizeReq, json);
-        const ip = yield* client_ip();
+        const ip = yield* client_ip;
         const ua = (req.headers["user-agent"] as unknown as string | undefined) ?? null;
         const r = yield* Auth.finalizeMagicLink({ ...input, ip, userAgent: typeof ua === "string" ? ua : null });
         const secure = cfg.publicBaseUrl.startsWith("https://");

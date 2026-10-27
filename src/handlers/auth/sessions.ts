@@ -16,7 +16,7 @@ export const router = HttpRouter.empty.pipe(
   register_route(
     R.me,
       Effect.gen(function* () {
-        const { principal: s } = yield* session_of();
+        const { principal: s } = yield* session_of;
         const [machines, providers, latest_config_version] = yield* Effect.all(
           [
             Machines.listMachines(s.accountId),
@@ -43,7 +43,7 @@ export const router = HttpRouter.empty.pipe(
   register_route(
     R.sessions,
       Effect.gen(function* () {
-        const { principal: s } = yield* session_of();
+        const { principal: s } = yield* session_of;
         const data = yield* Auth.listSessions(s.accountId, 50);
         return encode_ok(C.SessionListResp, data);
       }),
@@ -52,11 +52,11 @@ export const router = HttpRouter.empty.pipe(
     R.logout,
       Effect.gen(function* () {
         const cfg = yield* AppConfigTag;
-        const sess = yield* session_of();
+        const sess = yield* session_of;
         if (sess.via === "cookie") {
-          yield* session_for_mutation();
+          yield* session_for_mutation;
         }
-        const token = yield* current_token();
+        const token = yield* current_token;
         yield* Auth.revokeCurrentSession(token);
         const secure = cfg.publicBaseUrl.startsWith("https://");
         const ok = encode_ok(R.logout.responseSchema, { revoked: true });
@@ -67,7 +67,7 @@ export const router = HttpRouter.empty.pipe(
     R.sessionsRevokeAll,
       Effect.gen(function* () {
         const cfg = yield* AppConfigTag;
-        const s = yield* session_for_mutation();
+        const s = yield* session_for_mutation;
         yield* Auth.revokeAllSessions(s.accountId);
         const secure = cfg.publicBaseUrl.startsWith("https://");
         const ok = encode_ok(R.sessionsRevokeAll.responseSchema, { revoked: true });

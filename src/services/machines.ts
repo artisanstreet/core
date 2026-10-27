@@ -32,12 +32,11 @@ export interface MachinePrincipal {
 
 const EMPTY_BODY_HASH = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
-export function fingerprintOfPublicKeyX(x: string) {
-  return Effect.promise(() => sha256Bytes(base64urlDecode(x)).then(base64urlEncode));
-}
+export const fingerprintOfPublicKeyX = (x: string) =>
+  Effect.promise(() => sha256Bytes(base64urlDecode(x)).then(base64urlEncode));
 
-export function verifyEd25519(publicKeyX: string, signatureB64: string, message: Uint8Array) {
-  return Effect.tryPromise({
+export const verifyEd25519 = (publicKeyX: string, signatureB64: string, message: Uint8Array) =>
+  Effect.tryPromise({
     try: async () => {
       const key = await crypto.subtle.importKey(
         "jwk",
@@ -50,7 +49,6 @@ export function verifyEd25519(publicKeyX: string, signatureB64: string, message:
     },
     catch: () => unauthorized("invalid signature"),
   });
-}
 
 // Canonical request proof (§3): verifies timestamp window, recomputes the
 // body hash, verifies the Ed25519 signature FIRST, then atomically claims
@@ -59,7 +57,7 @@ export function verifyEd25519(publicKeyX: string, signatureB64: string, message:
 // poisoning a nonce the legitimate holder will use; the nonce is part of
 // the signed canonical string, so the later claim stays bound to exactly
 // what was verified. Any failure is a generic 401.
-export function verifyMachineProof(opts: {
+export const verifyMachineProof = (opts: {
   subjectId: string;
   publicKeyX: string;
   timestamp: string;
@@ -68,8 +66,8 @@ export function verifyMachineProof(opts: {
   method: string;
   pathAndQuery: string;
   rawBody: string;
-}) {
-  return Effect.gen(function* () {
+}) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
     const ts = Number(opts.timestamp);
@@ -89,7 +87,6 @@ export function verifyMachineProof(opts: {
     const claimed = yield* dbRun(() => insertNonce.run(db, { subject: opts.subjectId, nonce: opts.nonce }));
     if (!claimed) return yield* Effect.fail(unauthorized("replay rejected"));
   });
-}
 
 function newCode(): string {
   // Rejection sampling over the actual alphabet length: unbiased, and every
@@ -113,14 +110,14 @@ export { newCode as newEnrollmentCode };
 // Enrollment lifecycle
 // ---------------------------------------------------------------------------
 
-export function startEnrollment(opts: {
+export const startEnrollment = (opts: {
   publicKeyX: string;
   label: string;
   timestamp: number;
   proof: string;
   ip?: string | null;
-}) {
-  return Effect.gen(function* () {
+}) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
     if (opts.ip) yield* checkBudget(`enroll:ip:${opts.ip}`, RATE_WINDOW_SECONDS, 10, cfg.now());
@@ -146,15 +143,14 @@ export function startEnrollment(opts: {
     const fingerprint = yield* fingerprintOfPublicKeyX(opts.publicKeyX);
     return { enrollmentId, code, expiresAt, keyFingerprint: fingerprint };
   });
-}
 
-export function claimEnrollmentWithCode(opts: {
+export const claimEnrollmentWithCode = (opts: {
   code: string;
   accountId: string;
   email: string;
   ip?: string | null;
-}) {
-  return Effect.gen(function* () {
+}) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
     yield* checkBudget(`claim:account:${opts.accountId}`, RATE_WINDOW_SECONDS, 20, cfg.now());
@@ -172,10 +168,9 @@ export function claimEnrollmentWithCode(opts: {
     yield* record(opts.accountId, "machine.claimed", { ip: opts.ip ?? null });
     return { enrollmentId: found.id, status: "claimed" as const };
   });
-}
 
-export function enrollmentStatus(enrollmentId: string, subjectPublicKeyX: string) {
-  return Effect.gen(function* () {
+export const enrollmentStatus = (enrollmentId: string, subjectPublicKeyX: string) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
     const row = yield* dbRun(() => getEnrollmentById.run(db, { id: enrollmentId }));
@@ -199,12 +194,11 @@ export function enrollmentStatus(enrollmentId: string, subjectPublicKeyX: string
       expiresAt: row.expires_at,
     };
   });
-}
 
 // Authenticate a machine-proof request: resolves the subject id (enrollment
 // or machine) to its enrolled public key, then verifies the full proof.
 // Returns the caller's identity for account-scoping downstream.
-export function authenticateMachineProof(opts: {
+export const authenticateMachineProof = (opts: {
   subjectId: string;
   timestamp: string;
   nonce: string;
@@ -212,8 +206,8 @@ export function authenticateMachineProof(opts: {
   method: string;
   pathAndQuery: string;
   rawBody: string;
-}) {
-  return Effect.gen(function* () {
+}) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     let publicKeyX: string;
     let accountId: string | null = null;
@@ -234,14 +228,13 @@ export function authenticateMachineProof(opts: {
     yield* verifyMachineProof({ ...opts, publicKeyX });
     return { publicKeyX, accountId, machineId };
   });
-}
 
-export function confirmEnrollmentWithKey(opts: {
+export const confirmEnrollmentWithKey = (opts: {
   enrollmentId: string;
   accountId: string;
   confirmation: string;
-}) {
-  return Effect.gen(function* () {
+}) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const row = yield* dbRun(() => getEnrollmentById.run(db, { id: opts.enrollmentId }));
     if (!row) return yield* Effect.fail(unauthorized("unknown enrollment"));
@@ -270,14 +263,13 @@ export function confirmEnrollmentWithKey(opts: {
     yield* record(opts.accountId, "machine.enrolled", {});
     return { machineId, accountId: opts.accountId };
   });
-}
 
 // ---------------------------------------------------------------------------
 // Machine registry
 // ---------------------------------------------------------------------------
 
-export function requireMachine(machineId: string) {
-  return Effect.gen(function* () {
+export const requireMachine = (machineId: string) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const row = yield* dbRun(() => getMachineById.run(db, { id: machineId }));
     if (!row || row.revoked_at) return yield* Effect.fail(unauthorized("unknown or revoked machine"));
@@ -285,10 +277,9 @@ export function requireMachine(machineId: string) {
     const principal: MachinePrincipal = { machineId: row.id, accountId: row.account_id };
     return { principal, publicKeyX: row.public_key_x };
   });
-}
 
-export function listMachines(accountId: string) {
-  return Effect.gen(function* () {
+export const listMachines = (accountId: string) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const rows = yield* dbRun(() => listMachinesByAccount.run(db, { accountId }));
     return {
@@ -302,20 +293,18 @@ export function listMachines(accountId: string) {
       })),
     };
   });
-}
 
-export function revokeMachineById(accountId: string, machineId: string) {
-  return Effect.gen(function* () {
+export const revokeMachineById = (accountId: string, machineId: string) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const done = yield* dbRun(() => revokeMachine.run(db, { id: machineId, accountId }));
     if (!done) return yield* Effect.fail(forbidden("no such machine in this account"));
     yield* record(accountId, "machine.revoked", {});
     return { revoked: true };
   });
-}
 
-export function machinePublicKeyJwk(accountId: string, machineId: string) {
-  return Effect.gen(function* () {
+export const machinePublicKeyJwk = (accountId: string, machineId: string) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const row = yield* dbRun(() => getMachineById.run(db, { id: machineId }));
     if (!row || row.account_id !== accountId || row.revoked_at) {
@@ -323,4 +312,3 @@ export function machinePublicKeyJwk(accountId: string, machineId: string) {
     }
     return { kty: "OKP" as const, crv: "Ed25519" as const, x: row.public_key_x };
   });
-}

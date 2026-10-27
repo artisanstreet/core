@@ -8,10 +8,10 @@ import { encode_fail, RequestIdTag, with_security_headers } from "./response.ts"
 import { CoreError } from "../errors.ts";
 import type { Layer } from "effect";
 
-export function http_effect(
+export const http_effect = (
   request: Request,
   layers: Layer.Layer<ServiceEnv, never, never>,
-): Effect.Effect<Response, never, Scope.Scope> {
+): Effect.Effect<Response, never, Scope.Scope> => {
   const request_id = crypto.randomUUID();
   const req = HttpServerRequest.fromWeb(request);
   return compiled_app.pipe(
@@ -33,4 +33,4 @@ export function http_effect(
     Effect.map((res) => with_security_headers(res, request_id)),
     Effect.map((res) => HttpServerResponse.toWeb(res)),
   );
-}
+};

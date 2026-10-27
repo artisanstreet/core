@@ -10,8 +10,8 @@ import pruneTotpSteps from "../db/queries/totp/pruneTotpSteps.sql";
 
 // Scheduled maintenance: expire stale requests, drop used nonces and old
 // counters, purge accounts past their deletion grace period.
-export function janitor(nowMs: number) {
-  return Effect.gen(function* () {
+export const janitor = (nowMs: number) =>
+  Effect.gen(function* () {
     const { db } = yield* DbTag;
     const now = new Date(nowMs).toISOString();
     const dayAgo = new Date(nowMs - 24 * 60 * 60 * 1000).toISOString();
@@ -32,4 +32,3 @@ export function janitor(nowMs: number) {
       purgedAccounts: purged,
     };
   });
-}

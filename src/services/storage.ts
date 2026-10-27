@@ -16,22 +16,20 @@ export const memoryR2 = (): { r2: R2Like; layer: Layer.Layer<StorageTag> } => {
   return { r2, layer: Layer.succeed(StorageTag, { r2 }) };
 };
 
-export function putBlob(key: string, body: Uint8Array | string) {
-  return Effect.gen(function* () {
+export const putBlob = (key: string, body: Uint8Array | string) =>
+  Effect.gen(function* () {
     const { r2 } = yield* StorageTag;
     yield* Effect.tryPromise({
       try: () => r2.put(key, body),
       catch: () => internal("storage unavailable"),
     });
   });
-}
 
-export function getBlob(key: string) {
-  return Effect.gen(function* () {
+export const getBlob = (key: string) =>
+  Effect.gen(function* () {
     const { r2 } = yield* StorageTag;
     return yield* Effect.tryPromise({
       try: () => r2.get(key),
       catch: () => internal("storage unavailable"),
     });
   });
-}
