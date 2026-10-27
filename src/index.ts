@@ -33,7 +33,9 @@ function string_vars(env: WorkerEnv): Record<string, string | undefined> {
     MAIL_PROVIDER: pick(env.MAIL_PROVIDER),
     MAIL_FROM: pick(env.MAIL_FROM),
     MAIL_FROM_NAME: pick(env.MAIL_FROM_NAME),
-    CORE_RELAY_ORIGIN: pick(env.CORE_RELAY_ORIGIN) };
+    CORE_RELAY_ORIGIN: pick(env.CORE_RELAY_ORIGIN),
+    AUTH_PUBLIC_BASE_URL: pick(env.AUTH_PUBLIC_BASE_URL),
+    DASHBOARD_PUBLIC_BASE_URL: pick(env.DASHBOARD_PUBLIC_BASE_URL) };
 }
 
 function r2_adapter(bucket: NonNullable<WorkerEnv["CONFIG_BUCKET"]>): R2Like {

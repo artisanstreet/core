@@ -25,6 +25,13 @@ export const config = Config.all({
   "AST_CORE_ORIGIN": Config.String("AST_CORE_ORIGIN"),
   "AST_RELAY_ORIGIN": Config.String("AST_RELAY_ORIGIN"),
   /**
+   * Browser origins for exact credentialed CORS (auth + dashboard).
+   * Stage-specific; never reuse prod for previews (second custom-domain
+   * attach would move ownership).
+   */
+  "AST_AUTH_ORIGIN": Config.String("AST_AUTH_ORIGIN"),
+  "AST_DASHBOARD_ORIGIN": Config.String("AST_DASHBOARD_ORIGIN"),
+  /**
    * External Postgres direct URL (secret; no pooled URL).
    */
   "AST_CORE_DATABASE_URL": redactErrors(Config.map(Config.String("AST_CORE_DATABASE_URL"), Redacted.make), "AST_CORE_DATABASE_URL"),

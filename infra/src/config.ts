@@ -62,6 +62,14 @@ export const MAIL_SENDING_SUBDOMAIN = "mail.artisan.st" as const;
 export const MAIL_SENDER_EMAIL = "auth@mail.artisan.st" as const;
 export const MAIL_SENDER_NAME = "Artisan Street" as const;
 
+// Known production browser + API origins. Deploy defaults to these ONLY
+// when the stage is prod and validation confirms consistency; preview
+// stages must use stage-specific origins (never reuse prod — the second
+// custom-domain attach would move ownership).
+export const API_PROD_ORIGIN = "https://api.artisan.st" as const;
+export const AUTH_PROD_ORIGIN = "https://auth.artisan.st" as const;
+export const DASHBOARD_PROD_ORIGIN = "https://dashboard.artisan.st" as const;
+
 export function sender_email_from_mail_from(mail_from: string): string {
   const trimmed = mail_from.trim();
   const angled = trimmed.match(/^(.*)<([^<>\s]+@[^<>\s]+)>\s*$/);
@@ -165,6 +173,52 @@ export function assert_distinct_origins(core_origin: string, relay_origin: strin
   }
   if (core_host === relay_host) {
     throw new Error("AST_CORE_ORIGIN and AST_RELAY_ORIGIN must have distinct hostnames (separate Workers cannot share one custom-domain owner; ports do not separate ownership)");
+  }
+}
+
+export function assert_all_origins_distinct(
+  core_origin: string,
+  relay_origin: string,
+  auth_origin: string,
+  dashboard_origin: string,
+): void {
+  const parsed = Result.try(() => [
+    new URL(core_origin).hostname.toLowerCase(),
+    new URL(relay_origin).hostname.toLowerCase(),
+    new URL(auth_origin).hostname.toLowerCase(),
+    new URL(dashboard_origin).hostname.toLowerCase(),
+  ]);
+  if (Result.isFailure(parsed)) {
+    throw new Error("AST_*_ORIGIN values must be valid absolute URLs");
+  }
+  const hosts = parsed.success;
+  if (hosts.some((h) => !h)) {
+    throw new Error("AST_*_ORIGIN values must include hostnames");
+  }
+  if (new Set(hosts).size !== hosts.length) {
+    throw new Error("AST_CORE/RELAY/AUTH/DASHBOARD origins must have distinct hostnames (separate Workers cannot share one custom-domain owner)");
+  }
+}
+
+export function assert_browser_origins_for_stage(
+  auth_origin: string,
+  dashboard_origin: string,
+  stage: string,
+): void {
+  assert_valid_stage(stage);
+  assert_origin_for_stage(auth_origin, "AST_AUTH_ORIGIN", stage);
+  assert_origin_for_stage(dashboard_origin, "AST_DASHBOARD_ORIGIN", stage);
+  if (stage === "prod") {
+    if (auth_origin !== AUTH_PROD_ORIGIN) {
+      throw new Error(`AST_AUTH_ORIGIN must be ${AUTH_PROD_ORIGIN} in prod`);
+    }
+    if (dashboard_origin !== DASHBOARD_PROD_ORIGIN) {
+      throw new Error(`AST_DASHBOARD_ORIGIN must be ${DASHBOARD_PROD_ORIGIN} in prod`);
+    }
+  } else {
+    if (auth_origin === AUTH_PROD_ORIGIN || dashboard_origin === DASHBOARD_PROD_ORIGIN) {
+      throw new Error("preview stages must not reuse prod browser origins (second custom-domain attach would move ownership)");
+    }
   }
 }
 

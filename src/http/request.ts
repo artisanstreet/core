@@ -113,12 +113,14 @@ export const session_for_mutation = Effect.gen(function* () {
   const req = yield* HttpServerRequest.HttpServerRequest;
   const { principal, via } = yield* session_of;
   const cookie_check = Effect.gen(function* () {
+    const cfg = yield* AppConfigTag;
     const origin = get_header(req, "origin");
     if (!origin) return yield* Effect.fail(forbidden("origin required"));
     const origin_url = yield* parse_url(origin);
     const request_url = yield* parse_url(req.originalUrl);
-    if (origin_url.origin !== request_url.origin) return yield* Effect.fail(forbidden("cross-origin forbidden"));
-    return principal;
+    if (origin_url.origin === request_url.origin) return principal;
+    if (cfg.allowed_browser_origins.includes(origin_url.origin)) return principal;
+    return yield* Effect.fail(forbidden("cross-origin forbidden"));
   });
   return yield* Match.value(via).pipe(
     Match.when("bearer", () => Effect.succeed(principal)),

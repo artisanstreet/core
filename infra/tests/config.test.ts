@@ -10,6 +10,8 @@ import { fileURLToPath as file_url_to_path } from "node:url";
 // subpath exports. Cloud-free: needs only FileSystem + Path.
 import { readPrebuiltWorkerBundle as read_prebuilt_worker_bundle } from "../node_modules/@alchemy.run/cloudflare/lib/Workers/Sources/Prebuilt.js";
 import {
+  AUTH_PROD_ORIGIN,
+  DASHBOARD_PROD_ORIGIN,
   HYPERDRIVE_CACHING,
   MAIL_PROVIDER_VALUE,
   MAIL_SENDER_EMAIL,
@@ -17,6 +19,8 @@ import {
   MAIL_ZONE_ID,
   MAIL_ZONE_NAME,
   STACK_NAME,
+  assert_all_origins_distinct,
+  assert_browser_origins_for_stage,
   assert_distinct_origins,
   assert_origin_for_stage,
   assert_valid_mail_from,
@@ -39,6 +43,8 @@ const dummy_hd = { __dummy: "hyperdrive" } as never;
 const dummy_email = { kind: "Cloudflare.Email.SendEmail", name: "EMAIL" } as never;
 const dummy_master_key = Redacted.make("test-master-key-not-a-secret");
 const dummy_admin_token = Redacted.make("test-admin-token-not-a-secret");
+const test_auth_origin = "https://auth.example.invalid";
+const test_dashboard_origin = "https://dashboard.example.invalid";
 
 describe("stack identity (stage isolation, no sibling imports)", () => {
   it("uses the Core stack name (Relay owns its own stack)", () => {
@@ -87,16 +93,50 @@ describe("public origins (shared AST_CORE_ORIGIN / AST_RELAY_ORIGIN)", () => {
     expect(() => assert_origin_for_stage("http://core.artisanstreet.dev", "AST_CORE_ORIGIN", "pr-42")).toThrow();
     expect(() => assert_origin_for_stage("http://core.artisanstreet.dev", "AST_CORE_ORIGIN", "prod")).toThrow();
   });
+
+  it("browser origins are distinct hostnames across all four workers", () => {
+    expect(() =>
+      assert_all_origins_distinct(
+        "https://api.example.dev",
+        "https://relay.example.dev",
+        "https://auth.example.dev",
+        "https://dashboard.example.dev",
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assert_all_origins_distinct(
+        "https://api.example.dev",
+        "https://relay.example.dev",
+        "https://api.example.dev",
+        "https://dashboard.example.dev",
+      ),
+    ).toThrow();
+  });
+
+  it("prod pins known browser origins; previews must not reuse prod", () => {
+    expect(() => assert_browser_origins_for_stage(AUTH_PROD_ORIGIN, DASHBOARD_PROD_ORIGIN, "prod")).not.toThrow();
+    expect(() =>
+      assert_browser_origins_for_stage("https://auth-pr-42.example.dev", "https://dashboard-pr-42.example.dev", "pr-42"),
+    ).not.toThrow();
+    expect(() => assert_browser_origins_for_stage(AUTH_PROD_ORIGIN, DASHBOARD_PROD_ORIGIN, "pr-42")).toThrow();
+    expect(() =>
+      assert_browser_origins_for_stage("https://auth-pr-42.example.dev", DASHBOARD_PROD_ORIGIN, "pr-42"),
+    ).toThrow();
+  });
 });
 
 describe("Worker env binds canonical literals (not raw Config values)", () => {
   it("factory env equals normalized origins even for messy inputs", () => {
     const core_origin = normalize_origin("HTTPS://Core.ArtisanStreet.Dev/", "AST_CORE_ORIGIN");
     const relay_origin = normalize_origin("https://Relay.ArtisanStreet.Dev/", "AST_RELAY_ORIGIN");
+    const auth_origin = normalize_origin("https://Auth.Example.Invalid/", "AST_AUTH_ORIGIN");
+    const dashboard_origin = normalize_origin("https://Dashboard.Example.Invalid/", "AST_DASHBOARD_ORIGIN");
     const props = build_core_worker_props({
       stage: "pr-42",
       core_origin,
       relay_origin,
+      auth_origin,
+      dashboard_origin,
       mail_from: "auth@mail.artisan.st",
       mail_from_name: "Artisan Street",
       email: dummy_email,
@@ -108,6 +148,8 @@ describe("Worker env binds canonical literals (not raw Config values)", () => {
     expect(props.env.CORE_PUBLIC_BASE_URL).toBe("https://core.artisanstreet.dev");
     expect(props.env.CORE_JWT_ISSUER).toBe("https://core.artisanstreet.dev");
     expect(props.env.CORE_RELAY_ORIGIN).toBe("https://relay.artisanstreet.dev");
+    expect(props.env.AUTH_PUBLIC_BASE_URL).toBe("https://auth.example.invalid");
+    expect(props.env.DASHBOARD_PUBLIC_BASE_URL).toBe("https://dashboard.example.invalid");
     expect(props.env.MAIL_PROVIDER).toBe("cloudflare");
     expect(props.env.MAIL_FROM).toBe("auth@mail.artisan.st");
     expect(props.env.MAIL_FROM_NAME).toBe("Artisan Street");
@@ -131,6 +173,8 @@ describe("Worker env binds canonical literals (not raw Config values)", () => {
         stage: "pr-42",
         core_origin,
         relay_origin,
+        auth_origin: test_auth_origin,
+        dashboard_origin: test_dashboard_origin,
         mail_from: "   ",
         mail_from_name: "Artisan Street",
         email: dummy_email,
@@ -150,6 +194,8 @@ describe("Worker env binds canonical literals (not raw Config values)", () => {
         stage: "pr-42",
         core_origin,
         relay_origin,
+        auth_origin: test_auth_origin,
+        dashboard_origin: test_dashboard_origin,
         mail_from: "ops@example.com",
         mail_from_name: "Ast",
         email: dummy_email,
@@ -169,6 +215,8 @@ describe("Worker env binds canonical literals (not raw Config values)", () => {
         stage: "pr-42",
         core_origin,
         relay_origin,
+        auth_origin: test_auth_origin,
+        dashboard_origin: test_dashboard_origin,
         mail_from: "auth@mail.artisan.st",
         mail_from_name: "  ",
         email: dummy_email,
@@ -207,10 +255,16 @@ describe("stage routes: exact custom domain on every stage, api-only", () => {
         stage === "prod" ? "https://core.artisanstreet.dev" : "https://core-pr-42.example.dev",
         "AST_CORE_ORIGIN",
       );
+      const auth_origin =
+        stage === "prod" ? AUTH_PROD_ORIGIN : "https://auth-pr-42.example.dev";
+      const dashboard_origin =
+        stage === "prod" ? DASHBOARD_PROD_ORIGIN : "https://dashboard-pr-42.example.dev";
       const props = build_core_worker_props({
         stage,
         core_origin,
         relay_origin: "https://relay.artisanstreet.dev",
+        auth_origin,
+        dashboard_origin,
         mail_from: "auth@mail.artisan.st",
         mail_from_name: "Artisan Street",
         email: dummy_email,

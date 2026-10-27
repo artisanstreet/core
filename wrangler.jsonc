@@ -8,6 +8,8 @@
     "CORE_ENV": "production",
     "CORE_PUBLIC_BASE_URL": "https://api.artisan.st",
     "CORE_JWT_ISSUER": "https://api.artisan.st",
+    "AUTH_PUBLIC_BASE_URL": "https://auth.artisan.st",
+    "DASHBOARD_PUBLIC_BASE_URL": "https://dashboard.artisan.st",
     "MAIL_PROVIDER": "resend"
   },
   "hyperdrive": [

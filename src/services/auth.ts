@@ -106,7 +106,10 @@ export const request_magic_link = (opts: {
         requester_ip: opts.ip ?? null,
         expires_at: expires_at }),
     );
-    const confirm_url = `${cfg.public_base_url}/v1/auth/magic/confirm?token=${email_token}`;
+    const approve_base = (cfg.auth_public_base_url ?? cfg.public_base_url).replace(/\/+$/, "");
+    const confirm_url = cfg.auth_public_base_url
+      ? `${approve_base}/approve?token=${email_token}`
+      : `${approve_base}/v1/auth/magic/confirm?token=${email_token}`;
     yield* mailer.send({
       to: email,
       subject: "Sign in to Ast",

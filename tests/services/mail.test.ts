@@ -10,22 +10,15 @@ import { CoreError } from "../../src/errors.ts";
 const MASTER_KEY = "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI";
 
 function test_config() {
-  return {
-    env: {
-      CORE_ENV: "test",
-      CORE_PUBLIC_BASE_URL: "http://test.invalid",
-      CORE_JWT_ISSUER: "http://test.invalid",
-      CORE_MASTER_KEY: MASTER_KEY,
-      MAIL_PROVIDER: "resend",
-      MAIL_FROM: "Ast <noreply@example.invalid>",
-      RESEND_API_KEY: "test-key" } as Record<string, string | undefined>,
-    core_env: "test",
-    public_base_url: "http://test.invalid",
-    jwt_issuer: "http://test.invalid",
-    master_key: load_master_key({ CORE_MASTER_KEY: MASTER_KEY, CORE_ENV: "test" }),
-    mailer: "resend" as const,
-    resend_api_key: "test-key",
-    now: Date.now };
+  const env = {
+    CORE_ENV: "test",
+    CORE_PUBLIC_BASE_URL: "http://test.invalid",
+    CORE_JWT_ISSUER: "http://test.invalid",
+    CORE_MASTER_KEY: MASTER_KEY,
+    MAIL_PROVIDER: "resend",
+    MAIL_FROM: "Ast <noreply@example.invalid>",
+    RESEND_API_KEY: "test-key" } as Record<string, string | undefined>;
+  return config_from_env(env);
 }
 
 function mail_layers() {
@@ -73,17 +66,15 @@ describe("mail http client", () => {
 });
 
 function cloudflare_config() {
-  const base = test_config();
-  return {
-    ...base,
-    env: {
-      ...base.env,
-      MAIL_PROVIDER: "cloudflare",
-      MAIL_FROM: "auth@mail.artisan.st",
-      MAIL_FROM_NAME: "Artisan Street",
-      RESEND_API_KEY: undefined } as Record<string, string | undefined>,
-    mailer: "cloudflare" as const,
-    resend_api_key: undefined };
+  const env = {
+    CORE_ENV: "test",
+    CORE_PUBLIC_BASE_URL: "http://test.invalid",
+    CORE_JWT_ISSUER: "http://test.invalid",
+    CORE_MASTER_KEY: MASTER_KEY,
+    MAIL_PROVIDER: "cloudflare",
+    MAIL_FROM: "auth@mail.artisan.st",
+    MAIL_FROM_NAME: "Artisan Street" } as Record<string, string | undefined>;
+  return config_from_env(env);
 }
 
 describe("mail native cloudflare binding", () => {
@@ -203,12 +194,14 @@ describe("mail native cloudflare binding", () => {
     expect(() =>
       config_from_env({
         CORE_ENV: "production",
+        CORE_PUBLIC_BASE_URL: "https://test.invalid",
         CORE_MASTER_KEY: MASTER_KEY,
         MAIL_PROVIDER: "log",
       }),
     ).toThrow();
     const cfg = config_from_env({
       CORE_ENV: "production",
+      CORE_PUBLIC_BASE_URL: "https://test.invalid",
       CORE_MASTER_KEY: MASTER_KEY,
       MAIL_PROVIDER: "cloudflare",
       MAIL_FROM: "auth@mail.artisan.st",

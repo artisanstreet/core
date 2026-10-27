@@ -5,7 +5,7 @@ import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import * as Path from "node:path";
 import { fileURLToPath as file_url_to_path } from "node:url";
-import { CORE_ENV_VALUE, MAIL_PROVIDER_VALUE, MAIL_SENDER_EMAIL, MAIL_SENDER_NAME, WORKER_COMPATIBILITY_DATE, WORKER_COMPATIBILITY_FLAGS, WORKER_PREBUILT_ENTRY, assert_distinct_origins, assert_origin_for_stage, assert_valid_mail_from, hostname_from_origin, normalize_origin, worker_name } from "./config.ts";
+import { CORE_ENV_VALUE, MAIL_PROVIDER_VALUE, MAIL_SENDER_EMAIL, MAIL_SENDER_NAME, WORKER_COMPATIBILITY_DATE, WORKER_COMPATIBILITY_FLAGS, WORKER_PREBUILT_ENTRY, assert_all_origins_distinct, assert_browser_origins_for_stage, assert_distinct_origins, assert_origin_for_stage, assert_valid_mail_from, hostname_from_origin, normalize_origin, worker_name } from "./config.ts";
 import type { ConfigBucket } from "./storage.ts";
 import type { CoreHyperdrive } from "./hyperdrive.ts";
 import { config as deploy_config } from "./env.generated.ts";
@@ -26,6 +26,8 @@ export interface CoreWorkerPropsInput {
   /** Canonical normalized origins (already validated). Bound as literals. */
   readonly core_origin: string;
   readonly relay_origin: string;
+  readonly auth_origin: string;
+  readonly dashboard_origin: string;
   readonly mail_from: string;
   readonly mail_from_name: string;
   /** Loaded Redacted secrets. Bound as secret_text (never plain strings). */
@@ -49,6 +51,7 @@ export function build_core_worker_props(input: CoreWorkerPropsInput) {
     throw new Error("MAIL_FROM_NAME is required");
   }
   const domain_host = hostname_from_origin(input.core_origin);
+  assert_all_origins_distinct(input.core_origin, input.relay_origin, input.auth_origin, input.dashboard_origin);
   return {
     name: worker_name(input.stage),
     // Prebuilt ESM from `pnpm run build` (core root). No re-bundling:
@@ -63,6 +66,8 @@ export function build_core_worker_props(input: CoreWorkerPropsInput) {
       CORE_PUBLIC_BASE_URL: input.core_origin,
       CORE_JWT_ISSUER: input.core_origin,
       CORE_RELAY_ORIGIN: input.relay_origin,
+      AUTH_PUBLIC_BASE_URL: input.auth_origin,
+      DASHBOARD_PUBLIC_BASE_URL: input.dashboard_origin,
       MAIL_PROVIDER: MAIL_PROVIDER_VALUE,
       MAIL_FROM: input.mail_from,
       MAIL_FROM_NAME: input.mail_from_name,
@@ -89,6 +94,8 @@ export const make_core_worker = (deps: { bucket: BucketHandle; hyperdrive: Hyper
     const deploy_env = yield* deploy_config;
     const core_origin_raw = deploy_env.AST_CORE_ORIGIN;
     const relay_origin_raw = deploy_env.AST_RELAY_ORIGIN;
+    const auth_origin_raw = deploy_env.AST_AUTH_ORIGIN;
+    const dashboard_origin_raw = deploy_env.AST_DASHBOARD_ORIGIN;
     // MAIL_FROM is REQUIRED: it must be a verified Cloudflare sender on the
     // onboarded sending subdomain. No example.invalid fallback — silently
     // deploying broken auth email is worse than failing fast here.
@@ -98,9 +105,13 @@ export const make_core_worker = (deps: { bucket: BucketHandle; hyperdrive: Hyper
     const mail_from_name_raw = mail_from_name_trimmed ? mail_from_name_trimmed : MAIL_SENDER_NAME;
     const core_origin = normalize_origin(core_origin_raw, "AST_CORE_ORIGIN");
     const relay_origin = normalize_origin(relay_origin_raw, "AST_RELAY_ORIGIN");
+    const auth_origin = normalize_origin(auth_origin_raw, "AST_AUTH_ORIGIN");
+    const dashboard_origin = normalize_origin(dashboard_origin_raw, "AST_DASHBOARD_ORIGIN");
     assert_origin_for_stage(core_origin, "AST_CORE_ORIGIN", stage);
     assert_origin_for_stage(relay_origin, "AST_RELAY_ORIGIN", stage);
+    assert_browser_origins_for_stage(auth_origin, dashboard_origin, stage);
     assert_distinct_origins(core_origin, relay_origin);
+    assert_all_origins_distinct(core_origin, relay_origin, auth_origin, dashboard_origin);
 
     const email = yield* Cloudflare.Email.SendEmail("EMAIL", {
       allowedSenderAddresses: [MAIL_SENDER_EMAIL],
@@ -109,6 +120,8 @@ export const make_core_worker = (deps: { bucket: BucketHandle; hyperdrive: Hyper
       stage,
       core_origin,
       relay_origin,
+      auth_origin,
+      dashboard_origin,
       mail_from: mail_from_raw,
       mail_from_name: mail_from_name_raw,
       master_key: deploy_env.CORE_MASTER_KEY,

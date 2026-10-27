@@ -1,9 +1,13 @@
-import { ParseResult, type Schema } from "effect";
+import { Either, ParseResult, type Schema } from "effect";
 import { Context, Effect } from "effect";
+import * as HttpServerRequest from "@effect/platform/HttpServerRequest";
 import * as HttpServerResponse from "@effect/platform/HttpServerResponse";
 import * as Headers from "@effect/platform/Headers";
+import * as Option from "effect/Option";
+import * as Url from "@effect/platform/Url";
 import { CoreError } from "../errors.ts";
 import * as C from "../contracts/v1.ts";
+import { AppConfigTag } from "../services/deps.ts";
 
 export const max_body_bytes = 1 << 20;
 
@@ -51,6 +55,71 @@ export function with_security_headers(
   }
   return out;
 }
+
+const get_origin_header = (req: HttpServerRequest.HttpServerRequest): string | null => {
+  const found = Headers.get(req.headers, "origin");
+  if (Option.isNone(found)) return null;
+  const trimmed = found.value.trim();
+  return trimmed ? trimmed : null;
+};
+
+const ensure_vary_origin = (
+  res: HttpServerResponse.HttpServerResponse,
+): HttpServerResponse.HttpServerResponse => {
+  const found = Headers.get(res.headers, "vary");
+  if (Option.isNone(found)) return res.pipe(HttpServerResponse.setHeader("Vary", "Origin"));
+  const parts = found.value.split(",").map((part) => part.trim().toLowerCase());
+  if (parts.includes("origin")) return res;
+  return res.pipe(HttpServerResponse.setHeader("Vary", `${found.value}, Origin`));
+};
+
+export const with_cors_headers = (
+  res: HttpServerResponse.HttpServerResponse,
+): Effect.Effect<HttpServerResponse.HttpServerResponse, never, AppConfigTag | HttpServerRequest.HttpServerRequest> =>
+  Effect.gen(function* () {
+    const req = yield* HttpServerRequest.HttpServerRequest;
+    const cfg = yield* AppConfigTag;
+    const with_vary = ensure_vary_origin(res);
+    const origin = get_origin_header(req);
+    if (!origin) return with_vary;
+    const parsed = Url.fromString(origin);
+    if (Either.isLeft(parsed)) return with_vary;
+    if (!cfg.allowed_browser_origins.includes(parsed.right.origin)) return with_vary;
+    return with_vary.pipe(
+      HttpServerResponse.setHeader("Access-Control-Allow-Origin", origin),
+      HttpServerResponse.setHeader("Access-Control-Allow-Credentials", "true"),
+    );
+  });
+
+export const preflight_response: Effect.Effect<
+  HttpServerResponse.HttpServerResponse,
+  never,
+  AppConfigTag | HttpServerRequest.HttpServerRequest | RequestIdTag
+> = Effect.gen(function* () {
+  const req = yield* HttpServerRequest.HttpServerRequest;
+  const cfg = yield* AppConfigTag;
+  const request_id = yield* RequestIdTag;
+  const base = HttpServerResponse.empty({ status: 204 });
+  const secured = with_security_headers(base, request_id);
+  const with_vary = secured.pipe(
+    HttpServerResponse.setHeader("Vary", "Origin, Access-Control-Request-Method, Access-Control-Request-Headers"),
+  );
+  const origin = get_origin_header(req);
+  if (!origin) return with_vary;
+  const parsed = Url.fromString(origin);
+  if (Either.isLeft(parsed)) return with_vary;
+  if (!cfg.allowed_browser_origins.includes(parsed.right.origin)) return with_vary;
+  return with_vary.pipe(
+    HttpServerResponse.setHeader("Access-Control-Allow-Origin", origin),
+    HttpServerResponse.setHeader("Access-Control-Allow-Credentials", "true"),
+    HttpServerResponse.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS"),
+    HttpServerResponse.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-AST-Machine, X-AST-Timestamp, X-AST-Nonce, X-Admin-Token",
+    ),
+    HttpServerResponse.setHeader("Access-Control-Max-Age", "600"),
+  );
+});
 
 export function session_cookie_value(token: string | null, max_age: number, secure: boolean): string {
   return `ast_session=${token ? encodeURIComponent(token) : ""}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${max_age}${secure ? "; Secure" : ""}`;
