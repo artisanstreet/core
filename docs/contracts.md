@@ -29,7 +29,7 @@ and pairing lifecycle below are normative for v1.
 - All product endpoints are versioned: `/v1/*`. Breaking wire change → `/v2`;
   additive fields are allowed within v1.
 - `GET /v1/version` → `{ "api": "1", "contracts": "1.0.0",
-  "jwksUri": "/.well-known/jwks.json", "openapi": "/v1/openapi.json" }`.
+  "jwks_uri": "/.well-known/jwks.json", "openapi": "/v1/openapi.json" }`.
 - Machine-readable contract: `contracts/v1.openapi.json` (authoritative once
   published); cross-language fixtures: `fixtures/v1/*.json`.
 - Timestamps: RFC 3339 UTC strings (`2026-10-26T20:00:00.000Z`). Durations in
@@ -43,7 +43,7 @@ and pairing lifecycle below are normative for v1.
   except echoing it inside signed proof strings where the server re-derives
   and compares. Session/machine auth determines the account.
 - Errors: `{ "error": { "code": "snake_case", "message": "human",
-  "requestId": "…" } }`, HTTP status mirrors `code` class. `message` never
+  "request_id": "…" } }`, HTTP status mirrors `code` class. `message` never
   carries secrets, tokens, or hashes.
 
 ## 2. Machine public key format (normative)
@@ -57,7 +57,7 @@ and pairing lifecycle below are normative for v1.
   always the JWK above.
 - Fingerprint for display/pinning (CLI, logs):
   `SHA-256(raw 32 pubkey bytes)`, base64url no-pad. Example field name
-  `keyFingerprint`. Never log private material.
+  `key_fingerprint`. Never log private material.
 
 ## 3. Machine request proof (Forge → Core, normative)
 
@@ -128,7 +128,7 @@ Standards JWT, JWS compact, `alg: "EdDSA"` (Ed25519), `typ: "JWT"`.
   - `jti`: unique per token (`tkn_…` ULID or UUIDv7 string).
 - No `rev` claim in v1 (decision 2026-10-26): Rust/Relay drafts required a
   `rev` integer, but Core maintains no per-token revocation epoch — short
-  TTL (≤300 s) plus the `revokedMachineIds`/`revokedKeyIds` revocation list
+  TTL (≤300 s) plus the `revoked_machine_ids`/`revoked_key_ids` revocation list
   is the revocation mechanism, and Relay holds no per-machine mutable state
   (no shared DB). Peers: remove the `rev` requirement. If epochs are ever
   needed, they ship as a `v: 2` claim change, not a silent extra field.
@@ -146,7 +146,7 @@ Standards JWT, JWS compact, `alg: "EdDSA"` (Ed25519), `typ: "JWT"`.
   Core defines only the keys and the JWT).
   Cache JWKS 10 min; on unknown `kid` refetch once before rejecting.
   Revocation bound: short TTL (≤300 s) is the revocation mechanism;
-  additionally Core publishes `revokedKeys`/`revokedMachines` best-effort
+  additionally Core publishes `revoked_machine_ids`/`revoked_key_ids` best-effort
   list consumed by Relay
   (`GET /v1/grants/revocations`, 60 s cache). No request-proof inspection of
   application plaintext by Relay: Relay verifies the grant envelope only.
@@ -157,15 +157,15 @@ Standards JWT, JWS compact, `alg: "EdDSA"` (Ed25519), `typ: "JWT"`.
     "targetMachineId": "mch_…" (required when audience is ast-relay),
     "cnf": {JWK} (required for session-issued Editor grants; omitted for
     machine grants where cnf defaults to the enrolled key) }`
-    → `{ "token": "<jwt>", "expiresAt": "…" }`. Server intersects requested
+    → `{ "token": "<jwt>", "expires_at": "…" }` (response snake; request `ttlSeconds`/`targetMachineId`/`cnf` stay camel). Server intersects requested
     scope with what the account/machine is entitled to and enforces
     `ttlSeconds ≤ 300`.
   - `POST /v1/grants/issue` (session alias for Editor grants; same body).
   - `GET /.well-known/jwks.json` → `{ "keys": [
     { "kty": "OKP", "crv": "Ed25519", "x": "…", "kid": "…",
       "use": "sig", "alg": "EdDSA" } ] }` (public keys only, cacheable).
-  - `GET /v1/grants/revocations` → `{ "revokedMachineIds": [...],
-    "revokedKeyIds": [...], "asOf": "…" }`.
+  - `GET /v1/grants/revocations` → `{ "revoked_machine_ids": [...],
+    "revoked_key_ids": [...], "as_of": "…" }`.
 
 ### Relay usage (for Relay contributor)
 
@@ -188,7 +188,7 @@ Standards JWT, JWS compact, `alg: "EdDSA"` (Ed25519), `typ: "JWT"`.
     Editor grants: `cnf` is the Editor's per-connection ephemeral Ed25519
     key, submitted by the authenticated session at issuance.
   - Editor fetches the target Forge's enrolled Ed25519 public key from
-    authenticated Core (`GET /v1/machines` returns `publicKey` JWKs for the
+    authenticated Core (`GET /v1/machines` returns `public_key` JWKs for the
     account's machines) and verifies Forge's transcript signature against it.
   - Core stores no Noise/X25519 keys: standard `cnf` issuance plus the
     existing enrolled machine key field is the whole Core surface.
@@ -207,8 +207,8 @@ to the exact account/key. Codes are single-use, short TTL, rate-limited.
    `{ "publicKey": {JWK}, "label": "server-forge", "timestamp": 173…,
       "proof": "<base64url Ed25519 over
       `enrollment-request\n<x>\n<label>\n<timestamp>`>" }`
-   → `201 { "enrollmentId": "enr_…", "code": "8-char",
-   "expiresAt": "…", "keyFingerprint": "…" }`.
+   → `201 { "enrollment_id": "enr_…", "code": "8-char",
+   "expires_at": "…", "key_fingerprint": "…" }` (response snake; request `publicKey` stays camel).
    `code`: 8 chars from a 31-symbol unambiguous alphabet
    (`ABCDEFGHJKMNPQRSTUVWXYZ23456789`, ~39.6 bits), 10 min TTL,
    SHA-256 hash stored, raw code returned once.
@@ -217,7 +217,7 @@ to the exact account/key. Codes are single-use, short TTL, rate-limited.
    per enrollment.
 2. **Signed-in user claims it**:
    `POST /v1/machines/enrollments/claim` (session auth)
-   `{ "code": "XXXXXXXX" }` → `{ "enrollmentId": "enr_…",
+   `{ "code": "XXXXXXXX" }` → `{ "enrollment_id": "enr_…",
    "status": "claimed" }`. Binds enrollment to the session's account.
    Rate limits: per account, per IP, and global wrong-code budgets; codes
    burn on success and expire on TTL. No existence oracle beyond
@@ -226,20 +226,20 @@ to the exact account/key. Codes are single-use, short TTL, rate-limited.
    authenticated caller holding the enrollment private key):
    `GET /v1/machines/enrollments/{id}/status`
    → `{ "status": "pending"|"claimed"|"confirmed"|"expired"|"voided",
-   "accountId": "acct_…"|null,
+   "account_id": "acct_…"|null,
    "email": "full verified address"|null,
-   "displayName": "…"|null }`.
+   "display_name": "…"|null }`.
    When `claimed`, the polling Forge sees the full verified email/display
    for the account that claimed it; the local operator explicitly approves
    that exact identity (no masked-only hint, no copy/paste of account IDs).
-   `email`/`accountId` are only ever returned to the proven holder of the
+   `email`/`account_id` are only ever returned to the proven holder of the
    enrollment key, never to unauthenticated callers.
 4. **Forge confirms locally** (explicit operator action, machine proof §3):
    `POST /v1/machines/enrollments/confirm`
    `{ "enrollmentId": "enr_…", "accountId": "acct_…",
       "confirmation": "<base64url Ed25519 over
       `enrollment-confirm\n<enrollmentId>\n<accountId>\n<x>`>" }`
-   → `201 { "machineId": "mch_…", "accountId": "acct_…" }`.
+   → `201 { "machine_id": "mch_…", "account_id": "acct_…" }` (request `enrollmentId`/`accountId` stay camel; response snake).
    Server: enrollment exists, unexpired, `claimed` to that same account,
    signature verifies with the enrollment public key over the exact
    account+key binding. Then the machine row is created; code is burned.
@@ -319,6 +319,7 @@ gains an optional `bundle` for machines that lack the skill:
   or endpoint. Forge installs bundle files verbatim under the skill root on
   a new machine; machines that already have the skill keep using `source`.
   Unchanged bundles are never re-downloaded (manifest `ETag`/`304`).
+- Wire split: requests use `contentBase64` (and manifest `mcpServers`/`globalPrompt`); responses use `content_base64` (and `mcp_servers`/`global_prompt`). `sha256`/`path` unchanged.
 
 ## 7. Integration order (ask)
 
@@ -340,7 +341,7 @@ gains an optional `bundle` for machines that lack the skill:
   `ast-relay`/`ast-core` (Relay's `ast-relay-v1` not adopted; version rides
   in `v`).
 - Pairing simplified per review: authenticated polling Forge sees full
-  `accountId` + verified email/display; operator approves the exact identity.
+  `account_id` + verified email/display; operator approves the exact identity.
   No masked-only hint, no account-ID copy/paste.
 - Nonce replay: atomic durable `INSERT` with unique(subject, nonce);
   best-effort cache removed. Relay holds no nonce state (JWT only).
