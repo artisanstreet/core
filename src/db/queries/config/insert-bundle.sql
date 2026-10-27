@@ -17,4 +17,4 @@ select input.id, input.account_id,
   input.content_hash, input.r2_key, input.manifest
 from input
 on conflict do nothing
-returning id, version, content_hash, r2_key, created_at
+returning id, version, r2_key, created_at

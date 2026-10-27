@@ -5,4 +5,4 @@ insert into engine_artifacts
   (id, account_id, engine, kind, label, format_version, envelope_enc, exported_at)
 values
   (:id, :account_id, :engine, :kind, :label, :format_version, :envelope_enc, :exported_at)
-returning id, engine, kind, label, format_version, exported_at, created_at
+returning id
