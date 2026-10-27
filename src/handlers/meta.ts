@@ -6,7 +6,7 @@ import * as C from "../contracts/v1.ts";
 import { R } from "../contracts/registry.ts";
 import * as Grants from "../services/grants.ts";
 import { encode_ok } from "../http/response.ts";
-import openapiDoc from "../../contracts/v1.openapi.json";
+import openapi_doc from "../../contracts/v1.openapi.json";
 
 const version_handler = Effect.gen(function* () {
   const res = encode_ok(C.VersionResp, {
@@ -17,7 +17,7 @@ const version_handler = Effect.gen(function* () {
   return res.pipe(HttpServerResponse.setHeader("Cache-Control", "public, max-age=60"));
 });
 const openapi_handler = Effect.gen(function* () {
-  return HttpServerResponse.unsafeJson(openapiDoc, { status: 200 }).pipe(
+  return HttpServerResponse.unsafeJson(openapi_doc, { status: 200 }).pipe(
     HttpServerResponse.setHeader("Cache-Control", "public, max-age=300"),
   );
 });

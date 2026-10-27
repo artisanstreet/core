@@ -25,8 +25,8 @@ channel. No mockups: every value on screen comes from a live API response.
 Deployed runtime never imports `../../relay/src`. `scripts/vendor-relay.mjs`
 copies the exact files into `web/vendor/relay/` and records the source
 commit + SHA-256 per file in `INTEGRITY.json` (+ `VERSION`).
-Pinned release: **`f50958d`** (Noise XX, `sendApp`/`sendAcked` + `onAck`
-ack-forwarding, `sealedFrameSize`, per-channel 64-frame / 1 MiB window).
+Pinned release: **`7e4963a`** (Noise XX, `send_app`/`send_acked` + `on_ack`
+ack-forwarding, `sealed_frame_size`, per-channel 64-frame / 1 MiB window).
 `tests/vendor-integrity.test.ts` fails the build on any drift.
 To move releases: check out the announced Relay commit in the sibling
 checkout, re-run the script, update the test's expected commit.
@@ -68,9 +68,9 @@ Wire doc: `editor/docs/plans/ast-account-wire.md` + `tunnel.rs`
   cursor, chunked oversized envelopes, Reset → re-subscribe from cursor
   (storm → polling fallback), end/error → polling fallback. Unary calls run
   concurrently on the main channel. UNSUBSCRIBE best-effort on stop.
-- Flow control: sends go through `sendApp` (exact pre-seal sizing via
-  `sealedFrameSize`, throws-before-consume on a full window, seal +
-  `sendAcked`, ack-paced, mutex-serialized per channel, all waiting
+- Flow control: sends go through `send_app` (exact pre-seal sizing via
+  `sealed_frame_size`, throws-before-consume on a full window, seal +
+  `send_acked`, ack-paced, mutex-serialized per channel, all waiting
   OUTSIDE the incoming handler so the ACK read loop drains). WouldBlock
   pauses for recipient acks and retries; any post-seal failure fails the
   channel closed → re-handshake, never resend/skip ciphertext.
