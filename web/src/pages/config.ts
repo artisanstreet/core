@@ -1,11 +1,9 @@
-// Editor configuration (#/config): versioned MCP/skill bundles + per-machine
-// applied state. The manifest is validated client-side against the Core
-// contract before publishing; the server re-validates strictly.
-
+import { Effect, Match } from "effect";
 import type { CoreApi } from "../api.ts";
 import { decodeStrict } from "../api.ts";
 import * as C from "../../../src/contracts/v1.ts";
 import { buildSkillBundle } from "../skills-bundle.ts";
+import { run_promise } from "../core/run-promise.ts";
 import { clear, el, when } from "../ui.ts";
 import type { PageContext } from "../main.ts";
 import { friendly } from "./signin.ts";
@@ -36,29 +34,36 @@ export function renderConfig(ctx: PageContext): void {
   const btn = el("button", { type: "button" }, "Validate + publish");
   const msg = el("p", { class: "status", role: "status" });
   btn.addEventListener("click", () => {
-    void (async () => {
-      btn.disabled = true;
-      try {
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(area.value);
-        } catch {
-          throw new Error("Not valid JSON.");
-        }
-        // Strict against Core's published manifest (SkillRef.bundle
-        // included): unknown fields rejected, bundle bytes preserved.
-        const manifest: typeof C.EditorManifest.Type = decodeStrict(C.EditorManifest, parsed);
-        const info = await api.publishBundle(manifest);
+    const publish: Effect.Effect<void, unknown> = Effect.gen(function* () {
+      yield* Effect.sync(() => {
+        btn.disabled = true;
+      });
+      const parsed = yield* Effect.try({
+        try: () => JSON.parse(area.value) as unknown,
+        catch: () => new Error("Not valid JSON."),
+      });
+      const manifest = yield* Effect.try({
+        try: () => decodeStrict(C.EditorManifest, parsed),
+        catch: (e) => e,
+      });
+      const info = yield* Effect.tryPromise({ try: () => api.publishBundle(manifest), catch: (e) => e });
+      yield* Effect.sync(() => {
         msg.textContent = `Published version ${info.version}.`;
         msg.className = "status ok";
-        void loadLatest(api, latest);
-      } catch (err) {
-        msg.textContent = friendly(err);
-        msg.className = "status err";
-      } finally {
+      });
+      yield* load_latest_effect(api, latest);
+    }).pipe(
+      Effect.catchAll((err: unknown) =>
+        Effect.sync(() => {
+          msg.textContent = friendly(err);
+          msg.className = "status err";
+        }),
+      ),
+      Effect.ensuring(Effect.sync(() => {
         btn.disabled = false;
-      }
-    })();
+      })),
+    );
+    void run_promise(publish);
   });
   pub.append(label, area, btn, msg);
   root.append(pub);
@@ -70,64 +75,76 @@ export function renderConfig(ctx: PageContext): void {
   state.append(machineStateForm(api));
   root.append(state);
 
-  void loadLatest(api, latest);
+  void run_promise(load_latest_effect(api, latest));
 }
 
-async function loadLatest(api: CoreApi, box: HTMLElement): Promise<void> {
-  let res: Awaited<ReturnType<CoreApi["latestBundle"]>>;
-  try {
-    res = await api.latestBundle();
-  } catch (err) {
-    clear(box);
-    box.append(el("h2", {}, "Latest bundle"));
-    box.append(el("p", { class: "status err" }, friendly(err)));
-    return;
-  }
-  clear(box);
-  box.append(el("h2", {}, "Latest bundle"));
-  if (!res.bundle || !res.manifest) {
-    box.append(el("p", { class: "muted" }, "No bundle published yet."));
-    return;
-  }
-  box.append(
-    el("p", {}, `Version ${res.bundle.version} · published ${when(res.bundle.createdAt)}`),
-    el("p", { class: "small mono" }, `sha256 ${res.bundle.contentHash}`),
-    el("p", {}, `MCP servers: ${res.manifest.mcpServers.length} · Skills: ${res.manifest.skills.length}`),
+const load_latest_effect = (api: CoreApi, box: HTMLElement): Effect.Effect<void, never> =>
+  Effect.gen(function* () {
+    const res = yield* Effect.tryPromise({ try: () => api.latestBundle(), catch: (e) => e });
+    yield* Effect.sync(() => {
+      clear(box);
+      box.append(el("h2", {}, "Latest bundle"));
+      if (!res.bundle || !res.manifest) {
+        box.append(el("p", { class: "muted" }, "No bundle published yet."));
+        return;
+      }
+      box.append(
+        el("p", {}, `Version ${res.bundle.version} · published ${when(res.bundle.createdAt)}`),
+        el("p", { class: "small mono" }, `sha256 ${res.bundle.contentHash}`),
+        el("p", {}, `MCP servers: ${res.manifest.mcpServers.length} · Skills: ${res.manifest.skills.length}`),
+      );
+    });
+  }).pipe(
+    Effect.catchAll((err: unknown) =>
+      Effect.sync(() => {
+        clear(box);
+        box.append(el("h2", {}, "Latest bundle"));
+        box.append(el("p", { class: "status err" }, friendly(err)));
+      }),
+    ),
   );
-}
 
-function machineStateForm(api: CoreApi): HTMLElement {  const wrap = el("div", {});
+const machineStateForm = (api: CoreApi): HTMLElement => {
+  const wrap = el("div", {});
   const label = el("label", { for: "cfg-machine" }, "Forge id");
   const input = el("input", { id: "cfg-machine", type: "text", placeholder: "mch_…" }) as HTMLInputElement;
   const btn = el("button", { class: "secondary", type: "button" }, "Read state");
   const out = el("div", {});
   btn.addEventListener("click", () => {
-    void (async () => {
-      clear(out);
-      const msg = el("p", { class: "status muted", role: "status" }, "Loading…");
-      out.append(msg);
-      try {
-        const s = await api.configState(input.value.trim());
+    const machineId = input.value.trim();
+    const read: Effect.Effect<void, unknown> = Effect.gen(function* () {
+      yield* Effect.sync(() => {
+        clear(out);
+        const loading = el("p", { class: "status muted", role: "status" }, "Loading…");
+        out.append(loading);
+      });
+      const s = yield* Effect.tryPromise({ try: () => api.configState(machineId), catch: (e) => e });
+      yield* Effect.sync(() => {
         clear(out);
         out.append(el("p", {}, `Bundle ${s.bundleId}: ${s.status}`, el("br", {}),
           el("span", { class: "small muted" }, `applied ${when(s.appliedAt)}`)));
-      } catch (err) {
-        msg.textContent = friendly(err);
-        msg.className = "status err";
-      }
-    })();
+      });
+    }).pipe(
+      Effect.catchAll((err: unknown) =>
+        Effect.sync(() => {
+          const msg = out.querySelector("p");
+          if (msg) {
+            msg.textContent = friendly(err);
+            msg.className = "status err";
+          } else {
+            clear(out);
+            out.append(el("p", { class: "status err" }, friendly(err)));
+          }
+        }),
+      ),
+    );
+    void run_promise(read);
   });
   wrap.append(label, input, btn, out);
   return wrap;
-}
+};
 
-/**
- * Folder upload for bundled skills: picks a skill folder (SKILL.md +
- * relative support files), builds a strict `SkillRef.bundle` entry, and
- * inserts it into the manifest JSON above. Secret-looking and oversized
- * files are refused with names, never silently dropped.
- */
-function skillFolderBox(area: HTMLTextAreaElement): HTMLElement {
+const skillFolderBox = (area: HTMLTextAreaElement): HTMLElement => {
   const box = el("div", { class: "card" });
   box.append(el("h2", {}, "Bundle a skill folder"));
   box.append(el("p", { class: "muted small" },
@@ -141,36 +158,57 @@ function skillFolderBox(area: HTMLTextAreaElement): HTMLElement {
   const add = el("button", { class: "secondary", type: "button" }, "Add bundled skill to the manifest");
   const msg = el("p", { class: "status", role: "status" });
   add.addEventListener("click", () => {
-    void (async () => {
-      add.disabled = true;
-      try {
-        const files = [...(pick.files ?? [])];
-        if (files.length === 0) throw new Error("Choose a skill folder first.");
-        const top = (files[0] as File & { webkitRelativePath?: string }).webkitRelativePath?.split("/")[0] ?? "skill";
-        const built = await buildSkillBundle({ folderName: top, files }, { name: nameInput.value });
-        let manifest: Record<string, unknown>;
-        try {
-          manifest = JSON.parse(area.value) as Record<string, unknown>;
-        } catch {
-          throw new Error("The manifest above is not valid JSON yet.");
-        }
-        if (!Array.isArray(manifest.skills)) throw new Error("The manifest above has no skills array.");
-        if ((manifest.skills as unknown[]).some((s) => (s as { name?: unknown }).name === built.name)) {
-          throw new Error(`A skill named “${built.name}” is already in the manifest.`);
-        }
+    const files = [...(pick.files ?? [])];
+    const top = (files[0] as File & { webkitRelativePath?: string }).webkitRelativePath?.split("/")[0] ?? "skill";
+    const bundle_name = nameInput.value;
+    const program: Effect.Effect<void, unknown> = Effect.gen(function* () {
+      yield* Effect.sync(() => {
+        add.disabled = true;
+      });
+      if (files.length === 0) {
+        yield* Effect.fail(new Error("Choose a skill folder first."));
+      }
+      const built = yield* Effect.tryPromise({
+        try: () => buildSkillBundle({ folderName: top, files }, { name: bundle_name }),
+        catch: (e) => e,
+      });
+      const manifest = yield* Effect.try({
+        try: () => JSON.parse(area.value) as Record<string, unknown>,
+        catch: () => new Error("The manifest above is not valid JSON yet."),
+      });
+      if (!Array.isArray(manifest.skills)) {
+        yield* Effect.fail(new Error("The manifest above has no skills array."));
+      }
+      const exists = (manifest.skills as unknown[]).some((s) => (s as { name?: unknown }).name === built.name);
+      if (exists) {
+        yield* Effect.fail(new Error(`A skill named “${built.name}” is already in the manifest.`));
+      }
+      yield* Effect.sync(() => {
         (manifest.skills as unknown[]).push({ name: built.name, source: built.source, bundle: built.bundle });
         area.value = JSON.stringify(manifest, null, 2);
         msg.textContent = `Added “${built.name}” with ${built.bundle.files.length} file(s). Review the manifest, then publish.` +
           (built.skipped.length > 0 ? ` Skipped: ${built.skipped.join("; ")}.` : "");
         msg.className = "status ok";
-      } catch (err) {
-        msg.textContent = friendly(err);
-        msg.className = "status err";
-      } finally {
+      });
+    }).pipe(
+      Effect.catchAll((err: unknown) =>
+        Effect.sync(() => {
+          msg.textContent = Match.value(err).pipe(
+            Match.when(
+              (v: unknown): v is Error => v instanceof Error,
+              (e) => friendly(e),
+            ),
+            Match.orElse(() => "Something went wrong."),
+          );
+          msg.className = "status err";
+        }),
+      ),
+      Effect.ensuring(Effect.sync(() => {
         add.disabled = false;
-      }
-    })();
+      })),
+    );
+    void run_promise(program);
   });
   box.append(nameLabel, nameInput, pickLabel, pick, add, msg);
   return box;
-}
+};

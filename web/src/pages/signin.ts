@@ -1,13 +1,20 @@
-// Sign-in (#/signin) and email approval (#/approve).
-//
-// The emailed link carries only `?token=` and opens #/approve, which POSTs
-// `consume` on explicit button press — GET never consumes, so mail-scanner
-// prefetches approve nothing. Finishing needs the originating browser's
-// request secret (see src/auth.ts).
-
+import { Effect, Match } from "effect";
 import { ApiError, type CoreApi } from "../api.ts";
-import { finalizePayload, loadRequestSecret, clearRequestSecret, nextLoginState, storeRequestSecret, type LoginState } from "../auth.ts";
+import {
+  FinalizeExpired,
+  FinalizeMissingSecret,
+  FinalizeNotApproved,
+  FinalizeTotpRequired,
+  finalize_effect,
+  finalizeFailureMessage,
+  loadRequestSecret,
+  clearRequestSecret,
+  nextLoginState,
+  storeRequestSecret,
+  type LoginState,
+} from "../auth.ts";
 import { start_login_poll } from "../core/login-poll.ts";
+import { run_promise } from "../core/run-promise.ts";
 import { clear, el } from "../ui.ts";
 import type { PageContext } from "../main.ts";
 
@@ -24,7 +31,7 @@ export function renderSignin(ctx: PageContext): void {
   );
 }
 
-function emailForm(api: CoreApi, signal: AbortSignal): HTMLElement {
+const emailForm = (api: CoreApi, signal: AbortSignal): HTMLElement => {
   const form = el("form", {});
   const label = el("label", { for: "signin-email" }, "Email");
   const input = el("input", { id: "signin-email", type: "email", required: "true", autocomplete: "email", placeholder: "you@example.com" }) as HTMLInputElement;
@@ -35,32 +42,42 @@ function emailForm(api: CoreApi, signal: AbortSignal): HTMLElement {
   form.append(label, input, deviceLabel, device, submit, msg);
   form.addEventListener("submit", (e) => {
     e.preventDefault();
-    void (async () => {
-      submit.disabled = true;
-      msg.textContent = "Sending…";
-      try {
-        const res = await api.requestMagicLink(input.value.trim(), undefined, device.value.trim() || undefined);
+    const email = input.value.trim();
+    const deviceName = device.value.trim() || undefined;
+    const request_link = Effect.gen(function* () {
+      yield* Effect.sync(() => {
+        submit.disabled = true;
+        msg.textContent = "Sending…";
+      });
+      const res = yield* Effect.tryPromise({ try: () => api.requestMagicLink(email, undefined, deviceName), catch: (err) => err });
+      yield* Effect.sync(() => {
         storeRequestSecret(res.requestId, res.requestSecret);
         const state: LoginState = {
           requestId: res.requestId,
-          email: input.value.trim(),
+          email,
           expiresAt: res.expiresAt,
           phase: "requested",
           totpRequired: false,
         };
         showProgress(api, state, signal);
         msg.textContent = "";
-      } catch (err) {
-        msg.textContent = friendly(err);
-      } finally {
+      });
+    }).pipe(
+      Effect.catchAll((err: unknown) =>
+        Effect.sync(() => {
+          msg.textContent = friendly(err);
+        }),
+      ),
+      Effect.ensuring(Effect.sync(() => {
         submit.disabled = false;
-      }
-    })();
+      })),
+    );
+    void run_promise(request_link);
   });
   return form;
-}
+};
 
-function showProgress(api: CoreApi, initial: LoginState, signal: AbortSignal): void {
+const showProgress = (api: CoreApi, initial: LoginState, signal: AbortSignal): void => {
   const box = document.getElementById("signin-progress");
   if (!box) return;
   box.hidden = false;
@@ -93,37 +110,64 @@ function showProgress(api: CoreApi, initial: LoginState, signal: AbortSignal): v
 
   let stopped = false;
   signal.addEventListener("abort", () => {
-    stopped = true; // route gone: no more polls, no detached DOM writes
+    stopped = true;
   });
   finish.addEventListener("click", () => {
-    void (async () => {
-      finish.disabled = true;
-      try {
-        const secret = loadRequestSecret(state.requestId);
-        const payload = finalizePayload({
-          state,
-          opts: {
-            requestSecret: secret,
-            totpCode: !useRecovery && totp.value.trim() ? totp.value.trim() : undefined,
-            recoveryCode: useRecovery && rec.value.trim() ? rec.value.trim() : undefined,
-          },
-        });
-        await api.finalizeMagicLink(payload.requestId, payload.requestSecret, {
+    const totpValue = !useRecovery && totp.value.trim() ? totp.value.trim() : undefined;
+    const recoveryValue = useRecovery && rec.value.trim() ? rec.value.trim() : undefined;
+    const finish_signin = Effect.gen(function* () {
+      yield* Effect.sync(() => {
+        finish.disabled = true;
+      });
+      const secret = loadRequestSecret(state.requestId);
+      const payload = yield* finalize_effect({
+        state,
+        opts: { requestSecret: secret, totpCode: totpValue, recoveryCode: recoveryValue },
+      });
+      yield* Effect.tryPromise({
+        try: () => api.finalizeMagicLink(payload.requestId, payload.requestSecret, {
           totpCode: payload.totpCode,
           recoveryCode: payload.recoveryCode,
-        });
+        }),
+        catch: (err) => err as ApiError,
+      });
+      yield* Effect.sync(() => {
         clearRequestSecret(state.requestId);
         state = { ...state, phase: "completed" };
         stopped = true;
         stop_poll();
         done.textContent = "Signed in. Opening your account…";
         location.hash = "#/account";
-      } catch (err) {
-        done.textContent = friendly(err);
-      } finally {
+      });
+    }).pipe(
+      Effect.catchTags({
+        FinalizeExpired: (f) =>
+          Effect.sync(() => {
+            done.textContent = finalizeFailureMessage(f);
+          }),
+        FinalizeMissingSecret: (f) =>
+          Effect.sync(() => {
+            done.textContent = finalizeFailureMessage(f);
+          }),
+        FinalizeNotApproved: (f) =>
+          Effect.sync(() => {
+            done.textContent = finalizeFailureMessage(f);
+          }),
+        FinalizeTotpRequired: (f) =>
+          Effect.sync(() => {
+            done.textContent = finalizeFailureMessage(f);
+          }),
+      }),
+      Effect.catchAll((err) =>
+        Effect.sync(() => {
+          done.textContent = friendly(err);
+        }),
+      ),
+      Effect.ensuring(Effect.sync(() => {
         finish.disabled = false;
-      }
-    })();
+      })),
+    );
+    void run_promise(finish_signin);
   });
 
   const stop_poll = start_login_poll(api, state.requestId, () => loadRequestSecret(state.requestId), {
@@ -154,18 +198,38 @@ function showProgress(api: CoreApi, initial: LoginState, signal: AbortSignal): v
     is_cancelled: () => stopped || signal.aborted || !box.isConnected,
     format_error: (err) => friendly(err),
   }, signal);
-  // The finish button completes the flow; the poll stops on approve.
   signal.addEventListener("abort", () => stop_poll(), { once: true });
-}
+};
 
-export function friendly(err: unknown): string {
-  if (err instanceof ApiError) {
-    if (err.status === 429) return "Too many attempts. Wait a little and try again.";
-    if (err.status >= 500) return "The account service had a problem. Try again in a bit.";
-    return err.message;
+export const friendly = (err: unknown): string => {
+  if (
+    err instanceof FinalizeExpired ||
+    err instanceof FinalizeMissingSecret ||
+    err instanceof FinalizeNotApproved ||
+    err instanceof FinalizeTotpRequired
+  ) {
+    return finalizeFailureMessage(err);
   }
-  return err instanceof Error ? err.message : "Something went wrong.";
-}
+  return Match.value(err).pipe(
+    Match.when(
+      (v: unknown): v is ApiError => v instanceof ApiError && v.status === 429,
+      () => "Too many attempts. Wait a little and try again.",
+    ),
+    Match.when(
+      (v: unknown): v is ApiError => v instanceof ApiError && v.status >= 500,
+      () => "The account service had a problem. Try again in a bit.",
+    ),
+    Match.when(
+      (v: unknown): v is ApiError => v instanceof ApiError,
+      (api_err) => api_err.message,
+    ),
+    Match.when(
+      (v: unknown): v is Error => v instanceof Error,
+      (e) => e.message,
+    ),
+    Match.orElse(() => "Something went wrong."),
+  );
+};
 
 export function renderApprove(ctx: PageContext): void {
   const { root, api } = ctx;
@@ -186,39 +250,54 @@ export function renderApprove(ctx: PageContext): void {
     );
   } else {
     const btn = el("button", { type: "button" }, "Approve this request");
-    btn.addEventListener("click", () => void doConsume(api, token, card, msg));
+    btn.addEventListener("click", () => {
+      void run_promise(consume_effect(api, token, card, msg));
+    });
     card.append(btn);
   }
   root.append(card);
 }
 
-async function doConsume(api: CoreApi, token: string, card: HTMLElement, msg: HTMLElement): Promise<void> {
-  if (!token) {
-    msg.textContent = "This approval link is missing its token. Request a new sign-in link and open the fresh approval link.";
-    return;
-  }
-  msg.textContent = "Approving…";
-  try {
-    const res = await api.consumeMagicLink(token);
+const consume_effect = (api: CoreApi, token: string, card: HTMLElement, msg: HTMLElement) =>
+  Effect.gen(function* () {
+    if (!token) {
+      yield* Effect.sync(() => {
+        msg.textContent = "This approval link is missing its token. Request a new sign-in link and open the fresh approval link.";
+      });
+      return;
+    }
+    yield* Effect.sync(() => {
+      msg.textContent = "Approving…";
+    });
+    const res = yield* Effect.tryPromise({ try: () => api.consumeMagicLink(token), catch: (err) => err });
     if (res.status === "expired") {
-      msg.textContent = "This link expired. Request a fresh one.";
+      yield* Effect.sync(() => {
+        msg.textContent = "This link expired. Request a fresh one.";
+      });
       return;
     }
     const secret = loadRequestSecret(res.requestId);
     if (secret) {
-      msg.textContent = "Approved. This tab started the request — you can finish sign-in here.";
-      card.append(finishHere(api, res.requestId, secret, res.totpRequired));
+      yield* Effect.sync(() => {
+        msg.textContent = "Approved. This tab started the request — you can finish sign-in here.";
+        card.append(finishHere(api, res.requestId, secret, res.totpRequired));
+      });
     } else {
-      msg.textContent =
-        "Approved. This tab did not start the sign-in: finish in the tab that requested the link — it picks up this approval on its own. " +
-        "If you requested the link on a different device, finish there.";
+      yield* Effect.sync(() => {
+        msg.textContent =
+          "Approved. This tab did not start the sign-in: finish in the tab that requested the link — it picks up this approval on its own. " +
+          "If you requested the link on a different device, finish there.";
+      });
     }
-  } catch (err) {
-    msg.textContent = friendly(err);
-  }
-}
+  }).pipe(
+    Effect.catchAll((err: unknown) =>
+      Effect.sync(() => {
+        msg.textContent = friendly(err);
+      }),
+    ),
+  );
 
-function finishHere(api: CoreApi, requestId: string, secret: string, totpRequired: boolean): HTMLElement {
+const finishHere = (api: CoreApi, requestId: string, secret: string, totpRequired: boolean): HTMLElement => {
   const wrap = el("div", {});
   const state: LoginState = { requestId, email: "", expiresAt: "", phase: "email_approved", totpRequired };
   let codeInput: HTMLInputElement | null = null;
@@ -245,27 +324,52 @@ function finishHere(api: CoreApi, requestId: string, secret: string, totpRequire
   const btn = el("button", { type: "button" }, "Finish sign-in");
   const out = el("p", { class: "status", role: "status" });
   btn.addEventListener("click", () => {
-    void (async () => {
-      try {
-        const payload = finalizePayload({
-          state,
-          opts: {
-            requestSecret: secret,
-            totpCode: !useRecovery && codeInput?.value.trim() ? codeInput.value.trim() : undefined,
-            recoveryCode: useRecovery && recInput?.value.trim() ? recInput.value.trim() : undefined,
-          },
-        });
-        await api.finalizeMagicLink(payload.requestId, payload.requestSecret, {
-          totpCode: payload.totpCode,
-          recoveryCode: payload.recoveryCode,
-        });
+    const codeValue = !useRecovery && codeInput?.value.trim() ? codeInput.value.trim() : undefined;
+    const recValue = useRecovery && recInput?.value.trim() ? recInput.value.trim() : undefined;
+    const finish_here = Effect.gen(function* () {
+      const payload = yield* finalize_effect({
+        state,
+        opts: { requestSecret: secret, totpCode: codeValue, recoveryCode: recValue },
+      });
+      yield* Effect.tryPromise({
+        try: () =>
+          api.finalizeMagicLink(payload.requestId, payload.requestSecret, {
+            totpCode: payload.totpCode,
+            recoveryCode: payload.recoveryCode,
+          }),
+        catch: (err) => err as ApiError,
+      });
+      yield* Effect.sync(() => {
         out.textContent = "Signed in. Opening your account…";
         location.hash = "#/account";
-      } catch (err) {
-        out.textContent = friendly(err);
-      }
-    })();
+      });
+    }).pipe(
+      Effect.catchTags({
+        FinalizeExpired: (f) =>
+          Effect.sync(() => {
+            out.textContent = finalizeFailureMessage(f);
+          }),
+        FinalizeMissingSecret: (f) =>
+          Effect.sync(() => {
+            out.textContent = finalizeFailureMessage(f);
+          }),
+        FinalizeNotApproved: (f) =>
+          Effect.sync(() => {
+            out.textContent = finalizeFailureMessage(f);
+          }),
+        FinalizeTotpRequired: (f) =>
+          Effect.sync(() => {
+            out.textContent = finalizeFailureMessage(f);
+          }),
+      }),
+      Effect.catchAll((err) =>
+        Effect.sync(() => {
+          out.textContent = friendly(err);
+        }),
+      ),
+    );
+    void run_promise(finish_here);
   });
   wrap.append(btn, out);
   return wrap;
-}
+};

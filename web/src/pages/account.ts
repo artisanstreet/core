@@ -1,57 +1,75 @@
-// Account views: profile (#/account), sessions (#/sessions), two-step
-// sign-in (#/security), activity (#/activity), deletion (#/danger).
-// Everything shown comes from live Core responses; empty states say so.
-
+import { Effect, Either, Match } from "effect";
 import type { CoreApi } from "../api.ts";
+import { run_promise } from "../core/run-promise.ts";
 import { clear, el, idSpan, when } from "../ui.ts";
 import type { PageContext } from "../main.ts";
 import { friendly } from "./signin.ts";
 import QRCode from "qrcode";
 
-/** Render the otpauth URL as a local SVG QR (no external service). */
-async function renderQrSvg(otpauthUrl: string): Promise<HTMLElement> {
-  const wrap = el("div", { class: "qr" });
-  try {
-    const svg = await QRCode.toString(otpauthUrl, { type: "svg", margin: 1, width: 180 });
-    const img = el("img", { alt: "Authenticator setup code" }) as HTMLImageElement;
-    img.src = `data:image/svg+xml,${encodeURIComponent(svg)}`;
-    img.width = 180;
-    img.height = 180;
-    wrap.append(img);
-  } catch {
-    wrap.append(el("p", { class: "muted small" }, "The code image did not render — enter the details below manually."));
-  }
-  return wrap;
-}
+type QrState = { readonly _tag: "Rendered"; readonly node: HTMLElement } | { readonly _tag: "Fallback" };
 
-/** Pull the human-enterable parts out of an otpauth://totp/ URL. */
+const qr_effect = (otpauthUrl: string): Effect.Effect<QrState, never> =>
+  Effect.tryPromise({
+    try: () => QRCode.toString(otpauthUrl, { type: "svg", margin: 1, width: 180 }),
+    catch: () => new Error("qr failed"),
+  }).pipe(
+    Effect.catchAll(() => Effect.succeed(null as string | null)),
+    Effect.map((svg) =>
+      Match.value(svg).pipe(
+        Match.when(
+          (v): v is string => typeof v === "string",
+          (text): QrState => {
+            const wrap = el("div", { class: "qr" });
+            const img = el("img", { alt: "Authenticator setup code" }) as HTMLImageElement;
+            img.src = `data:image/svg+xml,${encodeURIComponent(text)}`;
+            img.width = 180;
+            img.height = 180;
+            wrap.append(img);
+            return { _tag: "Rendered", node: wrap };
+          },
+        ),
+        Match.orElse((): QrState => ({ _tag: "Fallback" })),
+      ),
+    ),
+  );
+
+const render_qr_node = (state: QrState): HTMLElement =>
+  Match.value(state).pipe(
+    Match.tag("Rendered", (s) => s.node),
+    Match.tag("Fallback", () => {
+      const wrap = el("div", { class: "qr" });
+      wrap.append(el("p", { class: "muted small" }, "The code image did not render — enter the details below manually."));
+      return wrap;
+    }),
+    Match.exhaustive,
+  );
+
 export function parseOtpauth(url: string): { account: string; secret: string } {
-  try {
-    const u = new URL(url);
-    const label = decodeURIComponent(u.pathname.replace(/^\//, ""));
-    const account = label.includes(":") ? (label.split(":").slice(1).join(":") || label) : label;
-    return { account: account || "this account", secret: u.searchParams.get("secret") ?? "" };
-  } catch {
-    return { account: "this account", secret: "" };
-  }
+  const parsed = Either.getOrNull(
+    Either.try({ try: () => new URL(url), catch: () => null }),
+  );
+  if (parsed === null) return { account: "this account", secret: "" };
+  const label = decodeURIComponent(parsed.pathname.replace(/^\//, ""));
+  const account = label.includes(":") ? (label.split(":").slice(1).join(":") || label) : label;
+  return { account: account || "this account", secret: parsed.searchParams.get("secret") ?? "" };
 }
 
-function card(title: string): { box: HTMLElement; status: HTMLElement } {
+const card = (title: string): { box: HTMLElement; status: HTMLElement } => {
   const box = el("div", { class: "card" });
   box.append(el("h2", {}, title));
   const status = el("p", { class: "status muted", role: "status" }, "Loading…");
   box.append(status);
   return { box, status };
-}
+};
 
 export function renderAccount(ctx: PageContext): void {
   const { root, api } = ctx;
   clear(root);
   const { box, status } = card("Account");
   root.append(box);
-  void (async () => {
-    try {
-      const me = await api.me();
+  const program: Effect.Effect<void, unknown> = Effect.gen(function* () {
+    const me = yield* Effect.tryPromise({ try: () => api.me(), catch: (e) => e });
+    yield* Effect.sync(() => {
       clear(box);
       box.append(el("h2", {}, "Account"));
       const dl = el("div", {});
@@ -73,11 +91,16 @@ export function renderAccount(ctx: PageContext): void {
         el("a", { href: "#/vault" }, "Connections"), " · ",
         el("a", { href: "#/forge" }, "Threads"),
       ));
-    } catch (err) {
-      status.textContent = friendly(err);
-      status.className = "status err";
-    }
-  })();
+    });
+  }).pipe(
+    Effect.catchAll((err: unknown) =>
+      Effect.sync(() => {
+        status.textContent = friendly(err);
+        status.className = "status err";
+      }),
+    ),
+  );
+  void run_promise(program);
 }
 
 export function renderSessions(ctx: PageContext): void {
@@ -88,9 +111,9 @@ export function renderSessions(ctx: PageContext): void {
   const note = el("p", { class: "muted small" },
     "Each row is a browser holding a revocable session. Sign-in sets a persistent HttpOnly cookie (30 days): closing the tab does not sign you out — use Sign out above or revoke here. The cookie itself is never visible to scripts.");
   box.append(note);
-  void (async () => {
-    try {
-      const list = await api.sessions();
+  const program: Effect.Effect<void, unknown> = Effect.gen(function* () {
+    const list = yield* Effect.tryPromise({ try: () => api.sessions(), catch: (e) => e });
+    yield* Effect.sync(() => {
       clear(box);
       box.append(el("h2", {}, "Sessions"), note);
       if (list.sessions.length === 0) {
@@ -112,23 +135,33 @@ export function renderSessions(ctx: PageContext): void {
       const revokeAll = el("button", { class: "secondary", type: "button" }, "Sign out everywhere else");
       const out = el("p", { class: "status", role: "status" });
       revokeAll.addEventListener("click", () => {
-        void (async () => {
-          try {
-            await api.revokeAllSessions();
+        const revoke: Effect.Effect<void, unknown> = Effect.gen(function* () {
+          yield* Effect.tryPromise({ try: () => api.revokeAllSessions(), catch: (e) => e });
+          yield* Effect.sync(() => {
             out.textContent = "All sessions revoked. This browser is signed out too.";
             setTimeout(() => { location.hash = "#/signin"; }, 800);
-          } catch (err) {
-            out.textContent = friendly(err);
-          }
-        })();
+          });
+        }).pipe(
+          Effect.catchAll((err: unknown) =>
+            Effect.sync(() => {
+              out.textContent = friendly(err);
+            }),
+          ),
+        );
+        void run_promise(revoke);
       });
       row.append(revokeAll);
       box.append(row, out);
-    } catch (err) {
-      status.textContent = friendly(err);
-      status.className = "status err";
-    }
-  })();
+    });
+  }).pipe(
+    Effect.catchAll((err: unknown) =>
+      Effect.sync(() => {
+        status.textContent = friendly(err);
+        status.className = "status err";
+      }),
+    ),
+  );
+  void run_promise(program);
 }
 
 export function renderSecurity(ctx: PageContext): void {
@@ -138,9 +171,9 @@ export function renderSecurity(ctx: PageContext): void {
   root.append(box);
   box.append(el("p", { class: "muted small" },
     "Optional authenticator (TOTP) plus recovery codes. Email alone never bypasses it: when enrolled, finishing sign-in always needs a code."));
-  void (async () => {
-    try {
-      const me = await api.me();
+  const program: Effect.Effect<void, unknown> = Effect.gen(function* () {
+    const me = yield* Effect.tryPromise({ try: () => api.me(), catch: (e) => e });
+    yield* Effect.sync(() => {
       clear(box);
       box.append(el("h2", {}, "Security"));
       if (!me.totpEnrolled) {
@@ -148,30 +181,33 @@ export function renderSecurity(ctx: PageContext): void {
       } else {
         box.append(disableBox(api));
       }
-    } catch (err) {
-      status.textContent = friendly(err);
-      status.className = "status err";
-    }
-  })();
+    });
+  }).pipe(
+    Effect.catchAll((err: unknown) =>
+      Effect.sync(() => {
+        status.textContent = friendly(err);
+        status.className = "status err";
+      }),
+    ),
+  );
+  void run_promise(program);
 }
 
-function enrollBox(api: CoreApi): HTMLElement {
+const enrollBox = (api: CoreApi): HTMLElement => {
   const wrap = el("div", {});
   wrap.append(el("p", {}, "Not enrolled."));
   const start = el("button", { type: "button" }, "Start enrollment");
   const out = el("div", {});
   start.addEventListener("click", () => {
-    void (async () => {
-      try {
-        const res = await api.enrollTotp();
+    const enroll: Effect.Effect<void, unknown> = Effect.gen(function* () {
+      const res = yield* Effect.tryPromise({ try: () => api.enrollTotp(), catch: (e) => e });
+      const qr = yield* qr_effect(res.otpauthUrl);
+      const { account, secret } = parseOtpauth(res.otpauthUrl);
+      yield* Effect.sync(() => {
         clear(out);
-        // The QR is rendered locally from the otpauth URL — the secret
-        // never goes to an external chart/QR service.
-        const qr = await renderQrSvg(res.otpauthUrl);
-        const { account, secret } = parseOtpauth(res.otpauthUrl);
         out.append(
           el("p", {}, "Scan the code with your authenticator, or enter the details manually:"),
-          qr,
+          render_qr_node(qr),
           el("p", { class: "small" }, "Account: ", el("strong", {}, account), el("br", {}),
             "Secret: ", el("span", { class: "mono" }, secret), el("br", {}),
             el("span", { class: "muted" }, "Time-based, 6 digits. Keep the secret where only you can find it.")),
@@ -183,27 +219,38 @@ function enrollBox(api: CoreApi): HTMLElement {
         const confirm = el("button", { type: "button" }, "Confirm enrollment");
         const msg = el("p", { class: "status", role: "status" });
         confirm.addEventListener("click", () => {
-          void (async () => {
-            try {
-              const r = await api.verifyTotp(input.value.trim());
+          const code = input.value.trim();
+          const verify: Effect.Effect<void, unknown> = Effect.gen(function* () {
+            const r = yield* Effect.tryPromise({ try: () => api.verifyTotp(code), catch: (e) => e });
+            yield* Effect.sync(() => {
               msg.textContent = r.enrolled ? "Two-step sign-in is on." : "Not confirmed yet.";
-            } catch (err) {
-              msg.textContent = friendly(err);
-            }
-          })();
+            });
+          }).pipe(
+            Effect.catchAll((err: unknown) =>
+              Effect.sync(() => {
+                msg.textContent = friendly(err);
+              }),
+            ),
+          );
+          void run_promise(verify);
         });
         out.append(label, input, confirm, msg);
-      } catch (err) {
-        clear(out);
-        out.append(el("p", { class: "err" }, friendly(err)));
-      }
-    })();
+      });
+    }).pipe(
+      Effect.catchAll((err: unknown) =>
+        Effect.sync(() => {
+          clear(out);
+          out.append(el("p", { class: "err" }, friendly(err)));
+        }),
+      ),
+    );
+    void run_promise(enroll);
   });
   wrap.append(start, out);
   return wrap;
-}
+};
 
-function disableBox(api: CoreApi): HTMLElement {
+const disableBox = (api: CoreApi): HTMLElement => {
   const wrap = el("div", {});
   wrap.append(el("p", {}, "Enrolled. Disabling needs a current code."));
   const label = el("label", { for: "totp-disable" }, "Authenticator code");
@@ -211,27 +258,33 @@ function disableBox(api: CoreApi): HTMLElement {
   const btn = el("button", { class: "danger", type: "button" }, "Turn off two-step sign-in");
   const msg = el("p", { class: "status", role: "status" });
   btn.addEventListener("click", () => {
-    void (async () => {
-      try {
-        const r = await api.disableTotp(input.value.trim());
+    const code = input.value.trim();
+    const disable: Effect.Effect<void, unknown> = Effect.gen(function* () {
+      const r = yield* Effect.tryPromise({ try: () => api.disableTotp(code), catch: (e) => e });
+      yield* Effect.sync(() => {
         msg.textContent = r.disabled ? "Two-step sign-in is off." : "Not disabled.";
-      } catch (err) {
-        msg.textContent = friendly(err);
-      }
-    })();
+      });
+    }).pipe(
+      Effect.catchAll((err: unknown) =>
+        Effect.sync(() => {
+          msg.textContent = friendly(err);
+        }),
+      ),
+    );
+    void run_promise(disable);
   });
   wrap.append(label, input, btn, msg);
   return wrap;
-}
+};
 
 export function renderActivity(ctx: PageContext): void {
   const { root, api } = ctx;
   clear(root);
   const { box, status } = card("Recent activity");
   root.append(box);
-  void (async () => {
-    try {
-      const res = await api.activity(50);
+  const program: Effect.Effect<void, unknown> = Effect.gen(function* () {
+    const res = yield* Effect.tryPromise({ try: () => api.activity(50), catch: (e) => e });
+    yield* Effect.sync(() => {
       clear(box);
       box.append(el("h2", {}, "Recent activity"));
       if (res.events.length === 0) {
@@ -248,77 +301,114 @@ export function renderActivity(ctx: PageContext): void {
         ));
       }
       box.append(table);
-    } catch (err) {
-      status.textContent = friendly(err);
-      status.className = "status err";
-    }
-  })();
-}
+    });
+  }).pipe(
+    Effect.catchAll((err: unknown) =>
+      Effect.sync(() => {
+        status.textContent = friendly(err);
+        status.className = "status err";
+      }),
+    ),
+  );
+  void run_promise(program);
+};
+
+type DeletionView =
+  | { readonly _tag: "Pending"; readonly requestedAt: string | null; readonly purgeAfter: string | null }
+  | { readonly _tag: "None" };
 
 export function renderDanger(ctx: PageContext): void {
   const { root, api } = ctx;
   clear(root);
   const { box, status } = card("Delete account");
   root.append(box);
-  void (async () => {
-    try {
-      const s = await api.deletionStatus();
+  const program: Effect.Effect<void, unknown> = Effect.gen(function* () {
+    const s = yield* Effect.tryPromise({ try: () => api.deletionStatus(), catch: (e) => e });
+    const view: DeletionView = s.status === "pending"
+      ? { _tag: "Pending", requestedAt: s.requestedAt, purgeAfter: s.purgeAfter }
+      : { _tag: "None" };
+    const me = view._tag === "None" ? yield* Effect.tryPromise({ try: () => api.me(), catch: (e) => e }) : null;
+    yield* Effect.sync(() => {
       clear(box);
       box.append(el("h2", {}, "Delete account"));
       box.append(el("p", {}, `Status: ${s.status}`));
-      if (s.status === "pending") {
-        box.append(el("p", { class: "warn" }, `Requested ${when(s.requestedAt)}. Purge after ${when(s.purgeAfter)}.`));
-        const cancel = el("button", { type: "button" }, "Cancel deletion");
-        const msg = el("p", { class: "status", role: "status" });
-        cancel.addEventListener("click", () => {
-          void (async () => {
-            try {
-              await api.cancelDeletion();
-              msg.textContent = "Deletion cancelled.";
-            } catch (err) {
-              msg.textContent = friendly(err);
-            }
-          })();
-        });
-        box.append(cancel, msg);
-        return;
-      }
-      const me = await api.me();
-      if (me.totpEnrolled) {
-        const label = el("label", { for: "del-totp" }, "Authenticator code (required while two-step is on)");
-        const input = el("input", { id: "del-totp", type: "text", inputmode: "numeric" }) as HTMLInputElement;
-        box.append(label, input);
-        const req = el("button", { class: "danger", type: "button" }, "Request deletion");
-        const msg = el("p", { class: "status", role: "status" });
-        req.addEventListener("click", () => {
-          void (async () => {
-            try {
-              await api.requestDeletion(input.value.trim() || undefined);
-              msg.textContent = "Deletion requested.";
-            } catch (err) {
-              msg.textContent = friendly(err);
-            }
-          })();
-        });
-        box.append(req, msg);
-      } else {
-        const req = el("button", { class: "danger", type: "button" }, "Request deletion");
-        const msg = el("p", { class: "status", role: "status" });
-        req.addEventListener("click", () => {
-          void (async () => {
-            try {
-              await api.requestDeletion(undefined);
-              msg.textContent = "Deletion requested.";
-            } catch (err) {
-              msg.textContent = friendly(err);
-            }
-          })();
-        });
-        box.append(req, msg);
-      }
-    } catch (err) {
-      status.textContent = friendly(err);
-      status.className = "status err";
-    }
-  })();
+      Match.value(view).pipe(
+        Match.tag("Pending", (pending) => {
+          box.append(el("p", { class: "warn" }, `Requested ${when(pending.requestedAt)}. Purge after ${when(pending.purgeAfter)}.`));
+          const cancel = el("button", { type: "button" }, "Cancel deletion");
+          const msg = el("p", { class: "status", role: "status" });
+          cancel.addEventListener("click", () => {
+            const cancel_one: Effect.Effect<void, unknown> = Effect.gen(function* () {
+              yield* Effect.tryPromise({ try: () => api.cancelDeletion(), catch: (e) => e });
+              yield* Effect.sync(() => {
+                msg.textContent = "Deletion cancelled.";
+              });
+            }).pipe(
+              Effect.catchAll((err: unknown) =>
+                Effect.sync(() => {
+                  msg.textContent = friendly(err);
+                }),
+              ),
+            );
+            void run_promise(cancel_one);
+          });
+          box.append(cancel, msg);
+        }),
+        Match.tag("None", () => {
+          if (me !== null && me.totpEnrolled) {
+            const label = el("label", { for: "del-totp" }, "Authenticator code (required while two-step is on)");
+            const input = el("input", { id: "del-totp", type: "text", inputmode: "numeric" }) as HTMLInputElement;
+            box.append(label, input);
+            const req = el("button", { class: "danger", type: "button" }, "Request deletion");
+            const msg = el("p", { class: "status", role: "status" });
+            req.addEventListener("click", () => {
+              const code = input.value.trim() || undefined;
+              const request: Effect.Effect<void, unknown> = Effect.gen(function* () {
+                yield* Effect.tryPromise({ try: () => api.requestDeletion(code), catch: (e) => e });
+                yield* Effect.sync(() => {
+                  msg.textContent = "Deletion requested.";
+                });
+              }).pipe(
+                Effect.catchAll((err: unknown) =>
+                  Effect.sync(() => {
+                    msg.textContent = friendly(err);
+                  }),
+                ),
+              );
+              void run_promise(request);
+            });
+            box.append(req, msg);
+          } else {
+            const req = el("button", { class: "danger", type: "button" }, "Request deletion");
+            const msg = el("p", { class: "status", role: "status" });
+            req.addEventListener("click", () => {
+              const request: Effect.Effect<void, unknown> = Effect.gen(function* () {
+                yield* Effect.tryPromise({ try: () => api.requestDeletion(undefined), catch: (e) => e });
+                yield* Effect.sync(() => {
+                  msg.textContent = "Deletion requested.";
+                });
+              }).pipe(
+                Effect.catchAll((err: unknown) =>
+                  Effect.sync(() => {
+                    msg.textContent = friendly(err);
+                  }),
+                ),
+              );
+              void run_promise(request);
+            });
+            box.append(req, msg);
+          }
+        }),
+        Match.exhaustive,
+      );
+    });
+  }).pipe(
+    Effect.catchAll((err: unknown) =>
+      Effect.sync(() => {
+        status.textContent = friendly(err);
+        status.className = "status err";
+      }),
+    ),
+  );
+  void run_promise(program);
 }

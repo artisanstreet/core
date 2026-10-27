@@ -1,24 +1,4 @@
-// Magic-link sign-in flow, with the request-secret binding that keeps a
-// forwarded/scanned email link from signing anyone in.
-//
-// Rules (from core/docs/contracts.md §6 + http.ts behavior):
-// - `requestMagicLink` returns a `requestSecret` ONCE to the originating
-//   browser. It is kept in sessionStorage (`ast-core:secret:<requestId>`,
-//   tab-scoped: closing the tab drops the secret) with a memory fallback,
-//   and travels only in POST bodies, never in URLs.
-// - Actual session lifecycle (Core, not the wire-doc cafe sketch): sign-in
-//   sets a persistent HttpOnly `ast_session` cookie (30 days). Closing the
-//   tab drops the Noise keys and the request secret, but NOT the Core
-//   session — only explicit sign-out (session revoke) ends it. The UI says
-//   exactly this on the Browsers page.
-// - The emailed token only marks the request approved (`consume`, POST).
-//   Link GET never consumes: opening the link in a mail scanner changes
-//   nothing until the explicit approve POST.
-// - `finalize` requires BOTH the approved token state AND the
-//   `requestSecret`. A different browser (email opened on a phone) can
-//   approve, but only the originating browser can finish sign-in.
-// - Email alone never bypasses TOTP: when `totpRequired`, finalize needs
-//   `totpCode` (or a recovery code).
+import { Data, Effect, Either, Match } from "effect";
 
 const SECRET_PREFIX = "ast-core:secret:";
 
@@ -26,34 +6,24 @@ export function secretKey(requestId: string): string {
   return `${SECRET_PREFIX}${requestId}`;
 }
 
-function storageGet(key: string): string | null {
-  try {
-    return sessionStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
+const read_storage = (key: string): string | null =>
+  Either.match(Either.try({ try: () => sessionStorage.getItem(key), catch: () => null }), {
+    onLeft: (): string | null => null,
+    onRight: (value): string | null => value,
+  });
 
-function storageSet(key: string, value: string): boolean {
-  try {
-    sessionStorage.setItem(key, value);
-    return true;
-  } catch {
-    return false;
-  }
-}
+const write_storage = (key: string, value: string): boolean =>
+  Either.match(Either.try({ try: () => sessionStorage.setItem(key, value), catch: () => null }), {
+    onLeft: () => false,
+    onRight: () => true,
+  });
 
-function storageDel(key: string): void {
-  try {
-    sessionStorage.removeItem(key);
-  } catch {
-    // ignore
-  }
-}
+const delete_storage = (key: string): void => {
+  Either.getOrNull(Either.try({ try: () => sessionStorage.removeItem(key), catch: () => null }));
+};
 
 export function storeRequestSecret(requestId: string, secret: string): void {
-  if (!storageSet(secretKey(requestId), secret)) {
-    // Private mode etc: the flow still works in this tab via memory.
+  if (!write_storage(secretKey(requestId), secret)) {
     memorySecrets.set(requestId, secret);
   }
 }
@@ -61,11 +31,11 @@ export function storeRequestSecret(requestId: string, secret: string): void {
 const memorySecrets = new Map<string, string>();
 
 export function loadRequestSecret(requestId: string): string | null {
-  return storageGet(secretKey(requestId)) ?? memorySecrets.get(requestId) ?? null;
+  return read_storage(secretKey(requestId)) ?? memorySecrets.get(requestId) ?? null;
 }
 
 export function clearRequestSecret(requestId: string): void {
-  storageDel(secretKey(requestId));
+  delete_storage(secretKey(requestId));
   memorySecrets.delete(requestId);
 }
 
@@ -79,7 +49,6 @@ export interface LoginState {
   totpRequired: boolean;
 }
 
-/** Map a /v1/auth/magic/status response onto UI state. */
 export function nextLoginState(
   current: LoginState,
   status: { status: "pending" | "email_approved" | "completed" | "expired"; totpRequired: boolean; email: string; expiresAt: string },
@@ -93,36 +62,87 @@ export function nextLoginState(
   };
 }
 
-/**
- * Guard for the finalize step. Returns the payload or throws with a
- * user-facing reason. Enforced in the client AND the page; the server
- * re-enforces.
- */
-export function finalizePayload(
-  args: { state: LoginState; opts: { requestSecret: string | null; totpCode?: string; recoveryCode?: string } },
-): { requestId: string; requestSecret: string; totpCode?: string; recoveryCode?: string } {
+export class FinalizeNotApproved extends Data.TaggedError("FinalizeNotApproved")<{
+  readonly phase: LoginPhase;
+}> {}
+
+export class FinalizeExpired extends Data.TaggedError("FinalizeExpired")<{}> {}
+
+export class FinalizeMissingSecret extends Data.TaggedError("FinalizeMissingSecret")<{}> {}
+
+export class FinalizeTotpRequired extends Data.TaggedError("FinalizeTotpRequired")<{}> {}
+
+export type FinalizeFailure = FinalizeNotApproved | FinalizeExpired | FinalizeMissingSecret | FinalizeTotpRequired;
+
+export interface FinalizePayload {
+  requestId: string;
+  requestSecret: string;
+  totpCode?: string;
+  recoveryCode?: string;
+}
+
+const check_finalize = (args: {
+  state: LoginState;
+  opts: { requestSecret: string | null; totpCode?: string; recoveryCode?: string };
+}): Either.Either<FinalizePayload, FinalizeFailure> => {
   const { state, opts } = args;
+  if (state.phase === "expired") {
+    return Either.left(new FinalizeExpired());
+  }
   if (state.phase !== "email_approved") {
-    throw new Error(
-      state.phase === "expired"
-        ? "This sign-in request expired. Start over."
-        : "The emailed link has not been approved yet. Approve it first.",
-    );
+    return Either.left(new FinalizeNotApproved({ phase: state.phase }));
   }
   if (!opts.requestSecret) {
-    throw new Error(
-      "This browser did not start the sign-in, so it cannot finish it. " +
-        "Finish on the browser that requested the link.",
-    );
+    return Either.left(new FinalizeMissingSecret());
   }
   if (state.totpRequired && !opts.totpCode && !opts.recoveryCode) {
-    throw new Error("This account needs its authenticator code (or a recovery code).");
+    return Either.left(new FinalizeTotpRequired());
   }
-  const payload: { requestId: string; requestSecret: string; totpCode?: string; recoveryCode?: string } = {
+  const payload: FinalizePayload = {
     requestId: state.requestId,
     requestSecret: opts.requestSecret,
   };
   if (opts.totpCode) payload.totpCode = opts.totpCode;
   if (opts.recoveryCode) payload.recoveryCode = opts.recoveryCode;
-  return payload;
+  return Either.right(payload);
+};
+
+export const finalizeFailureMessage = (failure: FinalizeFailure): string =>
+  Match.value(failure).pipe(
+    Match.tag("FinalizeExpired", () => "This sign-in request expired. Start over."),
+    Match.tag("FinalizeNotApproved", () => "The emailed link has not been approved yet. Approve it first."),
+    Match.tag(
+      "FinalizeMissingSecret",
+      () =>
+        "This browser did not start the sign-in, so it cannot finish it. " +
+        "Finish on the browser that requested the link.",
+    ),
+    Match.tag("FinalizeTotpRequired", () => "This account needs its authenticator code (or a recovery code)."),
+    Match.exhaustive,
+  );
+
+export function finalizePayload(
+  args: { state: LoginState; opts: { requestSecret: string | null; totpCode?: string; recoveryCode?: string } },
+): { requestId: string; requestSecret: string; totpCode?: string; recoveryCode?: string } {
+  return Either.match(check_finalize(args), {
+    onLeft: (failure): never => {
+      throw new Error(finalizeFailureMessage(failure));
+    },
+    onRight: (payload) => payload,
+  });
 }
+
+export const validateFinalize = (args: {
+  state: LoginState;
+  opts: { requestSecret: string | null; totpCode?: string; recoveryCode?: string };
+}): Either.Either<FinalizePayload, FinalizeFailure> => check_finalize(args);
+
+export const finalize_effect = (
+  args: {
+    state: LoginState;
+    opts: { requestSecret: string | null; totpCode?: string; recoveryCode?: string };
+  },
+): Effect.Effect<FinalizePayload, FinalizeFailure> =>
+  Effect.gen(function* () {
+    return yield* validateFinalize(args);
+  });

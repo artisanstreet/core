@@ -1,8 +1,4 @@
-// App shell: hash router, top navigation, sign-out. Session auth is the
-// HttpOnly `ast_session` cookie (never JS-readable); a 401 on any page
-// sends the user back to #/signin. The server-rendered /ui/* pages remain
-// the fallback when this bundle is not deployed.
-
+import { Effect, Match } from "effect";
 import { CoreApi, ApiError } from "./api.ts";
 import { clear, el } from "./ui.ts";
 import { renderSignin, renderApprove, friendly } from "./pages/signin.ts";
@@ -11,15 +7,11 @@ import { renderMachines } from "./pages/machines.ts";
 import { renderVault } from "./pages/vault.ts";
 import { renderConfig } from "./pages/config.ts";
 import { renderForge } from "./pages/forgeview.ts";
+import { run_promise } from "./core/run-promise.ts";
 
 export interface PageContext {
   api: CoreApi;
   root: HTMLElement;
-  /**
-   * Aborted when the user navigates away. Pages must stop timers, feeds,
-   * and detached callbacks on abort — no polling or state writes after
-   * the route is gone.
-   */
   signal: AbortSignal;
 }
 
@@ -35,6 +27,11 @@ const NAV: Array<{ hash: string; label: string }> = [
 ];
 
 const PUBLIC_HASHES = ["#/signin", "#/approve"];
+
+type ShellMode = { readonly _tag: "Public" } | { readonly _tag: "Authed" };
+
+const shell_mode = (authenticated: boolean): ShellMode =>
+  authenticated ? { _tag: "Authed" } : { _tag: "Public" };
 
 export function createApp(root: HTMLElement, api: CoreApi): void {
   let generation = 0;
@@ -55,32 +52,34 @@ export function createApp(root: HTMLElement, api: CoreApi): void {
       if (main) route(hash, { api, root: main, signal: controller.signal });
       return;
     }
-    // Protected area: confirm the session before showing its navigation.
-    // The session cookie is HttpOnly, so this is a real /v1/me read —
-    // signed-out visitors see only the brand and Sign in.
     renderShell(root, api, false);
     const main = mainOf();
     if (main) main.append(el("p", { class: "muted" }, "Checking your session…"));
-    void (async () => {
-      try {
-        await api.me();
-        if (!fresh()) return; // the user already navigated elsewhere
+    const check_session: Effect.Effect<void, unknown> = Effect.gen(function* () {
+      yield* Effect.tryPromise({ try: () => api.me(), catch: (e) => e });
+      yield* Effect.sync(() => {
+        if (!fresh()) return;
         renderShell(root, api, true);
         const next = mainOf();
         if (next) route(hash, { api, root: next, signal: controller.signal });
-      } catch (err) {
-        if (!fresh()) return;
-        if (err instanceof ApiError && err.status === 401) {
-          location.hash = "#/signin";
-          return;
-        }
-        const stale = mainOf();
-        if (stale) {
-          clear(stale);
-          stale.append(el("div", { class: "card" }, el("p", { class: "err" }, friendly(err))));
-        }
-      }
-    })();
+      });
+    }).pipe(
+      Effect.catchAll((err: unknown) =>
+        Effect.sync(() => {
+          if (!fresh()) return;
+          if (err instanceof ApiError && err.status === 401) {
+            location.hash = "#/signin";
+            return;
+          }
+          const stale = mainOf();
+          if (stale) {
+            clear(stale);
+            stale.append(el("div", { class: "card" }, el("p", { class: "err" }, friendly(err))));
+          }
+        }),
+      ),
+    );
+    void run_promise(check_session);
   };
   window.addEventListener("hashchange", render);
   render();
@@ -92,35 +91,39 @@ function renderShell(root: HTMLElement, api: CoreApi, authenticated: boolean): v
   const wrap = el("div", { class: "wrap" });
   const bar = el("div", { class: "topbar" });
   bar.append(el("a", { class: "brand", href: authenticated ? "#/account" : "#/signin" }, "AST"));
-  if (authenticated) {
-    const nav = el("nav", { "aria-label": "Account" });
-    for (const n of NAV) nav.append(el("a", { href: n.hash }, n.label));
-    bar.append(nav);
-    const out = el("a", { href: "#/signin", id: "signout" }, "Sign out");
-    out.addEventListener("click", (e) => {
-      e.preventDefault();
-      void (async () => {
-        try {
-          await api.revokeCurrentSession();
-        } catch (err) {
-          if (!(err instanceof ApiError) || err.status !== 401) {
-            // Revocation failed but the cookie may still be live; the
-            // sign-in page will say so if the session survives.
-          }
-        }
-        location.hash = "#/signin";
-      })();
-    });
-    // Sign out lives in its own right-aligned group so narrow viewports
-    // wrap it as a group, never as a lone orphan under the nav row.
-    const auth = el("div", { class: "auth-group" });
-    auth.append(out);
-    bar.append(auth);
-  } else {
-    const nav = el("nav", { "aria-label": "Account" });
-    nav.append(el("a", { href: "#/signin" }, "Sign in"));
-    bar.append(nav);
-  }
+  Match.value(shell_mode(authenticated)).pipe(
+    Match.tag("Authed", () => {
+      const nav = el("nav", { "aria-label": "Account" });
+      for (const n of NAV) nav.append(el("a", { href: n.hash }, n.label));
+      bar.append(nav);
+      const out = el("a", { href: "#/signin", id: "signout" }, "Sign out");
+      out.addEventListener("click", (e) => {
+        e.preventDefault();
+        const signout: Effect.Effect<void, never> = Effect.tryPromise({
+          try: () => api.revokeCurrentSession(),
+          catch: () => null,
+        }).pipe(
+          Effect.match({
+            onFailure: () => undefined,
+            onSuccess: () => undefined,
+          }),
+          Effect.andThen(Effect.sync(() => {
+            location.hash = "#/signin";
+          })),
+        );
+        void run_promise(signout);
+      });
+      const auth = el("div", { class: "auth-group" });
+      auth.append(out);
+      bar.append(auth);
+    }),
+    Match.tag("Public", () => {
+      const nav = el("nav", { "aria-label": "Account" });
+      nav.append(el("a", { href: "#/signin" }, "Sign in"));
+      bar.append(nav);
+    }),
+    Match.exhaustive,
+  );
   const main = el("main", { id: "main" });
   wrap.append(bar, main);
   root.append(skip, wrap);

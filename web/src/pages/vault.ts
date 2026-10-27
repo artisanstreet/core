@@ -1,9 +1,6 @@
-// Provider credentials + engine artifacts (#/vault).
-// Secrets are write-only here: the UI sends API keys/ envelopes on create
-// and never reads them back (release happens only to assigned machines over
-// authenticated machine channels). Lists show metadata + assignments only.
-
+import { Effect } from "effect";
 import type { CoreApi } from "../api.ts";
+import { run_promise } from "../core/run-promise.ts";
 import { clear, el, idSpan, when } from "../ui.ts";
 import type { PageContext } from "../main.ts";
 import { friendly } from "./signin.ts";
@@ -24,7 +21,7 @@ export function renderVault(ctx: PageContext): void {
   create.append(el("h2", {}, "Add a provider API key"));
   create.append(el("p", { class: "muted small" },
     "Stored encrypted. Only Forges you assign below can use it, and the key itself never appears in this UI again."));
-  create.append(providerForm(api, () => void refresh(api, list)));
+  create.append(providerForm(api, () => void run_promise(refresh_effect(api, list))));
   root.append(create);
 
   const arts = el("div", { class: "card" });
@@ -33,31 +30,49 @@ export function renderVault(ctx: PageContext): void {
   arts.append(astatus);
   root.append(arts);
 
-  void refresh(api, list);
-  void refreshArtifacts(ctx, arts, astatus);
+  void run_promise(refresh_effect(api, list));
+  void run_promise(refresh_artifacts_effect(ctx, arts, astatus));
 }
 
-async function refresh(api: CoreApi, list: HTMLElement): Promise<void> {
-  let res: Awaited<ReturnType<CoreApi["providerConnections"]>>;
-  let machines: Awaited<ReturnType<CoreApi["machines"]>>["machines"] = [];
-  try {
-    [res, machines] = [await api.providerConnections(), (await api.machines()).machines];
-  } catch (err) {
-    clear(list);
-    list.append(el("h2", {}, "Provider connections"));
-    list.append(el("p", { class: "status err" }, friendly(err)));
-    return;
-  }
+const refresh_effect = (api: CoreApi, list: HTMLElement): Effect.Effect<void, unknown> =>
+  Effect.gen(function* () {
+    const res = yield* Effect.tryPromise({ try: () => api.providerConnections(), catch: (e) => e });
+    const machines = (yield* Effect.tryPromise({ try: () => api.machines(), catch: (e) => e })).machines;
+    yield* Effect.sync(() => {
+      render_connections(api, list, res.connections, machines);
+    });
+  }).pipe(
+    Effect.catchAll((err: unknown) =>
+      Effect.sync(() => {
+        clear(list);
+        list.append(el("h2", {}, "Provider connections"));
+        list.append(el("p", { class: "status err" }, friendly(err)));
+      }),
+    ),
+  );
+
+const render_connections = (
+  api: CoreApi,
+  list: HTMLElement,
+  connections: ReadonlyArray<{
+    id: string;
+    provider: string;
+    label: string | null;
+    revokedAt: string | null;
+    assignedMachineIds: ReadonlyArray<string>;
+  }>,
+  machines: ReadonlyArray<{ id: string; label: string | null; revokedAt: string | null }>,
+): void => {
   clear(list);
   list.append(el("h2", {}, "Connections"));
   const live = machines.filter((m) => !m.revokedAt);
-  if (res.connections.length === 0) {
+  if (connections.length === 0) {
     list.append(el("p", { class: "muted" }, "No provider connections yet."));
     return;
   }
   const table = el("table", {});
   table.append(el("tr", {}, el("th", {}, "Connection"), el("th", {}, "Assigned Forges"), el("th", {}, "")));
-  for (const c of res.connections) {
+  for (const c of connections) {
     const assignCell = el("td", {});
     if (!c.revokedAt) {
       const sel = el("select", { "aria-label": `Assign ${c.label || c.provider} to a Forge` }) as HTMLSelectElement;
@@ -66,30 +81,39 @@ async function refresh(api: CoreApi, list: HTMLElement): Promise<void> {
       const go = el("button", { class: "secondary", type: "button" }, "Assign");
       const msg = el("span", { class: "small", role: "status" });
       go.addEventListener("click", () => {
-        void (async () => {
-          if (!sel.value) return;
-          try {
-            await api.assignConnection(c.id, sel.value);
+        if (!sel.value) return;
+        const target = sel.value;
+        const assign: Effect.Effect<void, unknown> = Effect.gen(function* () {
+          yield* Effect.tryPromise({ try: () => api.assignConnection(c.id, target), catch: (e) => e });
+          yield* Effect.sync(() => {
             msg.textContent = " Assigned.";
-            void refresh(api, list);
-          } catch (err) {
-            msg.textContent = ` ${friendly(err)}`;
-          }
-        })();
+          });
+          yield* refresh_effect(api, list);
+        }).pipe(
+          Effect.catchAll((err: unknown) =>
+            Effect.sync(() => {
+              msg.textContent = ` ${friendly(err)}`;
+            }),
+          ),
+        );
+        void run_promise(assign);
       });
       assignCell.append(sel, go, msg);
       for (const mid of c.assignedMachineIds) {
         const chip = el("div", { class: "small" }, idSpan(mid), " ");
         const un = el("button", { class: "secondary", type: "button" }, "remove");
         un.addEventListener("click", () => {
-          void (async () => {
-            try {
-              await api.unassignConnection(c.id, mid);
-              void refresh(api, list);
-            } catch (err) {
-              chip.append(el("span", { class: "err" }, ` ${friendly(err)}`));
-            }
-          })();
+          const unassign: Effect.Effect<void, unknown> = Effect.gen(function* () {
+            yield* Effect.tryPromise({ try: () => api.unassignConnection(c.id, mid), catch: (e) => e });
+            yield* refresh_effect(api, list);
+          }).pipe(
+            Effect.catchAll((err: unknown) =>
+              Effect.sync(() => {
+                chip.append(el("span", { class: "err" }, ` ${friendly(err)}`));
+              }),
+            ),
+          );
+          void run_promise(unassign);
         });
         chip.append(un);
         assignCell.append(chip);
@@ -102,14 +126,17 @@ async function refresh(api: CoreApi, list: HTMLElement): Promise<void> {
       : (() => {
           const b = el("button", { class: "danger", type: "button" }, "Revoke");
           b.addEventListener("click", () => {
-            void (async () => {
-              try {
-                await api.revokeProviderConnection(c.id);
-                void refresh(api, list);
-              } catch (err) {
-                b.after(el("span", { class: "err small" }, ` ${friendly(err)}`));
-              }
-            })();
+            const revoke_one: Effect.Effect<void, unknown> = Effect.gen(function* () {
+              yield* Effect.tryPromise({ try: () => api.revokeProviderConnection(c.id), catch: (e) => e });
+              yield* refresh_effect(api, list);
+            }).pipe(
+              Effect.catchAll((err: unknown) =>
+                Effect.sync(() => {
+                  b.after(el("span", { class: "err small" }, ` ${friendly(err)}`));
+                }),
+              ),
+            );
+            void run_promise(revoke_one);
           });
           return b;
         })();
@@ -120,9 +147,9 @@ async function refresh(api: CoreApi, list: HTMLElement): Promise<void> {
     ));
   }
   list.append(table);
-}
+};
 
-function providerForm(api: CoreApi, onDone: () => void): HTMLElement {
+const providerForm = (api: CoreApi, onDone: () => void): HTMLElement => {
   const form = el("form", {});
   const pLabel = el("label", { for: "vault-provider" }, "Provider");
   const provider = el("select", { id: "vault-provider" }) as HTMLSelectElement;
@@ -136,70 +163,103 @@ function providerForm(api: CoreApi, onDone: () => void): HTMLElement {
   form.append(pLabel, provider, lLabel, label, kLabel, key, btn, msg);
   form.addEventListener("submit", (e) => {
     e.preventDefault();
-    void (async () => {
-      btn.disabled = true;
-      try {
-        await api.createProviderConnection(
-          provider.value as (typeof PROVIDERS)[number],
-          label.value.trim(),
-          key.value,
-        );
+    const kind = provider.value as (typeof PROVIDERS)[number];
+    const name = label.value.trim();
+    const secret = key.value;
+    const store: Effect.Effect<void, unknown> = Effect.gen(function* () {
+      yield* Effect.sync(() => {
+        btn.disabled = true;
+      });
+      yield* Effect.tryPromise({ try: () => api.createProviderConnection(kind, name, secret), catch: (err) => err });
+      yield* Effect.sync(() => {
         key.value = "";
         msg.textContent = "Stored.";
         msg.className = "status ok";
         onDone();
-      } catch (err) {
-        msg.textContent = friendly(err);
-        msg.className = "status err";
-      } finally {
+      });
+    }).pipe(
+      Effect.catchAll((err: unknown) =>
+        Effect.sync(() => {
+          msg.textContent = friendly(err);
+          msg.className = "status err";
+        }),
+      ),
+      Effect.ensuring(Effect.sync(() => {
         btn.disabled = false;
-      }
-    })();
+      })),
+    );
+    void run_promise(store);
   });
   return form;
-}
+};
 
-async function refreshArtifacts(ctx: PageContext, box: HTMLElement, status: HTMLElement): Promise<void> {
+const refresh_artifacts_effect = (ctx: PageContext, box: HTMLElement, status: HTMLElement): Effect.Effect<void, never> =>
+  Effect.gen(function* () {
+    const { api } = ctx;
+    const res = yield* Effect.tryPromise({ try: () => api.artifacts(), catch: (e) => e });
+    const machines = yield* Effect.orElseSucceed(
+      Effect.tryPromise({ try: () => api.machines(), catch: () => null }),
+      () => ({ machines: [] as Array<{ id: string; label: string | null; revokedAt: string | null }> }),
+    );
+    yield* Effect.sync(() => {
+      render_artifacts(ctx, box, status, res.artifacts, machines.machines);
+    });
+  }).pipe(
+    Effect.catchAll((err: unknown) =>
+      Effect.sync(() => {
+        status.textContent = friendly(err);
+        status.className = "status err";
+      }),
+    ),
+  );
+
+const render_artifacts = (
+  ctx: PageContext,
+  box: HTMLElement,
+  status: HTMLElement,
+  artifacts: ReadonlyArray<{
+    id: string;
+    engine: string;
+    kind: string;
+    label: string | null;
+    revokedAt: string | null;
+    exportedAt: string;
+    assignedMachineIds: ReadonlyArray<string>;
+  }>,
+  machines: ReadonlyArray<{ id: string; label: string | null; revokedAt: string | null }>,
+): void => {
   const { api } = ctx;
-  let res: Awaited<ReturnType<CoreApi["artifacts"]>>;
-  try {
-    res = await api.artifacts();
-  } catch (err) {
-    status.textContent = friendly(err);
-    status.className = "status err";
-    return;
-  }
   clear(box);
   box.append(el("h2", {}, "Engine credential artifacts"));
   box.append(el("p", { class: "muted small" },
     "Opaque credential envelopes from a harness's own local login (Core validates the shape; inner file bytes stay opaque). Assign per Forge; download happens only from the assigned Forge itself."));
-  if (res.artifacts.length === 0) {
+  if (artifacts.length === 0) {
     box.append(el("p", { class: "muted" }, "No artifacts stored."));
     return;
-  }
-  let machines: Awaited<ReturnType<CoreApi["machines"]>>["machines"] = [];
-  try {
-    machines = (await api.machines()).machines;
-  } catch {
-    // assignment dropdown stays empty; listing still works.
   }
   const live = machines.filter((m) => !m.revokedAt);
   const table = el("table", {});
   table.append(el("tr", {}, el("th", {}, "Artifact"), el("th", {}, "Assigned Forges"), el("th", {}, "")));
-  for (const a of res.artifacts) {
+  for (const a of artifacts) {
     const cell = el("td", {});
     for (const mid of a.assignedMachineIds) {
       const chip = el("div", { class: "small" }, idSpan(mid), " ");
       const un = el("button", { class: "secondary", type: "button" }, "remove");
       un.addEventListener("click", () => {
-        void (async () => {
-          try {
-            await api.unassignArtifact(a.id, mid);
-            void refreshArtifacts(ctx, box, status);
-          } catch (err) {
-            chip.append(el("span", { class: "err" }, ` ${friendly(err)}`));
-          }
-        })();
+        const artifactId = a.id;
+        const unassign: Effect.Effect<void, unknown> = Effect.gen(function* () {
+          yield* Effect.tryPromise({ try: () => api.unassignArtifact(artifactId, mid), catch: (e) => e });
+          yield* Effect.sync(() => {
+            void run_promise(refresh_artifacts_effect(ctx, box, box.querySelector("p") ?? box));
+          });
+        }).pipe(
+          Effect.catchAll((err: unknown) =>
+            Effect.sync(() => {
+              chip.append(el("span", { class: "err" }, ` ${friendly(err)}`));
+            }),
+          ),
+        );
+        void run_promise(unassign);
       });
       chip.append(un);
       cell.append(chip);
@@ -210,15 +270,22 @@ async function refreshArtifacts(ctx: PageContext, box: HTMLElement, status: HTML
       for (const m of live) sel.append(el("option", { value: m.id }, `${m.label || "Forge"} (${m.id.slice(0, 13)}…)`));
       const go = el("button", { class: "secondary", type: "button" }, "Assign");
       go.addEventListener("click", () => {
-        void (async () => {
-          if (!sel.value) return;
-          try {
-            await api.assignArtifact(a.id, sel.value);
-            void refreshArtifacts(ctx, box, status);
-          } catch (err) {
-            cell.append(el("span", { class: "err small" }, ` ${friendly(err)}`));
-          }
-        })();
+        if (!sel.value) return;
+        const target = sel.value;
+        const artifactId = a.id;
+        const assign: Effect.Effect<void, unknown> = Effect.gen(function* () {
+          yield* Effect.tryPromise({ try: () => api.assignArtifact(artifactId, target), catch: (e) => e });
+          yield* Effect.sync(() => {
+            void run_promise(refresh_artifacts_effect(ctx, box, box.querySelector("p") ?? box));
+          });
+        }).pipe(
+          Effect.catchAll((err: unknown) =>
+            Effect.sync(() => {
+              cell.append(el("span", { class: "err small" }, ` ${friendly(err)}`));
+            }),
+          ),
+        );
+        void run_promise(assign);
       });
       cell.append(sel, go);
     }
@@ -227,14 +294,20 @@ async function refreshArtifacts(ctx: PageContext, box: HTMLElement, status: HTML
       : (() => {
           const b = el("button", { class: "danger", type: "button" }, "Revoke");
           b.addEventListener("click", () => {
-            void (async () => {
-              try {
-                await api.revokeArtifact(a.id);
-                void refreshArtifacts(ctx, box, status);
-              } catch (err) {
-                b.after(el("span", { class: "err small" }, ` ${friendly(err)}`));
-              }
-            })();
+            const artifactId = a.id;
+            const revoke_one: Effect.Effect<void, unknown> = Effect.gen(function* () {
+              yield* Effect.tryPromise({ try: () => api.revokeArtifact(artifactId), catch: (e) => e });
+              yield* Effect.sync(() => {
+                void run_promise(refresh_artifacts_effect(ctx, box, box.querySelector("p") ?? box));
+              });
+            }).pipe(
+              Effect.catchAll((err: unknown) =>
+                Effect.sync(() => {
+                  b.after(el("span", { class: "err small" }, ` ${friendly(err)}`));
+                }),
+              ),
+            );
+            void run_promise(revoke_one);
           });
           return b;
         })();
@@ -246,4 +319,4 @@ async function refreshArtifacts(ctx: PageContext, box: HTMLElement, status: HTML
     ));
   }
   box.append(table);
-}
+};
