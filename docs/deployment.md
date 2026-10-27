@@ -1,10 +1,60 @@
 # Core deployment (Cloudflare)
 
-Status: **not deployed**. `npx wrangler deploy --dry-run` passes against
-the committed template. No real Cloudflare resources have been created
+Status: **not deployed**. No real Cloudflare resources have been created
 from this repo; do not claim otherwise.
 
-## One-time provisioning (real account required)
+Authoritative production path: **Alchemy** (`infra/`, stack `ast-core`,
+`Cloudflare.state()` account backend, stage from CLI).
+`wrangler.jsonc` remains for **local/test only** (`wrangler dev`,
+`--dry-run` template checks). Do not treat them as two competing
+production sources: Alchemy owns prod; Wrangler never deploys prod.
+
+## Alchemy (authoritative prod)
+
+See `infra/README.md` for the reproducible flow. Summary:
+
+- Prebuild first (core root): `npm ci && npm run build`
+  (`dist/ast_core/index.js` + `dist/ast_core/assets/*` via Vite/Reylo;
+  `web/dist` portal). Alchemy reuses these with `bundle: false`
+  (Wrangler `no_bundle` contract); plain Alchemy rolldown of
+  `src/index.ts` would miss Reylo `.sql` transforms.
+- Deploy from `infra/` with the project-local binary
+  (`npm run deploy -- --stage <stage>`, never bare global `alchemy`):
+  Worker `ast-core-<stage>` via REAL factory `buildCoreWorkerProps`
+  (async `main` + `env`, `runWorkerFirst: true`,
+  `notFoundHandling: "none"`), canonical literal origins
+  (`CORE_PUBLIC_BASE_URL`/`CORE_JWT_ISSUER` = normalized `AST_CORE_ORIGIN`,
+  `CORE_RELAY_ORIGIN` = normalized relay; only secrets stay
+  `Config.Redacted`), R2 `ast-core-config-<stage>`,
+  Hyperdrive `ast-core-db-<stage>` with `caching: { disabled: true }`
+  explicit, exact HTTPS custom domain on EVERY stage
+  (stage-specific `AST_CORE_ORIGIN`; `workersDev: false`).
+- Shared public inputs (both repos, same names):
+  `AST_CORE_ORIGIN`, `AST_RELAY_ORIGIN` — exact https bare origins for
+  ALL stages, distinct HOSTNAMES (`Core != Relay` by hostname, ports do
+  not separate custom-domain ownership). **Stage-specific values only**:
+  never demonstrate or run prod and preview/dev with the same `.env`
+  domains — the second custom-domain attach would move ownership.
+- Secrets (operator-supplied, `Config.Redacted`, never logged/output):
+  `AST_CORE_DATABASE_URL` (external Postgres direct URL; no hosting
+  choice here), `CORE_MASTER_KEY` (32B base64url), `CORE_ADMIN_TOKEN`,
+  `RESEND_API_KEY`, plus resolved literal `MAIL_FROM`.
+- State: `Cloudflare.state()` (account default `alchemy-state-store`).
+  First `plan`/`dev`/`deploy` bootstraps the store Worker; `CI=true`
+  missing-store fails (pre-provision via
+  `alchemy state bootstrap --backend cloudflare`). Never run
+  `plan`/`dev`/`deploy` for “verification” — they ensure cloud state.
+  Offline checks only: `npm run check`, `npm run verify:bundle`
+  (deploy-exact `readPrebuiltWorkerBundle` + entry import execution).
+- Outputs are public URLs/names/ids only; no secrets.
+
+Auth: `alchemy profile edit --add Cloudflare` (OAuth/token → default
+profile); CI uses `CLOUDFLARE_ACCOUNT_ID` + token. Relay coordinates via
+root only (distinct stack `ast-relay`, same input names, same backend).
+
+## Wrangler one-time provisioning (local/test reference)
+
+Kept coherent for local/test; not the prod path. If ever used directly:
 
 1. Hyperdrive to the production PostgreSQL:
    `wrangler hyperdrive create ast-core-db --connection-string='postgres://…' --caching-disabled`
@@ -63,7 +113,8 @@ from this repo; do not claim otherwise.
    in transactions under an advisory lock; concurrent migrators serialize).
 2. `npm run typecheck && npm test` (needs the dev DB reachable for Reylo
    inference: default `postgres://core:core@127.0.0.1:55432/core`).
-3. `npm run build && npx wrangler deploy --dry-run`, then deploy.
+3. `npm run build && npx wrangler deploy --dry-run` (local template check
+   only), then Alchemy deploy per `infra/README.md`.
 4. Post-deploy smoke: `GET /v1/version`, `GET /.well-known/jwks.json`
    (after first grant issuance a key exists), `POST /v1/admin/janitor`
    with `x-admin-token`.

@@ -4,8 +4,11 @@ dist/
 .dev.vars
 .env
 .env.local
+.env.*.local
 .reylo/
 .wrangler/
+.alchemy/
+infra/.alchemy/
 coverage/
 wrangler.json
 *.log
