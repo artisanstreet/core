@@ -1,0 +1,40 @@
+{
+  "name": "ast-core-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "AST account browser UI: sign-in, machines, sessions, vault, config, and remote-Forge threads over the Relay Noise channel.",
+  "scripts": {
+    "vendor:relay": "node scripts/vendor-relay.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "vite build",
+    "dev": "vite dev --port 5173"
+  },
+  "dependencies": {
+    "@noble/ciphers": "2.4.0",
+    "@noble/curves": "2.4.0",
+    "@noble/hashes": "2.4.0",
+    "b4a": "1.9.0",
+    "colorjs.io": "^0.7.1",
+    "effect": "3.22.4",
+    "jose": "6.2.13",
+    "noise-handshake": "4.2.0",
+    "qrcode": "^1.5.4",
+    "sodium-javascript": "0.8.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.12",
+    "@types/qrcode": "^1.5.6",
+    "axe-core": "^4.14.0",
+    "happy-dom": "^21.0.4",
+    "playwright-core": "^1.64.1",
+    "typescript": "7.1.0-beta",
+    "vite": "8.3.5",
+    "vitest": "5.0.5",
+    "ws": "^8.22.0"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

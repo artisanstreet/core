@@ -1,0 +1,13 @@
+{
+  "commit": "f50958dacdaa68c139035ce431cbdb21d38cbae0",
+  "files": {
+    "schema.ts": "4eabf26790e4d269c8e0aff589c43868dcdc36f77c531926213a894bf9575378",
+    "jwt.ts": "f944bda9fd63697347ff4adc2d04b6b0c50fe5ba36d8bb08048d716d12a694a8",
+    "b64u.ts": "07cdb19f26e59e1cb634bd60e13a524fbca3d4360e92b8c5cb40fdf5bf41b80a",
+    "e2e.ts": "2443cd3ddb54d137146855237cd8b797f6e05dcc5006c0f6c69cf4fd460f5ba9",
+    "channel.ts": "d49c73837117041e4eadbf231ff72ead0b99d08c6967e6a84c41520c6166b074",
+    "channel-verify.ts": "912ccbc9fec0cfb18ac2f212c760b9f07ea5c4bb3914f556013f4c8561fd9014",
+    "client.ts": "c5c5faa9999fec512db96dd6d0c4b321767461258577cc882c0985f79629243d",
+    "noise-handshake.d.ts": "0336b9674c69b49a64b904a37236c27870941e749ce92bb8d2b2412301cd7258"
+  }
+}

@@ -1,0 +1,228 @@
+/* Ast account UI — restrained dark language shared with the service pages.
+   No marketing, no metric dashboards. Every value on screen comes from a
+   live API response; loading and error states are explicit.
+   Per sander-frontend-design-v1: all colors authored in OKLCH (no layered
+   translucency for palette colors), shared spacing tokens, deliberate
+   effective padding, :focus-visible states, mobile recomposition. */
+
+:root {
+  /* Surfaces: near-neutral blue-grey ramp, explicit solid tokens. */
+  --bg: oklch(0.17 0.005 285);
+  --panel: oklch(0.22 0.007 285);
+  --panel-2: oklch(0.25 0.008 285);
+  --line: oklch(0.30 0.009 285);
+  --line-soft: oklch(0.36 0.010 285);
+
+  /* Text: near-white primary, dimmed secondary — both checked ≥4.5:1
+     against --bg/--panel by the axe + ratio steps in tests/e2e. */
+  --text: oklch(0.93 0.004 285);
+  --muted: oklch(0.73 0.009 285);
+
+  /* Interactive + feedback. --accent is the link color (bright enough on
+     dark surfaces); --accent-solid is the filled-button surface, dark
+     enough for white text at 4.5:1. Never use one for the other's job. */
+  --accent: oklch(0.63 0.185 262);
+  --accent-solid: oklch(0.52 0.17 262);
+  --accent-ink: oklch(1 0 0);
+  --accent-visited: oklch(0.76 0.09 285);
+  --ok: oklch(0.80 0.145 152);
+  --warn: oklch(0.80 0.115 85);
+  --err: oklch(0.76 0.115 25);
+
+  /* Shared spacing scale (0.25rem base). */
+  --sp-1: 0.25rem;
+  --sp-2: 0.5rem;
+  --sp-3: 0.75rem;
+  --sp-4: 1rem;
+  --sp-5: 1.25rem;
+  --sp-6: 1.5rem;
+
+  --radius: 0.6rem;
+  --maxw: 46rem;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 1rem;
+  line-height: 1.55;
+  min-height: 100vh;
+}
+
+a { color: var(--accent); }
+a:visited { color: var(--accent-visited); }
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--sp-1);
+}
+
+.wrap {
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: var(--sp-6) var(--sp-4) var(--sp-6);
+}
+
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-4);
+  align-items: baseline;
+  padding: var(--sp-4) 0 var(--sp-3);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: var(--sp-5);
+}
+
+.topbar .brand {
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.topbar nav { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); }
+.topbar nav a { font-size: 0.92rem; text-underline-offset: 0.15em; }
+
+/* Sign-out is a separate right-aligned group: on narrow viewports the
+   nav links wrap among themselves first, and the group drops as a whole. */
+.topbar .auth-group {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  margin-left: auto;
+  padding-left: var(--sp-4);
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  /* Deliberate: larger horizontal inset pairs with the page gutter;
+     vertical rhythm stays even (top == bottom). */
+  padding: var(--sp-4) var(--sp-5);
+  margin: 0 0 var(--sp-4);
+}
+
+.card h2 {
+  font-size: 1.02rem;
+  letter-spacing: -0.01em;
+  margin: 0 0 var(--sp-3);
+}
+.card h3 { font-size: 0.95rem; margin: var(--sp-4) 0 var(--sp-2); }
+
+.muted { color: var(--muted); }
+.small { font-size: 0.87rem; }
+.mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.86em; word-break: break-all; }
+.ok { color: var(--ok); }
+.warn { color: var(--warn); }
+.err { color: var(--err); }
+
+label { display: block; font-size: 0.9rem; margin: var(--sp-3) 0 var(--sp-1); }
+
+input[type="email"],
+input[type="text"],
+input[type="url"],
+input[type="number"],
+textarea,
+select {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--line-soft);
+  color: var(--text);
+  border-radius: 0.4rem;
+  padding: var(--sp-2) var(--sp-3);
+  font: inherit;
+  min-height: 2.75rem;
+}
+
+textarea { min-height: 7rem; resize: vertical; }
+
+button {
+  font: inherit;
+  background: var(--accent-solid);
+  border: 0;
+  color: var(--accent-ink);
+  padding: var(--sp-2) var(--sp-4);
+  border-radius: 0.4rem;
+  cursor: pointer;
+  margin-top: var(--sp-3);
+  min-height: 2.75rem;
+}
+
+button:disabled { opacity: 0.5; cursor: default; }
+
+button.secondary {
+  background: transparent;
+  border: 1px solid var(--line-soft);
+  color: var(--text);
+}
+
+button.danger {
+  background: transparent;
+  border: 1px solid var(--err);
+  color: var(--err);
+}
+
+.qr img {
+  display: block;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  background: var(--accent-ink);
+  padding: var(--sp-2);
+  margin: var(--sp-3) 0;
+}
+
+.row { display: flex; gap: var(--sp-3); flex-wrap: wrap; align-items: end; }
+.row > * { flex: 1 1 12rem; }
+.row button { flex: 0 0 auto; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  margin-top: var(--sp-2);
+}
+
+th, td {
+  text-align: left;
+  padding: var(--sp-2) var(--sp-2);
+  border-top: 1px solid var(--line);
+  vertical-align: top;
+}
+
+th { color: var(--muted); font-weight: 600; }
+
+.status { margin: var(--sp-3) 0 0; }
+.thread-body { white-space: pre-wrap; }
+.thread-item {
+  border-top: 1px solid var(--line);
+  padding: var(--sp-3) 0;
+}
+.thread-item .kind { color: var(--muted); font-size: 0.82rem; }
+.skip-link {
+  position: absolute;
+  left: -999px;
+  top: 0;
+  background: var(--accent);
+  color: var(--accent-ink);
+  padding: var(--sp-2) var(--sp-4);
+}
+.skip-link:focus { left: 0; }
+
+/* Recompose for narrow viewports instead of shrinking the desktop row:
+   the topbar stacks, tables scroll horizontally, controls stay ≥44px. */
+@media (max-width: 40rem) {
+  .wrap { padding: var(--sp-4) var(--sp-3) var(--sp-6); }
+  .card { padding: var(--sp-4); overflow-x: auto; }
+  .topbar { gap: var(--sp-2); }
+  .row > * { flex-basis: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none; animation: none; }
+}
