@@ -4,7 +4,7 @@ import * as HttpServerRequest from "@effect/platform/HttpServerRequest";
 import * as HttpServerResponse from "@effect/platform/HttpServerResponse";
 import { AppConfigTag } from "../services/deps.ts";
 import { AssetsTag } from "../http/assets.ts";
-import { confirmPage, unavailablePage } from "../ui.ts";
+import { confirm_page, unavailable_page } from "../ui.ts";
 
 const ui_csp = "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'";
 
@@ -43,7 +43,7 @@ const ui_signin_handler = Effect.gen(function* () {
   if (yield* shell_is_deployed(assets.fetch, url)) {
     return spa_redirect("/#/signin");
   }
-  return html_page(unavailablePage(), 503);
+  return html_page(unavailable_page(), 503);
 });
 const ui_claim_handler = Effect.gen(function* () {
   const assets = yield* AssetsTag;
@@ -52,7 +52,7 @@ const ui_claim_handler = Effect.gen(function* () {
   if (yield* shell_is_deployed(assets.fetch, url)) {
     return spa_redirect("/#/machines");
   }
-  return html_page(unavailablePage(), 503);
+  return html_page(unavailable_page(), 503);
 });
 const magic_confirm_handler = Effect.gen(function* () {
   const req = yield* HttpServerRequest.HttpServerRequest;
@@ -71,7 +71,7 @@ const magic_confirm_handler = Effect.gen(function* () {
   if (cfg.env.CORE_SPA_APPROVE_PATH || (yield* shell_is_deployed(assets.fetch, url))) {
     return spa_redirect(`${spa}?token=${token}`);
   }
-  return html_page(confirmPage());
+  return html_page(confirm_page());
 });
 
 export const router = HttpRouter.empty.pipe(

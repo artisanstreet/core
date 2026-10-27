@@ -1,61 +1,55 @@
 import { Effect, Either } from "effect";
-import { createTOTPKeyURI, verifyHOTP } from "@oslojs/otp";
-import {
-  base64urlEncode,
-  decryptWithKey,
-  encryptWithKey,
-  randomBytes,
-  sha256Hex,
-} from "../crypto.ts";
+import { createTOTPKeyURI as create_totp_key_uri, verifyHOTP as verify_hotp } from "@oslojs/otp";
+import { base64url_encode, decrypt_with_key, encrypt_with_key, random_bytes, sha256_hex } from "../crypto.ts";
 import { MAGIC_LINK_TTL_SECONDS, RATE_WINDOW_SECONDS, SESSION_TTL_SECONDS } from "../constants.ts";
-import { CoreError, badRequest, conflict, forbidden, gone, internal, unauthorized } from "../errors.ts";
-import { newId } from "../ids.ts";
-import { AppConfigTag, DbTag, TxTag, dbRun } from "./deps.ts";
-import { checkBudget } from "./ratelimit.ts";
+import { CoreError, bad_request, conflict, forbidden, gone, internal, unauthorized } from "../errors.ts";
+import { new_id } from "../ids.ts";
+import { AppConfigTag, DbTag, TxTag, db_run } from "./deps.ts";
+import { check_budget } from "./ratelimit.ts";
 import { record } from "./activity.ts";
 import { MailTag } from "./mail.ts";
-import insertAccount from "../db/queries/accounts/insertAccount.sql";
-import getAccountById from "../db/queries/accounts/getAccountById.sql";
-import getAccountByEmail from "../db/queries/accounts/getAccountByEmail.sql";
-import stageTotpSecret from "../db/queries/accounts/stageTotpSecret.sql";
-import promoteTotp from "../db/queries/accounts/promoteTotp.sql";
-import clearTotp from "../db/queries/accounts/clearTotp.sql";
-import claimTotpStep from "../db/queries/totp/claimTotpStep.sql";
-import insertActivity from "../db/queries/activity/insertActivity.sql";
-import insertLoginRequest from "../db/queries/login/insertLoginRequest.sql";
-import getLoginRequestByEmailTokenHash from "../db/queries/login/getLoginRequestByEmailTokenHash.sql";
-import getLoginRequestById from "../db/queries/login/getLoginRequestById.sql";
-import markEmailApproved from "../db/queries/login/markEmailApproved.sql";
-import markLoginCompleted from "../db/queries/login/markLoginCompleted.sql";
-import insertSession from "../db/queries/sessions/insertSession.sql";
-import getSessionWithAccountByTokenHash from "../db/queries/sessions/getSessionWithAccountByTokenHash.sql";
-import revokeSession from "../db/queries/sessions/revokeSession.sql";
-import revokeSessionsByAccount from "../db/queries/sessions/revokeSessionsByAccount.sql";
-import listSessionsByAccount from "../db/queries/sessions/listSessionsByAccount.sql";
-import insertRecoveryCode from "../db/queries/recovery/insertRecoveryCode.sql";
-import countActiveRecoveryCodes from "../db/queries/recovery/countActiveRecoveryCodes.sql";
-import consumeRecoveryCode from "../db/queries/recovery/consumeRecoveryCode.sql";
-import purgeRecoveryCodes from "../db/queries/deletion/purgeRecoveryCodes.sql";
+import insert_account from "../db/queries/accounts/insertAccount.sql"
+import get_account_by_id from "../db/queries/accounts/getAccountById.sql"
+import get_account_by_email from "../db/queries/accounts/getAccountByEmail.sql"
+import stage_totp_secret from "../db/queries/accounts/stageTotpSecret.sql"
+import promote_totp from "../db/queries/accounts/promoteTotp.sql"
+import clear_totp from "../db/queries/accounts/clearTotp.sql"
+import claim_totp_step from "../db/queries/totp/claimTotpStep.sql"
+import insert_activity from "../db/queries/activity/insertActivity.sql"
+import insert_login_request from "../db/queries/login/insertLoginRequest.sql"
+import get_login_request_by_email_token_hash from "../db/queries/login/getLoginRequestByEmailTokenHash.sql"
+import get_login_request_by_id from "../db/queries/login/getLoginRequestById.sql"
+import mark_email_approved from "../db/queries/login/markEmailApproved.sql"
+import mark_login_completed from "../db/queries/login/markLoginCompleted.sql"
+import insert_session from "../db/queries/sessions/insertSession.sql"
+import get_session_with_account_by_token_hash from "../db/queries/sessions/getSessionWithAccountByTokenHash.sql"
+import revoke_session from "../db/queries/sessions/revokeSession.sql"
+import revoke_sessions_by_account from "../db/queries/sessions/revokeSessionsByAccount.sql"
+import list_sessions_by_account from "../db/queries/sessions/listSessionsByAccount.sql"
+import insert_recovery_code from "../db/queries/recovery/insertRecoveryCode.sql"
+import count_active_recovery_codes from "../db/queries/recovery/countActiveRecoveryCodes.sql"
+import consume_recovery_code from "../db/queries/recovery/consumeRecoveryCode.sql"
+import purge_recovery_codes from "../db/queries/deletion/purgeRecoveryCodes.sql"
 
 export interface SessionPrincipal {
-  readonly sessionId: string;
-  readonly accountId: string;
+  readonly session_id: string;
+  readonly account_id: string;
   readonly email: string;
-  readonly displayName: string;
-  readonly totpEnrolled: boolean;
-  readonly totpVerifiedAt: string | null;
-  readonly tokenHash: string;
+  readonly display_name: string;
+  readonly totp_enrolled: boolean;
+  readonly totp_verified_at: string | null;
+  readonly token_hash: string;
 }
 
 const SESSION_TOKEN_PREFIX = "ast_sess_";
 const TOTP_PURPOSE = "totp-secret v1";
 
-export function newSessionToken(): string {
-  return `${SESSION_TOKEN_PREFIX}${base64urlEncode(randomBytes(32))}`;
+export function new_session_token(): string {
+  return `${SESSION_TOKEN_PREFIX}${base64url_encode(random_bytes(32))}`;
 }
 
-const hashSecret = (s: string) =>
-  Effect.promise(() => sha256Hex(`ast-core secret v1:${s}`));
+const hash_secret = (s: string) =>
+  Effect.sync(() => sha256_hex(`ast-core secret v1:${s}`));
 
 // ---------------------------------------------------------------------------
 // Magic link: request → (email) consume → finalize. The emailed token only
@@ -63,183 +57,177 @@ const hashSecret = (s: string) =>
 // is what completes the login. GET never mutates.
 // ---------------------------------------------------------------------------
 
-export const requestMagicLink = (opts: {
+export const request_magic_link = (opts: {
   email: string;
-  displayName?: string;
-  deviceName?: string;
+  display_name?: string;
+  device_name?: string;
   ip?: string | null;
 }) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
     const mailer = yield* MailTag;
-    const nowMs = cfg.now();
+    const now_ms = cfg.now();
     const email = opts.email.trim().toLowerCase();
 
     // Six requests/hour per email leaves headroom for the legitimate
     // re-request pattern (lost/expired links) while still capping
     // mailbox bombing; IP and global budgets back it up.
-    yield* checkBudget(`login:email:${email}`, RATE_WINDOW_SECONDS, 10, nowMs);
-    if (opts.ip) yield* checkBudget(`login:ip:${opts.ip}`, RATE_WINDOW_SECONDS, 20, nowMs);
-    yield* checkBudget("login:global", RATE_WINDOW_SECONDS, 200, nowMs);
+    yield* check_budget(`login:email:${email}`, RATE_WINDOW_SECONDS, 10, now_ms);
+    if (opts.ip) yield* check_budget(`login:ip:${opts.ip}`, RATE_WINDOW_SECONDS, 20, now_ms);
+    yield* check_budget("login:global", RATE_WINDOW_SECONDS, 200, now_ms);
 
-    let account = yield* dbRun(() => getAccountByEmail.run(db, { email }));
+    let account = yield* db_run(() => get_account_by_email.run(db, { email }));
     if (!account) {
-      yield* dbRun(() =>
-        insertAccount.run(db, {
-          id: newId("acct"),
+      yield* db_run(() =>
+        insert_account.run(db, {
+          id: new_id("acct"),
           email,
-          displayName: (opts.displayName ?? "").slice(0, 120),
-        }),
+          displayName: (opts.display_name ?? "").slice(0, 120) }),
       );
-      account = yield* dbRun(() => getAccountByEmail.run(db, { email }));
+      account = yield* db_run(() => get_account_by_email.run(db, { email }));
     }
-    if (!account) return yield* Effect.fail(badRequest("could not load account"));
+    if (!account) return yield* Effect.fail(bad_request("could not load account"));
     if (account.deleted_at) return yield* Effect.fail(gone("account is deleted"));
 
-    const requestSecret = base64urlEncode(randomBytes(32));
-    const emailToken = base64urlEncode(randomBytes(32));
-    const requestId = newId("logreq");
-    const expiresAt = new Date(nowMs + MAGIC_LINK_TTL_SECONDS * 1000).toISOString();
-    const requestSecretHash = yield* hashSecret(requestSecret);
-    const emailTokenHash = yield* hashSecret(emailToken);
-    yield* dbRun(() =>
-      insertLoginRequest.run(db, {
-        id: requestId,
+    const request_secret = base64url_encode(random_bytes(32));
+    const email_token = base64url_encode(random_bytes(32));
+    const request_id = new_id("logreq");
+    const expires_at = new Date(now_ms + MAGIC_LINK_TTL_SECONDS * 1000).toISOString();
+    const request_secret_hash = yield* hash_secret(request_secret);
+    const email_token_hash = yield* hash_secret(email_token);
+    yield* db_run(() =>
+      insert_login_request.run(db, {
+        id: request_id,
         email,
-        requestSecretHash,
-        emailTokenHash,
+        requestSecretHash: request_secret_hash,
+        emailTokenHash: email_token_hash,
         totpRequired: account.totp_enrolled_at != null,
         requesterIp: opts.ip ?? null,
-        expiresAt,
-      }),
+        expiresAt: expires_at }),
     );
-    const confirmUrl = `${cfg.publicBaseUrl}/v1/auth/magic/confirm?token=${emailToken}`;
+    const confirm_url = `${cfg.public_base_url}/v1/auth/magic/confirm?token=${email_token}`;
     yield* mailer.send({
       to: email,
       subject: "Sign in to Ast",
       text:
-        `Approve this sign-in request (expires in 15 minutes):\n${confirmUrl}\n\n` +
+        `Approve this sign-in request (expires in 15 minutes):\n${confirm_url}\n\n` +
         `If you did not request this, ignore this message.`,
-      confirmUrl,
-    });
+      confirm_url });
     yield* record(account.id, "login.requested", { ip: opts.ip ?? null });
-    return { requestId, requestSecret, expiresAt };
+    return { requestId: request_id, requestSecret: request_secret, expiresAt: expires_at };
   });
 
-function requestStatusOf(row: { status: string; expires_at: string }, nowMs: number) {
+function request_status_of(row: { status: string; expires_at: string }, now_ms: number) {
   if (row.status === "completed") return "completed" as const;
-  if (Date.parse(row.expires_at) <= nowMs || row.status === "expired") return "expired" as const;
+  if (Date.parse(row.expires_at) <= now_ms || row.status === "expired") return "expired" as const;
   if (row.status === "email_approved") return "email_approved" as const;
   return "pending" as const;
 }
 
-export const consumeMagicLink = (opts: { token: string; requestSecret?: string; ip?: string | null }) =>
+export const consume_magic_link = (opts: { token: string; request_secret?: string; ip?: string | null }) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
-    const nowMs = cfg.now();
-    if (opts.ip) yield* checkBudget(`consume:ip:${opts.ip}`, RATE_WINDOW_SECONDS, 30, nowMs);
-    yield* checkBudget("consume:global", RATE_WINDOW_SECONDS, 300, nowMs);
+    const now_ms = cfg.now();
+    if (opts.ip) yield* check_budget(`consume:ip:${opts.ip}`, RATE_WINDOW_SECONDS, 30, now_ms);
+    yield* check_budget("consume:global", RATE_WINDOW_SECONDS, 300, now_ms);
 
-    const tokenHash = yield* hashSecret(opts.token);
-    const row = yield* dbRun(() => getLoginRequestByEmailTokenHash.run(db, { emailTokenHash: tokenHash }));
+    const token_hash = yield* hash_secret(opts.token);
+    const row = yield* db_run(() => get_login_request_by_email_token_hash.run(db, { emailTokenHash: token_hash }));
     // Wrong/absent tokens reveal nothing and map to no request.
     if (!row) return yield* Effect.fail(unauthorized("invalid or expired link"));
-    const status = requestStatusOf(row, nowMs);
+    const status = request_status_of(row, now_ms);
     if (status !== "pending") {
       return { requestId: row.id, status, totpRequired: row.totp_required };
     }
-    const approved = yield* dbRun(() => markEmailApproved.run(db, { id: row.id }));
+    const approved = yield* db_run(() => mark_email_approved.run(db, { id: row.id }));
     if (approved) {
-      const acct = yield* dbRun(() => getAccountByEmail.run(db, { email: row.email }));
+      const acct = yield* db_run(() => get_account_by_email.run(db, { email: row.email }));
       if (acct) yield* record(acct.id, "login.email_approved", {});
       return { requestId: row.id, status: "email_approved" as const, totpRequired: row.totp_required };
     }
-    return { requestId: row.id, status: requestStatusOf({ ...row, status: "expired" }, nowMs), totpRequired: row.totp_required };
+    return { requestId: row.id, status: request_status_of({ ...row, status: "expired" }, now_ms), totpRequired: row.totp_required };
   });
 
-export const loginRequestStatus = (opts: { requestId: string; requestSecret: string }) =>
+export const login_request_status = (opts: { request_id: string; request_secret: string }) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
-    const row = yield* dbRun(() => getLoginRequestById.run(db, { id: opts.requestId }));
+    const row = yield* db_run(() => get_login_request_by_id.run(db, { id: opts.request_id }));
     if (!row) return yield* Effect.fail(unauthorized("invalid request"));
-    const secretHash = yield* hashSecret(opts.requestSecret);
-    if (secretHash !== row.request_secret_hash) return yield* Effect.fail(unauthorized("invalid request"));
+    const secret_hash = yield* hash_secret(opts.request_secret);
+    if (secret_hash !== row.request_secret_hash) return yield* Effect.fail(unauthorized("invalid request"));
     return {
       requestId: row.id,
-      status: requestStatusOf(row, cfg.now()),
+      status: request_status_of(row, cfg.now()),
       totpRequired: row.totp_required,
       email: row.email,
-      expiresAt: row.expires_at,
-    };
+      expiresAt: row.expires_at };
   });
 
-export const finalizeMagicLink = (opts: {
-  requestId: string;
-  requestSecret: string;
-  totpCode?: string;
-  recoveryCode?: string;
-  deviceName?: string;
+export const finalize_magic_link = (opts: {
+  request_id: string;
+  request_secret: string;
+  totp_code?: string;
+  recovery_code?: string;
+  device_name?: string;
   ip?: string | null;
-  userAgent?: string | null;
+  user_agent?: string | null;
 }) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
-    const nowMs = cfg.now();
-    const row = yield* dbRun(() => getLoginRequestById.run(db, { id: opts.requestId }));
+    const now_ms = cfg.now();
+    const row = yield* db_run(() => get_login_request_by_id.run(db, { id: opts.request_id }));
     if (!row) return yield* Effect.fail(unauthorized("invalid request"));
-    const secretHash = yield* hashSecret(opts.requestSecret);
-    if (secretHash !== row.request_secret_hash) return yield* Effect.fail(unauthorized("invalid request"));
-    if (requestStatusOf(row, nowMs) === "expired") return yield* Effect.fail(gone("request expired"));
+    const secret_hash = yield* hash_secret(opts.request_secret);
+    if (secret_hash !== row.request_secret_hash) return yield* Effect.fail(unauthorized("invalid request"));
+    if (request_status_of(row, now_ms) === "expired") return yield* Effect.fail(gone("request expired"));
     if (row.status !== "email_approved") {
       return yield* Effect.fail(forbidden("email approval required first"));
     }
-    const account = yield* dbRun(() => getAccountByEmail.run(db, { email: row.email }));
+    const account = yield* db_run(() => get_account_by_email.run(db, { email: row.email }));
     if (!account || account.deleted_at) return yield* Effect.fail(gone("account is deleted"));
 
     // Email alone never bypasses TOTP.
-    let totpVerified = false;
+    let totp_verified = false;
     if (account.totp_enrolled_at != null) {
-      const ok = yield* satisfyTotpChallenge(account.id, opts.totpCode, opts.recoveryCode, opts.ip ?? null, nowMs);
+      const ok = yield* satisfy_totp_challenge(account.id, opts.totp_code, opts.recovery_code, opts.ip ?? null, now_ms);
       if (!ok) return yield* Effect.fail(forbidden("second factor required"));
-      totpVerified = true;
+      totp_verified = true;
     }
     // Atomic single-use: completion, session, and audit commit together, so
     // a crash cannot burn the request while stranding the login. Exactly one
     // finalize wins the markLoginCompleted race; losers see no row.
     const tx = yield* TxTag;
-    const token = newSessionToken();
-    const tokenHash = yield* hashSecret(token);
-    const expiresAt = new Date(nowMs + SESSION_TTL_SECONDS * 1000).toISOString();
+    const token = new_session_token();
+    const token_hash = yield* hash_secret(token);
+    const expires_at = new Date(now_ms + SESSION_TTL_SECONDS * 1000).toISOString();
     const finalize_tx = Effect.gen(function* () {
       const { db: tx_db } = yield* DbTag;
-      const completed = yield* dbRun(() => markLoginCompleted.run(tx_db, { id: row.id }));
+      const completed = yield* db_run(() => mark_login_completed.run(tx_db, { id: row.id }));
       if (!completed) return yield* Effect.fail(forbidden("already completed or expired"));
-      const s = yield* dbRun(() =>
-        insertSession.run(tx_db, {
-          id: newId("sess"),
+      const s = yield* db_run(() =>
+        insert_session.run(tx_db, {
+          id: new_id("sess"),
           accountId: account!.id,
-          tokenHash,
-          deviceName: (opts.deviceName ?? "").slice(0, 120),
+          tokenHash: token_hash,
+          deviceName: (opts.device_name ?? "").slice(0, 120),
           ip: opts.ip ?? null,
-          userAgent: (opts.userAgent ?? "").slice(0, 300),
-          totpVerifiedAt: totpVerified ? new Date(nowMs).toISOString() : null,
-          expiresAt,
-        }),
+          userAgent: (opts.user_agent ?? "").slice(0, 300),
+          totpVerifiedAt: totp_verified ? new Date(now_ms).toISOString() : null,
+          expiresAt: expires_at }),
       );
       if (!s) return yield* Effect.fail(internal("database unavailable"));
-      yield* dbRun(() =>
-        insertActivity.run(tx_db, {
-          id: newId("evt"),
+      yield* db_run(() =>
+        insert_activity.run(tx_db, {
+          id: new_id("evt"),
           accountId: account!.id,
           machineId: null,
           kind: "login.completed",
           detail: "{}",
-          ip: opts.ip ?? null,
-        }),
+          ip: opts.ip ?? null }),
       );
       return s;
     });
@@ -248,22 +236,21 @@ export const finalizeMagicLink = (opts: {
     );
     return {
       sessionId: sess.id,
-      rawToken: token,
+      raw_token: token,
       accountId: account.id,
-      expiresAt,
-      totpVerified,
-    };
+      expiresAt: expires_at,
+      totpVerified: totp_verified };
   });
 
 // Match a 6-digit code against explicit time-steps around now (±2 steps
 // covers the 60 s grace window). Returns the matched step so the caller can
 // claim it for durable single-use. Malformed input matches nothing.
-function matchTotpStep(secret: Uint8Array, code: string, nowMs: number): bigint | null {
+function match_totp_step(secret: Uint8Array, code: string, now_ms: number): bigint | null {
   const c = code.trim();
   if (!/^[0-9]{6}$/.test(c)) return null;
-  const base = Math.floor(nowMs / 30000);
+  const base = Math.floor(now_ms / 30000);
   for (let k = -2; k <= 2; k++) {
-    const attempt = Either.try(() => verifyHOTP(secret, BigInt(base + k), 6, c));
+    const attempt = Either.try(() => verify_hotp(secret, BigInt(base + k), 6, c));
     if (Either.isLeft(attempt)) return null;
     if (attempt.right) return BigInt(base + k);
   }
@@ -272,46 +259,45 @@ function matchTotpStep(secret: Uint8Array, code: string, nowMs: number): bigint 
 
 // Attempt budget (durable, per account) + step claim (durable, single-use).
 // Both checks live in the database so every isolate enforces them.
-const consumeTotpAttempt = (accountId: string, secret: Uint8Array, code: string | undefined, nowMs: number) =>
+const consume_totp_attempt = (account_id: string, secret: Uint8Array, code: string | undefined, now_ms: number) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    yield* checkBudget(`totp:account:${accountId}`, RATE_WINDOW_SECONDS, 10, nowMs);
+    yield* check_budget(`totp:account:${account_id}`, RATE_WINDOW_SECONDS, 10, now_ms);
     if (!code) return false;
-    const step = matchTotpStep(secret, code, nowMs);
+    const step = match_totp_step(secret, code, now_ms);
     if (step === null) return false;
     // Null means this exact code was already consumed in its window
     // (replay), or a concurrent attempt won the race.
-    const claimed = yield* dbRun(() => claimTotpStep.run(db, { accountId, step }));
+    const claimed = yield* db_run(() => claim_totp_step.run(db, { accountId: account_id, step }));
     return claimed !== null;
   });
 
-const decryptSecret = (enc: Uint8Array, masterKey: Uint8Array) =>
-  Effect.tryPromise({
-    try: () => decryptWithKey(masterKey, new Uint8Array(enc), TOTP_PURPOSE),
-    catch: () => unauthorized("second factor required"),
-  });
+const decrypt_secret = (enc: Uint8Array, master_key: Uint8Array) =>
+  Effect.try({
+        try: () => decrypt_with_key(master_key, new Uint8Array(enc), TOTP_PURPOSE),
+    catch: () => unauthorized("second factor required") });
 
-const satisfyTotpChallenge = (
-  accountId: string,
-  totpCode: string | undefined,
-  recoveryCode: string | undefined,
+const satisfy_totp_challenge = (
+  account_id: string,
+  totp_code: string | undefined,
+  recovery_code: string | undefined,
   ip: string | null,
-  nowMs: number,
+  now_ms: number,
 ) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
-    if (ip) yield* checkBudget(`totp:ip:${ip}`, RATE_WINDOW_SECONDS, 30, nowMs);
-    const account = yield* dbRun(() => getAccountById.run(db, { id: accountId }));
+    if (ip) yield* check_budget(`totp:ip:${ip}`, RATE_WINDOW_SECONDS, 30, now_ms);
+    const account = yield* db_run(() => get_account_by_id.run(db, { id: account_id }));
     if (!account?.totp_secret_enc) return false;
-    const secret = yield* decryptSecret(account.totp_secret_enc, cfg.masterKey.raw);
-    if (totpCode && (yield* consumeTotpAttempt(accountId, secret, totpCode, nowMs))) return true;
-    if (recoveryCode) {
-      yield* checkBudget(`totp:account:${accountId}`, RATE_WINDOW_SECONDS, 10, nowMs);
-      const codeHash = yield* hashSecret(recoveryCode.trim());
-      const used = yield* dbRun(() => consumeRecoveryCode.run(db, { accountId, codeHash }));
+    const secret = yield* decrypt_secret(account.totp_secret_enc, cfg.master_key.raw);
+    if (totp_code && (yield* consume_totp_attempt(account_id, secret, totp_code, now_ms))) return true;
+    if (recovery_code) {
+      yield* check_budget(`totp:account:${account_id}`, RATE_WINDOW_SECONDS, 10, now_ms);
+      const code_hash = yield* hash_secret(recovery_code.trim());
+      const used = yield* db_run(() => consume_recovery_code.run(db, { accountId: account_id, codeHash: code_hash }));
       if (used) {
-        yield* record(accountId, "totp.recovery_used", {});
+        yield* record(account_id, "totp.recovery_used", {});
         return true;
       }
     }
@@ -322,45 +308,44 @@ const satisfyTotpChallenge = (
 // Sessions
 // ---------------------------------------------------------------------------
 
-export const requireSession = (rawToken: string) =>
+export const require_session = (raw_token: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
-    const tokenHash = yield* hashSecret(rawToken);
-    const row = yield* dbRun(() => getSessionWithAccountByTokenHash.run(db, { tokenHash }));
+    const token_hash = yield* hash_secret(raw_token);
+    const row = yield* db_run(() => get_session_with_account_by_token_hash.run(db, { tokenHash: token_hash }));
     if (!row || row.revoked_at || Date.parse(row.expires_at) <= cfg.now() || row.deleted_at) {
       return yield* Effect.fail(unauthorized("invalid session"));
     }
     const principal: SessionPrincipal = {
-      sessionId: row.id,
-      accountId: row.account_id,
+      session_id: row.id,
+      account_id: row.account_id,
       email: row.email,
-      displayName: row.display_name,
-      totpEnrolled: row.totp_enrolled_at != null,
-      totpVerifiedAt: row.totp_verified_at,
-      tokenHash,
-    };
+      display_name: row.display_name,
+      totp_enrolled: row.totp_enrolled_at != null,
+      totp_verified_at: row.totp_verified_at,
+      token_hash };
     return principal;
   });
 
-export const revokeCurrentSession = (rawToken: string) =>
+export const revoke_current_session = (raw_token: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const tokenHash = yield* hashSecret(rawToken);
-    yield* dbRun(() => revokeSession.run(db, { tokenHash }));
+    const token_hash = yield* hash_secret(raw_token);
+    yield* db_run(() => revoke_session.run(db, { tokenHash: token_hash }));
   });
 
-export const revokeAllSessions = (accountId: string) =>
+export const revoke_all_sessions = (account_id: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    yield* dbRun(() => revokeSessionsByAccount.run(db, { accountId }));
-    yield* record(accountId, "sessions.revoked_all", {});
+    yield* db_run(() => revoke_sessions_by_account.run(db, { accountId: account_id }));
+    yield* record(account_id, "sessions.revoked_all", {});
   });
 
-export const listSessions = (accountId: string, limit: number) =>
+export const list_sessions = (account_id: string, limit: number) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const rows = yield* dbRun(() => listSessionsByAccount.run(db, { accountId, limit }));
+    const rows = yield* db_run(() => list_sessions_by_account.run(db, { accountId: account_id, limit }));
     return {
       sessions: rows.map((r) => ({
         id: r.id,
@@ -368,88 +353,86 @@ export const listSessions = (accountId: string, limit: number) =>
         totpVerifiedAt: r.totp_verified_at,
         createdAt: r.created_at,
         expiresAt: r.expires_at,
-        revokedAt: r.revoked_at,
-      })),
-    };
+        revokedAt: r.revoked_at })) };
   });
 
 // ---------------------------------------------------------------------------
 // TOTP + recovery codes
 // ---------------------------------------------------------------------------
 
-export const enrollTotp = (accountId: string) =>
+export const enroll_totp = (account_id: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
-    const existing = yield* dbRun(() => getAccountById.run(db, { id: accountId }));
+    const existing = yield* db_run(() => get_account_by_id.run(db, { id: account_id }));
     // A stolen session must not silently swap the factor: replacing MFA
     // goes through disable (which verifies the live code) first.
-    if (!existing) return yield* Effect.fail(badRequest("no such account"));
+    if (!existing) return yield* Effect.fail(bad_request("no such account"));
     if (existing.totp_enrolled_at != null) {
       return yield* Effect.fail(conflict("totp already enrolled; disable it first"));
     }
     // Fresh code set each enrollment; stale codes from a prior factor die.
-    yield* dbRun(() => purgeRecoveryCodes.run(db, { accountId }));
-    const secret = randomBytes(20);
-    const enc = yield* Effect.promise(() => encryptWithKey(cfg.masterKey.raw, secret, TOTP_PURPOSE));
-    const staged = yield* dbRun(() => stageTotpSecret.run(db, { id: accountId, secretEnc: enc }));
+    yield* db_run(() => purge_recovery_codes.run(db, { accountId: account_id }));
+    const secret = random_bytes(20);
+    const enc = yield* Effect.sync(() => encrypt_with_key(cfg.master_key.raw, secret, TOTP_PURPOSE));
+    const staged = yield* db_run(() => stage_totp_secret.run(db, { id: account_id, secretEnc: enc }));
     if (!staged) return yield* Effect.fail(conflict("totp already enrolled; disable it first"));
-    const codes = Array.from({ length: 10 }, () => base64urlEncode(randomBytes(9)));
+    const codes = Array.from({ length: 10 }, () => base64url_encode(random_bytes(9)));
     for (const code of codes) {
-      const codeHash = yield* hashSecret(code);
-      yield* dbRun(() => insertRecoveryCode.run(db, { id: newId("rc"), accountId, codeHash }));
+      const code_hash = yield* hash_secret(code);
+      yield* db_run(() => insert_recovery_code.run(db, { id: new_id("rc"), accountId: account_id, codeHash: code_hash }));
     }
-    const otpauthUrl = createTOTPKeyURI("Ast", accountId, secret, 30, 6);
-    yield* record(accountId, "totp.enroll_started", {});
-    return { otpauthUrl, recoveryCodes: codes };
+    const otpauth_url = create_totp_key_uri("Ast", account_id, secret, 30, 6);
+    yield* record(account_id, "totp.enroll_started", {});
+    return { otpauthUrl: otpauth_url, recoveryCodes: codes };
   });
 
-export const verifyTotpEnroll = (accountId: string, code: string) =>
+export const verify_totp_enroll = (account_id: string, code: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
-    const account = yield* dbRun(() => getAccountById.run(db, { id: accountId }));
-    if (!account) return yield* Effect.fail(badRequest("no such account"));
+    const account = yield* db_run(() => get_account_by_id.run(db, { id: account_id }));
+    if (!account) return yield* Effect.fail(bad_request("no such account"));
     if (account.totp_enrolled_at != null) return yield* Effect.fail(conflict("totp already enrolled"));
-    if (!account.totp_pending_secret_enc) return yield* Effect.fail(badRequest("no pending enrollment"));
-    const secret = yield* decryptSecret(new Uint8Array(account.totp_pending_secret_enc), cfg.masterKey.raw);
-    const ok = yield* consumeTotpAttempt(accountId, secret, code, cfg.now());
+    if (!account.totp_pending_secret_enc) return yield* Effect.fail(bad_request("no pending enrollment"));
+    const secret = yield* decrypt_secret(new Uint8Array(account.totp_pending_secret_enc), cfg.master_key.raw);
+    const ok = yield* consume_totp_attempt(account_id, secret, code, cfg.now());
     if (!ok) return yield* Effect.fail(forbidden("invalid code"));
-    yield* dbRun(() => promoteTotp.run(db, { id: accountId }));
-    yield* record(accountId, "totp.enrolled", {});
+    yield* db_run(() => promote_totp.run(db, { id: account_id }));
+    yield* record(account_id, "totp.enrolled", {});
     return { enrolled: true };
   });
 
-export const disableTotp = (accountId: string, code: string) =>
+export const disable_totp = (account_id: string, code: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
-    const account = yield* dbRun(() => getAccountById.run(db, { id: accountId }));
+    const account = yield* db_run(() => get_account_by_id.run(db, { id: account_id }));
     if (!account?.totp_secret_enc || account.totp_enrolled_at == null) {
-      return yield* Effect.fail(badRequest("totp is not enrolled"));
+      return yield* Effect.fail(bad_request("totp is not enrolled"));
     }
-    const secret = yield* decryptSecret(new Uint8Array(account.totp_secret_enc), cfg.masterKey.raw);
-    const ok = yield* consumeTotpAttempt(accountId, secret, code, cfg.now());
+    const secret = yield* decrypt_secret(new Uint8Array(account.totp_secret_enc), cfg.master_key.raw);
+    const ok = yield* consume_totp_attempt(account_id, secret, code, cfg.now());
     if (!ok) return yield* Effect.fail(forbidden("invalid code"));
-    yield* dbRun(() => clearTotp.run(db, { id: accountId }));
-    yield* dbRun(() => purgeRecoveryCodes.run(db, { accountId }));
-    yield* record(accountId, "totp.disabled", {});
+    yield* db_run(() => clear_totp.run(db, { id: account_id }));
+    yield* db_run(() => purge_recovery_codes.run(db, { accountId: account_id }));
+    yield* record(account_id, "totp.disabled", {});
     return { disabled: true };
   });
 
-export const countRecoveryCodes = (accountId: string) =>
+export const count_recovery_codes = (account_id: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const row = yield* dbRun(() => countActiveRecoveryCodes.run(db, { accountId }));
+    const row = yield* db_run(() => count_active_recovery_codes.run(db, { accountId: account_id }));
     return row.n;
   });
 
-export const assertSecondFactor = (
-  accountId: string,
-  opts: { totpCode?: string; recoveryCode?: string },
+export const assert_second_factor = (
+  account_id: string,
+  opts: { totp_code?: string; recovery_code?: string },
 ) =>
   Effect.gen(function* () {
     const cfg = yield* AppConfigTag;
-    const ok = yield* satisfyTotpChallenge(accountId, opts.totpCode, opts.recoveryCode, null, cfg.now());
+    const ok = yield* satisfy_totp_challenge(account_id, opts.totp_code, opts.recovery_code, null, cfg.now());
     if (!ok) return yield* Effect.fail(forbidden("second factor required"));
   });

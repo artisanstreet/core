@@ -9,35 +9,35 @@ import { encode_ok } from "../../http/response.ts";
 
 const totp_enroll_handler = Effect.gen(function* () {
   const s = yield* session_for_mutation;
-  const data = yield* Auth.enrollTotp(s.accountId);
+  const data = yield* Auth.enroll_totp(s.account_id);
   return encode_ok(C.TotpEnrollResp, data);
 });
 const totp_verify_handler = Effect.gen(function* () {
   const s = yield* session_for_mutation;
   const { json } = yield* read_json_body;
   const input = yield* decode_request(C.TotpVerifyReq, json);
-  const data = yield* Auth.verifyTotpEnroll(s.accountId, input.code);
+  const data = yield* Auth.verify_totp_enroll(s.account_id, input.code);
   return encode_ok(C.TotpVerifyResp, data);
 });
 const totp_disable_handler = Effect.gen(function* () {
   const s = yield* session_for_mutation;
   const { json } = yield* read_json_body;
   const input = yield* decode_request(C.TotpDisableReq, json);
-  const data = yield* Auth.disableTotp(s.accountId, input.code);
+  const data = yield* Auth.disable_totp(s.account_id, input.code);
   return encode_ok(C.TotpDisableResp, data);
 });
 
 export const router = HttpRouter.empty.pipe(
   register_route(
-    R.totpEnroll,
+    R.totp_enroll,
       totp_enroll_handler,
   ),
   register_route(
-    R.totpVerify,
+    R.totp_verify,
       totp_verify_handler,
   ),
   register_route(
-    R.totpDisable,
+    R.totp_disable,
       totp_disable_handler,
   ),
 );

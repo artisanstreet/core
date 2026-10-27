@@ -21,7 +21,7 @@ const bundle_publish_handler = Effect.gen(function* () {
   const me = yield* session_for_mutation;
   const { json } = yield* read_json_body;
   const input = yield* decode_request(C.BundlePublishReq, json);
-  const b = yield* ConfigSvc.publishBundle(me.accountId, input.manifest);
+  const b = yield* ConfigSvc.publish_bundle(me.account_id, input.manifest);
   return encode_ok(
     C.BundleInfo,
     { id: b.id, version: b.version, contentHash: b.contentHash, r2Key: b.r2Key, createdAt: b.createdAt },
@@ -32,11 +32,11 @@ const bundle_latest_handler = Effect.gen(function* () {
   const req = yield* HttpServerRequest.HttpServerRequest;
   let account_id: string;
   if (has_machine_header(req)) {
-    account_id = (yield* proof_for_machine).principal.accountId;
+    account_id = (yield* proof_for_machine).principal.account_id;
   } else {
-    account_id = (yield* session_of).principal.accountId;
+    account_id = (yield* session_of).principal.account_id;
   }
-  const latest = yield* ConfigSvc.latestBundle(account_id);
+  const latest = yield* ConfigSvc.latest_bundle(account_id);
   const manifest = latest.manifest == null
     ? null
     : yield* Schema.decodeUnknown(C.EditorManifest)(latest.manifest).pipe(
@@ -68,7 +68,7 @@ const bundle_manifest_handler = Effect.gen(function* () {
   if (!Number.isInteger(version) || version <= 0) {
     return yield* Effect.fail(new CoreError("bad_request", "bad version"));
   }
-  const { bytes, contentHash } = yield* ConfigSvc.bundleManifestBytes(principal.accountId, version);
+  const { bytes, contentHash } = yield* ConfigSvc.bundle_manifest_bytes(principal.account_id, version);
   const etag = `"${contentHash}"`;
   const not_modified = yield* if_none_match(contentHash);
   if (not_modified) {
@@ -91,16 +91,16 @@ const config_read_handler = Effect.gen(function* () {
   if (!/^mch_[0-9A-HJKMNP-TV-Z]{26}$/.test(machine_id)) {
     return yield* Effect.fail(new CoreError("bad_request", "machineId is required"));
   }
-  const data = yield* ConfigSvc.readMachineState(me.accountId, machine_id);
+  const data = yield* ConfigSvc.read_machine_state(me.account_id, machine_id);
   return encode_ok(C.ConfigStateResp, data);
 });
 const config_report_handler = Effect.gen(function* () {
-  const { principal, rawBody } = yield* proof_for_machine;
+  const { principal, raw_body } = yield* proof_for_machine;
   yield* require_json_content_type;
-  const parsed = yield* parse_json_text(rawBody);
+  const parsed = yield* parse_json_text(raw_body);
   const input = yield* decode_request(C.ConfigStateReq, parsed);
-  const data = yield* ConfigSvc.reportMachineState(principal.machineId, principal.accountId, {
-    bundleId: input.bundleId,
+  const data = yield* ConfigSvc.report_machine_state(principal.machine_id, principal.account_id, {
+    bundle_id: input.bundleId,
     status: input.status,
     detail: input.detail ?? "" });
   return encode_ok(C.ConfigStateResp, data);
@@ -108,23 +108,23 @@ const config_report_handler = Effect.gen(function* () {
 
 export const router = HttpRouter.empty.pipe(
   register_route(
-    R.bundlePublish,
+    R.bundle_publish,
       bundle_publish_handler,
   ),
   register_route(
-    R.bundleLatest,
+    R.bundle_latest,
       bundle_latest_handler,
   ),
   register_route(
-    R.bundleManifest,
+    R.bundle_manifest,
       bundle_manifest_handler,
   ),
   register_route(
-    R.configRead,
+    R.config_read,
       config_read_handler,
   ),
   register_route(
-    R.configReport,
+    R.config_report,
       config_report_handler,
   ),
 );

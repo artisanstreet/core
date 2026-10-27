@@ -3,7 +3,7 @@ import { Effect, Layer } from "effect";
 import { FetchHttpClient } from "@effect/platform";
 import { AppConfigTag } from "../../src/services/deps.ts";
 import { MailLive, MailTag } from "../../src/services/mail.ts";
-import { loadMasterKey } from "../../src/crypto.ts";
+import { load_master_key } from "../../src/crypto.ts";
 
 const MASTER_KEY = "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI";
 
@@ -16,16 +16,14 @@ function test_config() {
       CORE_MASTER_KEY: MASTER_KEY,
       MAIL_PROVIDER: "resend",
       MAIL_FROM: "Ast <noreply@example.invalid>",
-      RESEND_API_KEY: "test-key",
-    } as Record<string, string | undefined>,
-    coreEnv: "test",
-    publicBaseUrl: "http://test.invalid",
-    jwtIssuer: "http://test.invalid",
-    masterKey: loadMasterKey({ CORE_MASTER_KEY: MASTER_KEY, CORE_ENV: "test" }),
+      RESEND_API_KEY: "test-key" } as Record<string, string | undefined>,
+    core_env: "test",
+    public_base_url: "http://test.invalid",
+    jwt_issuer: "http://test.invalid",
+    master_key: load_master_key({ CORE_MASTER_KEY: MASTER_KEY, CORE_ENV: "test" }),
     mailer: "resend" as const,
-    resendApiKey: "test-key",
-    now: Date.now,
-  };
+    resend_api_key: "test-key",
+    now: Date.now };
 }
 
 function mail_layers() {
@@ -51,7 +49,7 @@ describe("mail http client", () => {
     );
     const program = Effect.gen(function* () {
       const mail = yield* MailTag;
-      yield* mail.send({ to: "a@example.com", subject: "s", text: "t", confirmUrl: "http://x" });
+      yield* mail.send({ to: "a@example.com", subject: "s", text: "t", confirm_url: "http://x" });
     }).pipe(Effect.provide(mail_layers()));
     await Effect.runPromise(program);
     expect(calls).toBe(2);
@@ -64,7 +62,7 @@ describe("mail http client", () => {
     );
     const program = Effect.gen(function* () {
       const mail = yield* MailTag;
-      return yield* Effect.exit(mail.send({ to: "a@example.com", subject: "s", text: "t", confirmUrl: "http://x" }));
+      return yield* Effect.exit(mail.send({ to: "a@example.com", subject: "s", text: "t", confirm_url: "http://x" }));
     }).pipe(Effect.provide(mail_layers()));
     const exit = await Effect.runPromise(program);
     expect(exit._tag).toBe("Failure");

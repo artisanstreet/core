@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 import { STACK_NAME } from "./src/config.ts";
 import { ConfigBucket } from "./src/storage.ts";
 import { CoreHyperdrive } from "./src/hyperdrive.ts";
-import { makeCoreWorker } from "./src/worker.ts";
+import { make_core_worker } from "./src/worker.ts";
 
 // Composition root — export default the Stack.
 // Stack name is fixed (`ast-core`, distinct from Relay's `ast-relay`);
@@ -24,7 +24,7 @@ export default Alchemy.Stack(
     const stack = yield* Alchemy.Stack;
     const bucket = yield* ConfigBucket;
     const hd = yield* CoreHyperdrive;
-    const worker = yield* makeCoreWorker({ bucket, hyperdrive: hd });
+    const worker = yield* make_core_worker({ bucket, hyperdrive: hd });
 
     // Useful public outputs only. No secret outputs.
     return {

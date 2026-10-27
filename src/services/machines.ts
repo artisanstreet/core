@@ -1,54 +1,50 @@
 import { Effect } from "effect";
-import {
-  base64urlDecode,
-  base64urlEncode,
-  randomBytes,
-  sha256Bytes,
-  sha256Hex,
-} from "../crypto.ts";
+import { base64url_decode, base64url_encode, random_bytes, sha256_bytes, sha256_hex } from "../crypto.ts";
 import { ENROLLMENT_TTL_SECONDS, LOGIN_CODE_ALPHABET, RATE_WINDOW_SECONDS } from "../constants.ts";
-import { badRequest, forbidden, unauthorized } from "../errors.ts";
-import { newId } from "../ids.ts";
-import { AppConfigTag, DbTag, dbRun } from "./deps.ts";
-import { checkBudget } from "./ratelimit.ts";
+import { bad_request, forbidden, unauthorized } from "../errors.ts";
+import { new_id } from "../ids.ts";
+import { AppConfigTag, DbTag, db_run } from "./deps.ts";
+import { check_budget } from "./ratelimit.ts";
 import { record } from "./activity.ts";
-import getAccountById from "../db/queries/accounts/getAccountById.sql";
-import insertEnrollment from "../db/queries/enrollments/insertEnrollment.sql";
-import getEnrollmentById from "../db/queries/enrollments/getEnrollmentById.sql";
-import getEnrollmentByCodeHash from "../db/queries/enrollments/getEnrollmentByCodeHash.sql";
-import claimEnrollment from "../db/queries/enrollments/claimEnrollment.sql";
-import confirmEnrollment from "../db/queries/enrollments/confirmEnrollment.sql";
-import insertMachine from "../db/queries/machines/insertMachine.sql";
-import getMachineById from "../db/queries/machines/getMachineById.sql";
-import listMachinesByAccount from "../db/queries/machines/listMachinesByAccount.sql";
-import revokeMachine from "../db/queries/machines/revokeMachine.sql";
-import touchMachineLastSeen from "../db/queries/machines/touchMachineLastSeen.sql";
-import insertNonce from "../db/queries/nonces/insertNonce.sql";
+import get_account_by_id from "../db/queries/accounts/getAccountById.sql"
+import insert_enrollment from "../db/queries/enrollments/insertEnrollment.sql"
+import get_enrollment_by_id from "../db/queries/enrollments/getEnrollmentById.sql"
+import get_enrollment_by_code_hash from "../db/queries/enrollments/getEnrollmentByCodeHash.sql"
+import claim_enrollment from "../db/queries/enrollments/claimEnrollment.sql"
+import confirm_enrollment from "../db/queries/enrollments/confirmEnrollment.sql"
+import insert_machine from "../db/queries/machines/insertMachine.sql"
+import get_machine_by_id from "../db/queries/machines/getMachineById.sql"
+import list_machines_by_account from "../db/queries/machines/listMachinesByAccount.sql"
+import revoke_machine from "../db/queries/machines/revokeMachine.sql"
+import touch_machine_last_seen from "../db/queries/machines/touchMachineLastSeen.sql"
+import insert_nonce from "../db/queries/nonces/insertNonce.sql"
 
 export interface MachinePrincipal {
-  readonly machineId: string;
-  readonly accountId: string;
+  readonly machine_id: string;
+  readonly account_id: string;
 }
 
 const EMPTY_BODY_HASH = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
-export const fingerprintOfPublicKeyX = (x: string) =>
-  Effect.promise(() => sha256Bytes(base64urlDecode(x)).then(base64urlEncode));
+export const fingerprint_of_public_key_x = (x: string) =>
+  Effect.sync(() => base64url_encode(sha256_bytes(base64url_decode(x))));
 
-export const verifyEd25519 = (publicKeyX: string, signatureB64: string, message: Uint8Array) =>
+export const verify_ed25519 = (public_key_x: string, signature_b64: string, message: Uint8Array) =>
   Effect.tryPromise({
     try: async () => {
       const key = await crypto.subtle.importKey(
         "jwk",
-        { kty: "OKP", crv: "Ed25519", x: publicKeyX, key_ops: ["verify"], ext: true } as JsonWebKey,
+        { kty: "OKP", crv: "Ed25519", x: public_key_x, key_ops: ["verify"], ext: true } as JsonWebKey,
         { name: "Ed25519" },
         false,
         ["verify"],
       );
-      return crypto.subtle.verify({ name: "Ed25519" }, key, base64urlDecode(signatureB64).buffer as ArrayBuffer, message.buffer as ArrayBuffer);
+      const sig_bytes = base64url_decode(signature_b64);
+      const sig_copy = new Uint8Array(sig_bytes);
+      const msg_copy = new Uint8Array(message);
+      return crypto.subtle.verify({ name: "Ed25519" }, key, sig_copy, msg_copy);
     },
-    catch: () => unauthorized("invalid signature"),
-  });
+    catch: () => unauthorized("invalid signature") });
 
 // Canonical request proof (§3): verifies timestamp window, recomputes the
 // body hash, verifies the Ed25519 signature FIRST, then atomically claims
@@ -57,15 +53,15 @@ export const verifyEd25519 = (publicKeyX: string, signatureB64: string, message:
 // poisoning a nonce the legitimate holder will use; the nonce is part of
 // the signed canonical string, so the later claim stays bound to exactly
 // what was verified. Any failure is a generic 401.
-export const verifyMachineProof = (opts: {
-  subjectId: string;
-  publicKeyX: string;
+export const verify_machine_proof = (opts: {
+  subject_id: string;
+  public_key_x: string;
   timestamp: string;
   nonce: string;
   signature: string;
   method: string;
-  pathAndQuery: string;
-  rawBody: string;
+  path_and_query: string;
+  raw_body: string;
 }) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
@@ -77,18 +73,18 @@ export const verifyMachineProof = (opts: {
     if (!/^[A-Za-z0-9_-]{16,128}$/.test(opts.nonce)) {
       return yield* Effect.fail(unauthorized("bad nonce"));
     }
-    const bodyHash = yield* Effect.promise(() => sha256Hex(opts.rawBody));
-    if (bodyHash !== EMPTY_BODY_HASH && opts.rawBody.length === 0) {
+    const body_hash = yield* Effect.sync(() => sha256_hex(opts.raw_body));
+    if (body_hash !== EMPTY_BODY_HASH && opts.raw_body.length === 0) {
       return yield* Effect.fail(unauthorized("bad body"));
     }
-    const canonical = `${opts.timestamp}\n${opts.nonce}\n${opts.method}\n${opts.pathAndQuery}\n${bodyHash}`;
-    const ok = yield* verifyEd25519(opts.publicKeyX, opts.signature, new TextEncoder().encode(canonical));
+    const canonical = `${opts.timestamp}\n${opts.nonce}\n${opts.method}\n${opts.path_and_query}\n${body_hash}`;
+    const ok = yield* verify_ed25519(opts.public_key_x, opts.signature, new TextEncoder().encode(canonical));
     if (!ok) return yield* Effect.fail(unauthorized("invalid signature"));
-    const claimed = yield* dbRun(() => insertNonce.run(db, { subject: opts.subjectId, nonce: opts.nonce }));
+    const claimed = yield* db_run(() => insert_nonce.run(db, { subject: opts.subject_id, nonce: opts.nonce }));
     if (!claimed) return yield* Effect.fail(unauthorized("replay rejected"));
   });
 
-function newCode(): string {
+function new_code(): string {
   // Rejection sampling over the actual alphabet length: unbiased, and every
   // index is always in range (a past &31 mask over a 31-char alphabet could
   // emit undefined and break code lookup after upper-casing).
@@ -96,7 +92,7 @@ function newCode(): string {
   const limit = 256 - (256 % n);
   let out = "";
   while (out.length < 8) {
-    const b = randomBytes(1)[0]!;
+    const b = random_bytes(1)[0]!;
     if (b >= limit) continue;
     out += LOGIN_CODE_ALPHABET[b % n];
   }
@@ -104,14 +100,14 @@ function newCode(): string {
 }
 
 // Exported for the generator distribution test.
-export { newCode as newEnrollmentCode };
+export { new_code as new_enrollment_code };
 
 // ---------------------------------------------------------------------------
 // Enrollment lifecycle
 // ---------------------------------------------------------------------------
 
-export const startEnrollment = (opts: {
-  publicKeyX: string;
+export const start_enrollment = (opts: {
+  public_key_x: string;
   label: string;
   timestamp: number;
   proof: string;
@@ -120,128 +116,126 @@ export const startEnrollment = (opts: {
   Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
-    if (opts.ip) yield* checkBudget(`enroll:ip:${opts.ip}`, RATE_WINDOW_SECONDS, 10, cfg.now());
+    if (opts.ip) yield* check_budget(`enroll:ip:${opts.ip}`, RATE_WINDOW_SECONDS, 10, cfg.now());
     if (Math.abs(cfg.now() / 1000 - opts.timestamp) > 300) {
       return yield* Effect.fail(unauthorized("stale request"));
     }
-    const msg = `enrollment-request\n${opts.publicKeyX}\n${opts.label}\n${opts.timestamp}`;
-    const ok = yield* verifyEd25519(opts.publicKeyX, opts.proof, new TextEncoder().encode(msg));
+    const msg = `enrollment-request\n${opts.public_key_x}\n${opts.label}\n${opts.timestamp}`;
+    const ok = yield* verify_ed25519(opts.public_key_x, opts.proof, new TextEncoder().encode(msg));
     if (!ok) return yield* Effect.fail(unauthorized("proof of possession failed"));
-    const code = newCode();
-    const codeHash = yield* Effect.promise(() => sha256Hex(`ast-core enroll v1:${code}`));
-    const enrollmentId = newId("enr");
-    const expiresAt = new Date(cfg.now() + ENROLLMENT_TTL_SECONDS * 1000).toISOString();
-    yield* dbRun(() =>
-      insertEnrollment.run(db, {
-        id: enrollmentId,
-        publicKeyX: opts.publicKeyX,
+    const code = new_code();
+    const code_hash = yield* Effect.sync(() => sha256_hex(`ast-core enroll v1:${code}`));
+    const enrollment_id = new_id("enr");
+    const expires_at = new Date(cfg.now() + ENROLLMENT_TTL_SECONDS * 1000).toISOString();
+    yield* db_run(() =>
+      insert_enrollment.run(db, {
+        id: enrollment_id,
+        publicKeyX: opts.public_key_x,
         label: opts.label.slice(0, 120),
-        codeHash,
-        expiresAt,
-      }),
+        codeHash: code_hash,
+        expiresAt: expires_at }),
     );
-    const fingerprint = yield* fingerprintOfPublicKeyX(opts.publicKeyX);
-    return { enrollmentId, code, expiresAt, keyFingerprint: fingerprint };
+    const fingerprint = yield* fingerprint_of_public_key_x(opts.public_key_x);
+    return { enrollmentId: enrollment_id, code, expiresAt: expires_at, keyFingerprint: fingerprint };
   });
 
-export const claimEnrollmentWithCode = (opts: {
+export const claim_enrollment_with_code = (opts: {
   code: string;
-  accountId: string;
+  account_id: string;
   email: string;
   ip?: string | null;
 }) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
-    yield* checkBudget(`claim:account:${opts.accountId}`, RATE_WINDOW_SECONDS, 20, cfg.now());
-    if (opts.ip) yield* checkBudget(`claim:ip:${opts.ip}`, RATE_WINDOW_SECONDS, 30, cfg.now());
-    yield* checkBudget("claim:global", RATE_WINDOW_SECONDS, 200, cfg.now());
-    const codeHash = yield* Effect.promise(() => sha256Hex(`ast-core enroll v1:${opts.code.trim().toUpperCase()}`));
-    const found = yield* dbRun(() => getEnrollmentByCodeHash.run(db, { codeHash }));
+    yield* check_budget(`claim:account:${opts.account_id}`, RATE_WINDOW_SECONDS, 20, cfg.now());
+    if (opts.ip) yield* check_budget(`claim:ip:${opts.ip}`, RATE_WINDOW_SECONDS, 30, cfg.now());
+    yield* check_budget("claim:global", RATE_WINDOW_SECONDS, 200, cfg.now());
+    const code_hash = yield* Effect.sync(() => sha256_hex(`ast-core enroll v1:${opts.code.trim().toUpperCase()}`));
+    const found = yield* db_run(() => get_enrollment_by_code_hash.run(db, { codeHash: code_hash }));
     if (!found || found.status !== "pending" || Date.parse(found.expires_at) <= cfg.now()) {
       return yield* Effect.fail(unauthorized("invalid or expired code"));
     }
-    const claimed = yield* dbRun(() =>
-      claimEnrollment.run(db, { id: found.id, accountId: opts.accountId, email: opts.email }),
+    const claimed = yield* db_run(() =>
+      claim_enrollment.run(db, { id: found.id, accountId: opts.account_id, email: opts.email }),
     );
     if (!claimed) return yield* Effect.fail(unauthorized("invalid or expired code"));
-    yield* record(opts.accountId, "machine.claimed", { ip: opts.ip ?? null });
+    yield* record(opts.account_id, "machine.claimed", { ip: opts.ip ?? null });
     return { enrollmentId: found.id, status: "claimed" as const };
   });
 
-export const enrollmentStatus = (enrollmentId: string, subjectPublicKeyX: string) =>
+export const enrollment_status = (enrollment_id: string, subject_public_key_x: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
-    const row = yield* dbRun(() => getEnrollmentById.run(db, { id: enrollmentId }));
+    const row = yield* db_run(() => get_enrollment_by_id.run(db, { id: enrollment_id }));
     if (!row) return yield* Effect.fail(unauthorized("unknown enrollment"));
-    if (row.public_key_x !== subjectPublicKeyX) return yield* Effect.fail(unauthorized("unknown enrollment"));
+    if (row.public_key_x !== subject_public_key_x) return yield* Effect.fail(unauthorized("unknown enrollment"));
     let status = row.status;
     if ((status === "pending" || status === "claimed") && Date.parse(row.expires_at) <= cfg.now()) {
       status = "expired";
     }
-    let displayName: string | null = null;
+    let display_name: string | null = null;
     if (row.account_id && (status === "claimed" || status === "confirmed")) {
-      const acct = yield* dbRun(() => getAccountById.run(db, { id: row.account_id as string }));
-      displayName = acct?.display_name ?? "";
+      const acct = yield* db_run(() => get_account_by_id.run(db, { id: row.account_id as string }));
+      display_name = acct?.display_name ?? "";
     }
     return {
       enrollmentId: row.id,
       status: status as "pending" | "claimed" | "confirmed" | "expired" | "voided",
       accountId: status === "claimed" || status === "confirmed" ? row.account_id : null,
       email: status === "claimed" || status === "confirmed" ? row.email : null,
-      displayName,
-      expiresAt: row.expires_at,
-    };
+      displayName: display_name,
+      expiresAt: row.expires_at };
   });
 
 // Authenticate a machine-proof request: resolves the subject id (enrollment
 // or machine) to its enrolled public key, then verifies the full proof.
 // Returns the caller's identity for account-scoping downstream.
-export const authenticateMachineProof = (opts: {
-  subjectId: string;
+export const authenticate_machine_proof = (opts: {
+  subject_id: string;
   timestamp: string;
   nonce: string;
   signature: string;
   method: string;
-  pathAndQuery: string;
-  rawBody: string;
+  path_and_query: string;
+  raw_body: string;
 }) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    let publicKeyX: string;
-    let accountId: string | null = null;
-    let machineId: string | null = null;
-    if (opts.subjectId.startsWith("enr_")) {
-      const row = yield* dbRun(() => getEnrollmentById.run(db, { id: opts.subjectId }));
+    let public_key_x: string;
+    let account_id: string | null = null;
+    let machine_id: string | null = null;
+    if (opts.subject_id.startsWith("enr_")) {
+      const row = yield* db_run(() => get_enrollment_by_id.run(db, { id: opts.subject_id }));
       if (!row) return yield* Effect.fail(unauthorized("unknown subject"));
-      publicKeyX = row.public_key_x;
-    } else if (opts.subjectId.startsWith("mch_")) {
-      const row = yield* dbRun(() => getMachineById.run(db, { id: opts.subjectId }));
+      public_key_x = row.public_key_x;
+    } else if (opts.subject_id.startsWith("mch_")) {
+      const row = yield* db_run(() => get_machine_by_id.run(db, { id: opts.subject_id }));
       if (!row || row.revoked_at) return yield* Effect.fail(unauthorized("unknown subject"));
-      publicKeyX = row.public_key_x;
-      accountId = row.account_id;
-      machineId = row.id;
+      public_key_x = row.public_key_x;
+      account_id = row.account_id;
+      machine_id = row.id;
     } else {
       return yield* Effect.fail(unauthorized("unknown subject"));
     }
-    yield* verifyMachineProof({ ...opts, publicKeyX });
-    return { publicKeyX, accountId, machineId };
+    yield* verify_machine_proof({ ...opts, public_key_x });
+    return { public_key_x, account_id, machine_id };
   });
 
-export const confirmEnrollmentWithKey = (opts: {
-  enrollmentId: string;
-  accountId: string;
+export const confirm_enrollment_with_key = (opts: {
+  enrollment_id: string;
+  account_id: string;
   confirmation: string;
 }) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const row = yield* dbRun(() => getEnrollmentById.run(db, { id: opts.enrollmentId }));
+    const row = yield* db_run(() => get_enrollment_by_id.run(db, { id: opts.enrollment_id }));
     if (!row) return yield* Effect.fail(unauthorized("unknown enrollment"));
-    if (row.status === "confirmed" && row.machine_id && row.account_id === opts.accountId) {
+    if (row.status === "confirmed" && row.machine_id && row.account_id === opts.account_id) {
       return { machineId: row.machine_id, accountId: row.account_id };
     }
-    if (row.status !== "claimed" || row.account_id !== opts.accountId) {
+    if (row.status !== "claimed" || row.account_id !== opts.account_id) {
       return yield* Effect.fail(forbidden("enrollment is not claimed to this account"));
     }
     // The caller proved possession of the enrollment key twice before
@@ -249,39 +243,39 @@ export const confirmEnrollmentWithKey = (opts: {
     // signature over the exact (enrollment, account, key) binding checked
     // below. The update then atomically requires the claimed state, so a
     // guessed code alone can never create a machine.
-    const bindMsg = `enrollment-confirm\n${row.id}\n${opts.accountId}\n${row.public_key_x}`;
-    const bound = yield* verifyEd25519(row.public_key_x, opts.confirmation, new TextEncoder().encode(bindMsg));
+    const bind_msg = `enrollment-confirm\n${row.id}\n${opts.account_id}\n${row.public_key_x}`;
+    const bound = yield* verify_ed25519(row.public_key_x, opts.confirmation, new TextEncoder().encode(bind_msg));
     if (!bound) return yield* Effect.fail(unauthorized("confirmation does not bind this account and key"));
-    const machineId = newId("mch");
-    const done = yield* dbRun(() =>
-      confirmEnrollment.run(db, { id: row.id, accountId: opts.accountId, machineId }),
+    const machine_id = new_id("mch");
+    const done = yield* db_run(() =>
+      confirm_enrollment.run(db, { id: row.id, accountId: opts.account_id, machineId: machine_id }),
     );
     if (!done) return yield* Effect.fail(forbidden("enrollment is not claimed to this account"));
-    yield* dbRun(() =>
-      insertMachine.run(db, { id: machineId, accountId: opts.accountId, publicKeyX: row.public_key_x, label: row.label }),
+    yield* db_run(() =>
+      insert_machine.run(db, { id: machine_id, accountId: opts.account_id, publicKeyX: row.public_key_x, label: row.label }),
     );
-    yield* record(opts.accountId, "machine.enrolled", {});
-    return { machineId, accountId: opts.accountId };
+    yield* record(opts.account_id, "machine.enrolled", {});
+    return { machineId: machine_id, accountId: opts.account_id };
   });
 
 // ---------------------------------------------------------------------------
 // Machine registry
 // ---------------------------------------------------------------------------
 
-export const requireMachine = (machineId: string) =>
+export const require_machine = (machine_id: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const row = yield* dbRun(() => getMachineById.run(db, { id: machineId }));
+    const row = yield* db_run(() => get_machine_by_id.run(db, { id: machine_id }));
     if (!row || row.revoked_at) return yield* Effect.fail(unauthorized("unknown or revoked machine"));
-    yield* dbRun(() => touchMachineLastSeen.run(db, { id: machineId }));
-    const principal: MachinePrincipal = { machineId: row.id, accountId: row.account_id };
-    return { principal, publicKeyX: row.public_key_x };
+    yield* db_run(() => touch_machine_last_seen.run(db, { id: machine_id }));
+    const principal: MachinePrincipal = { machine_id: row.id, account_id: row.account_id };
+    return { principal, public_key_x: row.public_key_x };
   });
 
-export const listMachines = (accountId: string) =>
+export const list_machines = (account_id: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const rows = yield* dbRun(() => listMachinesByAccount.run(db, { accountId }));
+    const rows = yield* db_run(() => list_machines_by_account.run(db, { accountId: account_id }));
     return {
       machines: rows.map((r) => ({
         id: r.id,
@@ -289,25 +283,23 @@ export const listMachines = (accountId: string) =>
         label: r.label,
         createdAt: r.created_at,
         revokedAt: r.revoked_at,
-        lastSeenAt: r.last_seen_at,
-      })),
-    };
+        lastSeenAt: r.last_seen_at })) };
   });
 
-export const revokeMachineById = (accountId: string, machineId: string) =>
+export const revoke_machine_by_id = (account_id: string, machine_id: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const done = yield* dbRun(() => revokeMachine.run(db, { id: machineId, accountId }));
+    const done = yield* db_run(() => revoke_machine.run(db, { id: machine_id, accountId: account_id }));
     if (!done) return yield* Effect.fail(forbidden("no such machine in this account"));
-    yield* record(accountId, "machine.revoked", {});
+    yield* record(account_id, "machine.revoked", {});
     return { revoked: true };
   });
 
-export const machinePublicKeyJwk = (accountId: string, machineId: string) =>
+export const machine_public_key_jwk = (account_id: string, machine_id: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const row = yield* dbRun(() => getMachineById.run(db, { id: machineId }));
-    if (!row || row.account_id !== accountId || row.revoked_at) {
+    const row = yield* db_run(() => get_machine_by_id.run(db, { id: machine_id }));
+    if (!row || row.account_id !== account_id || row.revoked_at) {
       return yield* Effect.fail(forbidden("no such machine in this account"));
     }
     return { kty: "OKP" as const, crv: "Ed25519" as const, x: row.public_key_x };

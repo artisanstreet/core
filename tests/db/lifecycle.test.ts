@@ -15,8 +15,7 @@ describe("scoped db lifecycle", () => {
       end: () =>
         Effect.gen(function* () {
           events.push("close");
-        }),
-    };
+        }) };
     const program = Effect.acquireUseRelease(
       Effect.sync(() => fake_client),
       (client) => client.query_delayed(),

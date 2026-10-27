@@ -1,8 +1,8 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile as read_file, writeFile as write_file } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { verifyGrantWithArtifactJwks, verifyGrantWithKeyId } from "../helpers/grants.ts";
-import { buildOpenApi } from "../../src/contracts/openapi.ts";
-import { api, enrollMachine, machineHeaders, newMachineKeys, setupRig, signup } from "../helpers/http.ts";
+import { verify_grant_with_artifact_jwks, verify_grant_with_key_id } from "../helpers/grants.ts";
+import { build_open_api } from "../../src/contracts/openapi.ts";
+import { api, enroll_machine, machine_headers, new_machine_keys, setup_rig, signup } from "../helpers/http.ts";
 
 // Regenerates machine-readable contracts from the runtime schemas when
 // EMIT_CONTRACTS=1, otherwise asserts the committed files are current.
@@ -10,40 +10,39 @@ import { api, enrollMachine, machineHeaders, newMachineKeys, setupRig, signup } 
 // vectors, never production secrets.
 describe("emit contracts + fixtures", () => {
   it("openapi matches runtime registry; core-issued fixture verifies", async () => {
-    const doc = buildOpenApi();
+    const doc = build_open_api();
     const openapiPath = new URL("../../contracts/v1.openapi.json", import.meta.url);
     const fixturesDir = new URL("../../fixtures/v1/", import.meta.url);
 
     if (process.env.EMIT_CONTRACTS === "1") {
-      await writeFile(openapiPath, `${JSON.stringify(doc, null, 2)}\n`);
+      await write_file(openapiPath, `${JSON.stringify(doc, null, 2)}\n`);
     } else {
-      const committed = JSON.parse(await readFile(openapiPath, "utf8")) as unknown;
+      const committed = JSON.parse(await read_file(openapiPath, "utf8")) as unknown;
       expect(committed, "run npm run contracts:emit").toEqual(doc);
     }
 
     // Real artifact: full signup + enrollment + issued grant + JWKS +
     // revocations, verified locally exactly like Relay/Forge verify.
-    const rig = await setupRig();
+    const rig = await setup_rig();
     const acct = await signup(rig, "fixture@example.invalid");
-    const { machineId, keys } = await enrollMachine(rig, { cookie: acct.cookie }, "fixture-forge");
+    const { machine_id, keys } = await enroll_machine(rig, { cookie: acct.cookie }, "fixture-forge");
     const raw = JSON.stringify({ audience: "ast-relay", scope: ["relay:connect", "forge:execute"] });
     const issued = await api(rig.app, "POST", "/v1/grants/issue", {
-      headers: await machineHeaders(machineId, keys, "POST", "/v1/grants/issue", raw),
-      rawBody: raw,
-    });
+      headers: await machine_headers(machine_id, keys, "POST", "/v1/grants/issue", raw),
+      raw_body: raw });
     expect(issued.status).toBe(200);
     const { token, expiresAt } = issued.json as { token: string; expiresAt: string };
     const jwksRes = await api(rig.app, "GET", "/.well-known/jwks.json");
     const revRes = await api(rig.app, "GET", "/v1/grants/revocations");
-    const verified = await verifyGrantWithKeyId(rig, token, "http://test.invalid", "ast-relay");
-    expect(verified.sub).toBe(acct.accountId);
-    expect(verified.mid).toBe(machineId);
+    const verified = await verify_grant_with_key_id(rig, token, "http://test.invalid", "ast-relay");
+    expect(verified.sub).toBe(acct.account_id);
+    expect(verified.mid).toBe(machine_id);
     expect(verified.role).toBe("forge");
 
     // Machine-proof vector: a real authenticated request, replayable by Rust.
     // (Bundle latest accepts machine auth via the either gate.)
     const proofPath = "/v1/config/bundles/latest";
-    const proofHeaders = await machineHeaders(machineId, keys, "GET", proofPath, "");
+    const proofHeaders = await machine_headers(machine_id, keys, "GET", proofPath, "");
     const listed = await api(rig.app, "GET", proofPath, { headers: proofHeaders });
     expect(listed.status).toBe(200);
 
@@ -52,8 +51,7 @@ describe("emit contracts + fixtures", () => {
       issuedAt: new Date().toISOString(),
       issuer: "http://test.invalid",
       audience: "ast-relay",
-      accountId: acct.accountId,
-      machineId,
+      accountId: acct.account_id, machineId: machine_id,
       grant: token,
       expiresAt,
       jwks: jwksRes.json,
@@ -62,12 +60,11 @@ describe("emit contracts + fixtures", () => {
         v: 1,
         iss: "http://test.invalid",
         aud: "ast-relay",
-        sub: acct.accountId,
-        mid: machineId,
+        sub: acct.account_id,
+        mid: machine_id,
         role: "forge",
         scope: ["relay:connect", "forge:execute"],
-        cnf: { jwk: (verified as { cnf: unknown }).cnf },
-      },
+        cnf: { jwk: (verified as { cnf: unknown }).cnf } },
       machineProof: {
         method: "GET",
         pathAndQuery: proofPath,
@@ -75,17 +72,14 @@ describe("emit contracts + fixtures", () => {
           "x-ast-machine": proofHeaders["x-ast-machine"],
           "x-ast-timestamp": proofHeaders["x-ast-timestamp"],
           "x-ast-nonce": proofHeaders["x-ast-nonce"],
-          authorization: proofHeaders.authorization,
-        },
-        rawBody: "",
-      },
-    };
+          authorization: proofHeaders.authorization },
+        raw_body: "" } };
 
     if (process.env.EMIT_CONTRACTS === "1") {
       await mkdir(fixturesDir, { recursive: true });
-      await writeFile(new URL("core-issued.json", fixturesDir), `${JSON.stringify(fixture, null, 2)}\n`);
+      await write_file(new URL("core-issued.json", fixturesDir), `${JSON.stringify(fixture, null, 2)}\n`);
     } else {
-      const committed = JSON.parse(await readFile(new URL("core-issued.json", fixturesDir), "utf8")) as {
+      const committed = JSON.parse(await read_file(new URL("core-issued.json", fixturesDir), "utf8")) as {
         grant: string;
         jwks: unknown;
         issuer: string;
@@ -97,12 +91,12 @@ describe("emit contracts + fixtures", () => {
       // jwks at ITS OWN time (never against a fresh rig's keys, which
       // rotate per run, and never against the wall clock, which the
       // short-lived fixture naturally outlives). Live grants keep the
-      // wall clock via verifyGrantWithKeyId above.
+      // wall clock via verify_grant_with_key_id above.
       const artifactNowSec = Math.floor(Date.parse(committed.issuedAt) / 1000);
-      const recheck = await verifyGrantWithArtifactJwks(committed.grant, committed.jwks, committed.issuer, committed.audience, artifactNowSec);
+      const recheck = await verify_grant_with_artifact_jwks(committed.grant, committed.jwks, committed.issuer, committed.audience, artifactNowSec);
       expect(recheck.sub).toBe(committed.expected.sub);
       expect(recheck.mid).toBe(committed.expected.mid);
     }
-    void newMachineKeys;
+    void new_machine_keys;
   });
 });

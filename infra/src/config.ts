@@ -3,7 +3,7 @@ import * as Redacted from "effect/Redacted";
 // Pure deploy-input helpers for ast-core Alchemy IaC.
 //
 // All functions here are credential-free except for the explicit Redacted
-// password holder returned by parsePostgresUrl. No function logs secrets,
+// password holder returned by parse_postgres_url. No function logs secrets,
 // and error messages never embed secret material (public origins may be
 // echoed for operator debuggability; the database URL/password never is).
 
@@ -13,7 +13,7 @@ export const STACK_NAME = "ast-core" as const;
 // [a-z0-9][-_a-z0-9]*
 const STAGE_PATTERN = /^[a-z0-9][-_a-z0-9]*$/;
 
-export function assertValidStage(stage: string): void {
+export function assert_valid_stage(stage: string): void {
   if (!STAGE_PATTERN.test(stage)) {
     throw new Error(
       `invalid stage ${JSON.stringify(stage)}: must match [a-z0-9][-_a-z0-9]* (see alchemy CLI --stage)`,
@@ -56,20 +56,20 @@ export const CORE_ENV_VALUE = "production" as const;
 export const CORE_SPA_APPROVE_PATH_VALUE = "/#/approve" as const;
 export const MAIL_PROVIDER_VALUE = "resend" as const;
 
-export function workerName(stage: string): string {
-  assertValidStage(stage);
+export function worker_name(stage: string): string {
+  assert_valid_stage(stage);
   return `ast-core-${stage}`;
 }
 
-export function bucketName(stage: string): string {
-  assertValidStage(stage);
+export function bucket_name(stage: string): string {
+  assert_valid_stage(stage);
   // Stage-aware; wrangler local/test uses bare `ast-core-config`.
   // Alchemy prod uses `ast-core-config-prod` (authoritative prod).
   return `ast-core-config-${stage}`;
 }
 
-export function hyperdriveName(stage: string): string {
-  assertValidStage(stage);
+export function hyperdrive_name(stage: string): string {
+  assert_valid_stage(stage);
   // Matches wrangler one-time `ast-core-db` base, stage-qualified.
   return `ast-core-db-${stage}`;
 }
@@ -77,64 +77,64 @@ export function hyperdriveName(stage: string): string {
 // Public origin validation. Mirrors the runtime allowlist in src/http.ts
 // shellHeadersFor (single exact origin, no wildcards/credentials, no
 // path/query/fragment) so deploy-time and runtime agree and fail closed.
-export function normalizeOrigin(raw: string | undefined, varName: string): string {
+export function normalize_origin(raw: string | undefined, var_name: string): string {
   const trimmed = (raw ?? "").trim().replace(/\/+$/, "");
-  if (!trimmed) throw new Error(`${varName} is required`);
-  if (trimmed.includes("*")) throw new Error(`${varName} must be a single exact origin (no wildcards)`);
+  if (!trimmed) throw new Error(`${var_name} is required`);
+  if (trimmed.includes("*")) throw new Error(`${var_name} must be a single exact origin (no wildcards)`);
   let u: URL;
   try {
     u = new URL(trimmed);
   } catch {
-    throw new Error(`${varName} must be a valid absolute URL (got ${JSON.stringify(trimmed)})`);
+    throw new Error(`${var_name} must be a valid absolute URL (got ${JSON.stringify(trimmed)})`);
   }
-  if (u.username || u.password) throw new Error(`${varName} must not embed credentials`);
-  if (u.search || u.hash) throw new Error(`${varName} must not include query or fragment`);
+  if (u.username || u.password) throw new Error(`${var_name} must not embed credentials`);
+  if (u.search || u.hash) throw new Error(`${var_name} must not include query or fragment`);
   if ((u.pathname !== "/" && u.pathname !== "") || trimmed.endsWith("/")) {
-    throw new Error(`${varName} must be a bare origin with no path (got ${JSON.stringify(trimmed)})`);
+    throw new Error(`${var_name} must be a bare origin with no path (got ${JSON.stringify(trimmed)})`);
   }
-  if (!u.hostname) throw new Error(`${varName} must include a hostname`);
+  if (!u.hostname) throw new Error(`${var_name} must include a hostname`);
   const host = u.hostname.toLowerCase();
   // Reject wildcards after URL parse too: percent-encoded forms (e.g.
   // https://%2A.example.com) contain no literal "*" pre-parse but normalize
   // to a wildcard hostname.
-  if (host.includes("*")) throw new Error(`${varName} must be a single exact origin (no wildcards)`);
-  const defPort = u.protocol === "https:" ? "443" : "80";
-  const port = u.port && u.port !== defPort ? `:${u.port}` : "";
+  if (host.includes("*")) throw new Error(`${var_name} must be a single exact origin (no wildcards)`);
+  const def_port = u.protocol === "https:" ? "443" : "80";
+  const port = u.port && u.port !== def_port ? `:${u.port}` : "";
   return `${u.protocol}//${host}${port}`;
 }
 
-export function assertOriginForStage(origin: string, varName: string, stage: string): void {
-  assertValidStage(stage);
+export function assert_origin_for_stage(origin: string, var_name: string, stage: string): void {
+  assert_valid_stage(stage);
   const u = new URL(origin);
   // All Alchemy-deployed stages attach an exact HTTPS custom domain
   // (stage-specific AST_*_ORIGIN); Wrangler remains the local-dev path
   // where http loopback is tolerated. Require https here so every
   // deployed stage is usable (issuer/redirects match the attached domain).
   if (u.protocol !== "https:") {
-    throw new Error(`${varName} must be an exact https origin (got ${JSON.stringify(origin)})`);
+    throw new Error(`${var_name} must be an exact https origin (got ${JSON.stringify(origin)})`);
   }
 }
 
-export function hostnameFromOrigin(origin: string): string {
+export function hostname_from_origin(origin: string): string {
   return new URL(origin).hostname.toLowerCase();
 }
 
 // Separate Workers cannot share the same custom-domain owner. Ownership is
 // hostname-scoped (not port): Core and Relay must have distinct hostnames,
 // otherwise the second custom-domain attach moves ownership away.
-export function assertDistinctOrigins(coreOrigin: string, relayOrigin: string): void {
-  let coreHost: string;
-  let relayHost: string;
+export function assert_distinct_origins(core_origin: string, relay_origin: string): void {
+  let core_host: string;
+  let relay_host: string;
   try {
-    coreHost = new URL(coreOrigin).hostname.toLowerCase();
-    relayHost = new URL(relayOrigin).hostname.toLowerCase();
+    core_host = new URL(core_origin).hostname.toLowerCase();
+    relay_host = new URL(relay_origin).hostname.toLowerCase();
   } catch {
     throw new Error("AST_CORE_ORIGIN and AST_RELAY_ORIGIN must be valid absolute URLs");
   }
-  if (!coreHost || !relayHost) {
+  if (!core_host || !relay_host) {
     throw new Error("AST_CORE_ORIGIN and AST_RELAY_ORIGIN must include hostnames");
   }
-  if (coreHost === relayHost) {
+  if (core_host === relay_host) {
     throw new Error("AST_CORE_ORIGIN and AST_RELAY_ORIGIN must have distinct hostnames (separate Workers cannot share one custom-domain owner; ports do not separate ownership)");
   }
 }
@@ -153,10 +153,10 @@ export interface ParsedPostgresOrigin {
   readonly password: Redacted.Redacted<string>;
 }
 
-export function parsePostgresUrl(urlString: string): ParsedPostgresOrigin {
+export function parse_postgres_url(url_string: string): ParsedPostgresOrigin {
   let u: URL;
   try {
-    u = new URL(urlString);
+    u = new URL(url_string);
   } catch {
     throw new Error("invalid Postgres origin URL (unparseable)");
   }
@@ -168,7 +168,7 @@ export function parsePostgresUrl(urlString: string): ParsedPostgresOrigin {
   if (u.username === "") throw new Error("invalid Postgres origin URL (missing user)");
   // Password may be empty for local dev URLs, but prod secrets must carry one.
   // Do not enforce here; Cloudflare will reject empty at provision time.
-  const rawPassword = (() => {
+  const raw_password = (() => {
     try {
       return decodeURIComponent(u.password);
     } catch {
@@ -186,6 +186,5 @@ export function parsePostgresUrl(urlString: string): ParsedPostgresOrigin {
     ...(port !== undefined ? { port } : {}),
     database: db,
     user: decodeURIComponent(u.username),
-    password: Redacted.make(rawPassword),
-  };
+    password: Redacted.make(raw_password) };
 }

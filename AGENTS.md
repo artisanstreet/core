@@ -22,16 +22,17 @@ Do not edit `../editor` or `../relay`. Do not undo user changes elsewhere.
   Ownership is server-derived; never trust client-supplied account/machine
   ownership. Email link GET never consumes. Email alone never bypasses TOTP.
 - Boundaries: Core owns identity/sessions/authorization/credentials/machines/
-  activity. `src/services/*` is shared and never imports `src/products/*`
-  (enforced by `tests/architecture.test.ts`); Editor product logic lives
+  activity. `src/services/*` is shared and never imports `src/products/*`;
+  Editor product logic lives
   under `src/products/editor/` with its router composed by `src/http.ts`.
   Products depend on shared, never reverse. Core never stores
   threads/runs (Forge SQLite owns those). Relay owns routing/presence only:
   no shared DB, no Core internals import — JWKS + revocation list + grant
   verification only.
 - Crypto: Ed25519 everywhere (machine keys, request proof, grant JWT
-  `alg=EdDSA`). Vetted libs only: `jose` (JWT/JWKS), WebCrypto (AES-GCM,
-  SHA-256, random), `@oslojs/otp` (TOTP). No homemade crypto, no fake
+  `alg=EdDSA`). Vetted libs only: `jose` (JWT/JWKS), `@noble/hashes`
+  (SHA-256, random), `@noble/ciphers` (AES-GCM), `@scure/base` (base64url),
+  `@oslojs/otp` (TOTP). No homemade crypto, no fake
   OAuth, no invented provider APIs (API-key vault + opaque engine
   artifacts from the harness's own local login).
 - Tests must be behavioral (HTTP + real PGlite DB), not mirrors of constants.

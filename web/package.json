@@ -15,6 +15,7 @@
     "@noble/ciphers": "2.4.0",
     "@noble/curves": "2.4.0",
     "@noble/hashes": "2.4.0",
+    "@scure/base": "2.4.0",
     "@effect/platform": "0.97.2",
     "b4a": "1.9.0",
     "colorjs.io": "^0.7.1",

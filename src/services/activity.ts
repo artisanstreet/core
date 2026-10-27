@@ -1,32 +1,31 @@
 import { Effect, Either } from "effect";
-import { newId } from "../ids.ts";
-import { DbTag, dbRun } from "./deps.ts";
-import insertActivity from "../db/queries/activity/insertActivity.sql";
-import listActivityByAccount from "../db/queries/activity/listActivityByAccount.sql";
+import { new_id } from "../ids.ts";
+import { DbTag, db_run } from "./deps.ts";
+import insert_activity from "../db/queries/activity/insertActivity.sql"
+import list_activity_by_account from "../db/queries/activity/listActivityByAccount.sql"
 
 export const record = (
-  accountId: string,
+  account_id: string,
   kind: string,
-  opts: { machineId?: string | null; detail?: Record<string, unknown>; ip?: string | null },
+  opts: { machine_id?: string | null; detail?: Record<string, unknown>; ip?: string | null },
 ) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    yield* dbRun(() =>
-      insertActivity.run(db, {
-        id: newId("evt"),
-        accountId,
-        machineId: opts.machineId ?? null,
+    yield* db_run(() =>
+      insert_activity.run(db, {
+        id: new_id("evt"),
+        accountId: account_id,
+        machineId: opts.machine_id ?? null,
         kind,
         detail: JSON.stringify(opts.detail ?? {}),
-        ip: opts.ip ?? null,
-      }),
+        ip: opts.ip ?? null }),
     );
   });
 
-export const listForAccount = (accountId: string, limit: number) =>
+export const list_for_account = (account_id: string, limit: number) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const rows = yield* dbRun(() => listActivityByAccount.run(db, { accountId, limit }));
+    const rows = yield* db_run(() => list_activity_by_account.run(db, { accountId: account_id, limit }));
     return {
       events: rows.map((r) => {
         const raw_detail: unknown = r.detail;
@@ -39,8 +38,6 @@ export const listForAccount = (accountId: string, limit: number) =>
           kind: r.kind,
           detail,
           ip: r.ip,
-          createdAt: r.created_at,
-        };
-      }),
-    };
+          createdAt: r.created_at };
+      }) };
   });

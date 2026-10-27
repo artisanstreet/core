@@ -11,7 +11,7 @@ export interface Mail {
   readonly to: string;
   readonly subject: string;
   readonly text: string;
-  readonly confirmUrl: string;
+  readonly confirm_url: string;
 }
 
 export class MailTag extends Context.Tag("Mail")<MailTag, { readonly send: (m: Mail) => Effect.Effect<void, CoreError> }>() {}
@@ -26,13 +26,13 @@ const send_with_client = (
   Effect.gen(function* () {
     if (cfg.mailer === "log") {
       return yield* Effect.sync(() => {
-        console.log(`[ast-core mail] to=${m.to} subject=${m.subject} confirm=${m.confirmUrl}`);
+        console.log(`[ast-core mail] to=${m.to} subject=${m.subject} confirm=${m.confirm_url}`);
       });
     }
-    if (!cfg.resendApiKey) return yield* Effect.fail(internal("mail delivery failed"));
+    if (!cfg.resend_api_key) return yield* Effect.fail(internal("mail delivery failed"));
     const from = cfg.env.MAIL_FROM ?? "Ast <noreply@example.invalid>";
     const req = HttpClientRequest.post("https://api.resend.com/emails").pipe(
-      HttpClientRequest.setHeader("Authorization", `Bearer ${cfg.resendApiKey}`),
+      HttpClientRequest.setHeader("Authorization", `Bearer ${cfg.resend_api_key}`),
       HttpClientRequest.setBody(HttpBody.unsafeJson({ from, to: [m.to], subject: m.subject, text: m.text })),
     );
     const execute_resend = Effect.gen(function* () {
@@ -61,11 +61,10 @@ export const MailLive = Layer.effect(
   mail_live_effect,
 );
 
-export function memoryMailBox() {
+export function memory_mail_box() {
   const out: Mail[] = [];
   const layer = Layer.succeed(MailTag, {
-    send: (m: Mail) => Effect.sync(() => void out.push(m)),
-  });
+    send: (m: Mail) => Effect.sync(() => void out.push(m)) });
   return { out, layer };
 }
 

@@ -2,7 +2,7 @@ import { Chunk, Effect, Either, Match, Option, Schema, Stream } from "effect";
 import * as HttpServerRequest from "@effect/platform/HttpServerRequest";
 import * as Headers from "@effect/platform/Headers";
 import * as Url from "@effect/platform/Url";
-import { CoreError, forbidden, payloadTooLarge, unauthorized } from "../errors.ts";
+import { CoreError, forbidden, payload_too_large, unauthorized } from "../errors.ts";
 import { AppConfigTag } from "../services/deps.ts";
 import * as Auth from "../services/auth.ts";
 import * as Machines from "../services/machines.ts";
@@ -17,7 +17,7 @@ export const client_ip = Effect.gen(function* () {
   const req = yield* HttpServerRequest.HttpServerRequest;
   const cfg = yield* AppConfigTag;
   const cf = (get_header(req, "cf-connecting-ip") ?? "").trim() || null;
-  if (cfg.coreEnv === "production") return cf;
+  if (cfg.core_env === "production") return cf;
   return get_header(req, "x-forwarded-for")?.split(",")[0]?.trim() || cf;
 });
 
@@ -37,7 +37,7 @@ export const read_raw_body = Effect.gen(function* () {
   if (!source.body) return "";
   const acc = yield* Stream.runFoldEffect(req.stream, { total: 0, chunks: Chunk.empty<Uint8Array>() }, (state, chunk) => {
     const total = state.total + chunk.byteLength;
-    if (total > max_body_bytes) return Effect.fail(payloadTooLarge());
+    if (total > max_body_bytes) return Effect.fail(payload_too_large());
     return Effect.succeed({ total, chunks: Chunk.append(state.chunks, chunk) });
   }).pipe(
     Effect.mapError((e) => (e instanceof CoreError ? e : new CoreError("bad_request", "invalid body"))),
@@ -96,7 +96,7 @@ export const session_of = Effect.gen(function* () {
   const req = yield* HttpServerRequest.HttpServerRequest;
   const { token, via } = extract_token(req);
   if (!token) return yield* Effect.fail(unauthorized("authentication required"));
-  const principal = yield* Auth.requireSession(token);
+  const principal = yield* Auth.require_session(token);
   return { principal, via };
 });
 
@@ -128,10 +128,10 @@ export const session_for_mutation = Effect.gen(function* () {
 });
 
 export interface ProofResult {
-  readonly principal: { machineId: string; accountId: string } | null;
-  readonly publicKeyX: string;
-  readonly subjectId: string;
-  readonly rawBody: string;
+  readonly principal: { machine_id: string; account_id: string } | null;
+  readonly public_key_x: string;
+  readonly subject_id: string;
+  readonly raw_body: string;
 }
 
 const proof_for = (kind: "machine" | "enrollment") =>
@@ -144,33 +144,31 @@ const proof_for = (kind: "machine" | "enrollment") =>
     const m = /^AST-Machine\s+(.+)$/.exec(auth);
     const raw_body = yield* read_raw_body;
     const path_and_query = req.url;
-    const who = yield* Machines.authenticateMachineProof({
-      subjectId: subject_id,
+    const who = yield* Machines.authenticate_machine_proof({
+      subject_id,
       timestamp,
       nonce,
       signature: (m?.[1] ?? "").trim(),
       method: req.method,
-      pathAndQuery: path_and_query,
-      rawBody: raw_body,
-    });
-    if (kind === "machine" && (!who.machineId || !who.accountId)) {
+      path_and_query,
+      raw_body });
+    if (kind === "machine" && (!who.machine_id || !who.account_id)) {
       return yield* Effect.fail(unauthorized("machine authentication required"));
     }
     if (kind === "enrollment" && !subject_id.startsWith("enr_")) {
       return yield* Effect.fail(unauthorized("enrollment authentication required"));
     }
     return {
-      principal: who.machineId && who.accountId ? { machineId: who.machineId, accountId: who.accountId } : null,
-      publicKeyX: who.publicKeyX,
-      subjectId: subject_id,
-      rawBody: raw_body,
-    };
+      principal: who.machine_id && who.account_id ? { machine_id: who.machine_id, account_id: who.account_id } : null,
+      public_key_x: who.public_key_x,
+      subject_id,
+      raw_body };
   });
 
 export const proof_for_machine = Effect.gen(function* () {
   const r = yield* proof_for("machine");
   if (!r.principal) return yield* Effect.fail(unauthorized("machine authentication required"));
-  return { principal: r.principal, publicKeyX: r.publicKeyX, subjectId: r.subjectId, rawBody: r.rawBody };
+  return { principal: r.principal, public_key_x: r.public_key_x, subject_id: r.subject_id, raw_body: r.raw_body };
 });
 
 export const proof_for_enrollment = proof_for("enrollment");

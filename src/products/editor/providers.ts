@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { badRequest } from "../../errors.ts";
+import { bad_request } from "../../errors.ts";
 
 // Editor product: provider credential adapter rules.
 //
@@ -22,18 +22,17 @@ export const PROVIDER_KEY_HINTS: Record<ProviderKind, string> = {
   anthropic: "sk-ant-… (Anthropic Console API key)",
   openai: "sk-… (OpenAI API key)",
   openrouter: "sk-or-… (OpenRouter API key)",
-  google: "AI… (Google AI Studio API key)",
-};
+  google: "AI… (Google AI Studio API key)" };
 
-export const validateProviderKey = (provider: string, apiKey: string) =>
+export const validate_provider_key = (provider: string, api_key: string) =>
   Effect.gen(function* () {
     if (!(PROVIDER_KINDS as readonly string[]).includes(provider)) {
-      return yield* Effect.fail(badRequest("unsupported provider"));
+      return yield* Effect.fail(bad_request("unsupported provider"));
     }
-    const key = apiKey.trim();
+    const key = api_key.trim();
     // Bounds only: prefixes rotate and must never lock users out.
     if (key.length < 8 || key.length > 4096) {
-      return yield* Effect.fail(badRequest("apiKey looks invalid"));
+      return yield* Effect.fail(bad_request("apiKey looks invalid"));
     }
-    return { provider: provider as ProviderKind, apiKey: key };
+    return { provider: provider as ProviderKind, api_key: key };
   });

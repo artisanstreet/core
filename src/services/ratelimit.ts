@@ -1,23 +1,23 @@
 import { Effect } from "effect";
-import { rateLimited } from "../errors.ts";
-import { DbTag, dbRun } from "./deps.ts";
-import bumpRateCounter from "../db/queries/rate/bumpRateCounter.sql";
+import { rate_limited } from "../errors.ts";
+import { DbTag, db_run } from "./deps.ts";
+import bump_rate_counter from "../db/queries/rate/bumpRateCounter.sql"
 
 // Fixed-window budgets backed by the database so every isolate enforces the
 // same limits. Wrong/absent codes cannot map to an enrollment or request,
 // so budgets are keyed per account, per IP, and globally — never "per
 // unknown target".
-export const checkBudget = (
+export const check_budget = (
   key: string,
-  windowSeconds: number,
+  window_seconds: number,
   max: number,
-  nowMs: number,
+  now_ms: number,
 ) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const bucketStart = new Date(
-      Math.floor(nowMs / (windowSeconds * 1000)) * windowSeconds * 1000,
+    const bucket_start = new Date(
+      Math.floor(now_ms / (window_seconds * 1000)) * window_seconds * 1000,
     ).toISOString();
-    const row = yield* dbRun(() => bumpRateCounter.run(db, { key, bucketStart }));
-    if (row.count > max) return yield* Effect.fail(rateLimited("too many attempts"));
+    const row = yield* db_run(() => bump_rate_counter.run(db, { key, bucketStart: bucket_start }));
+    if (row.count > max) return yield* Effect.fail(rate_limited("too many attempts"));
   });

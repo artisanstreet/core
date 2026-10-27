@@ -1,48 +1,47 @@
 import { Context, Effect, Layer } from "effect";
 import type { Db } from "../db.ts";
 import type { MasterKey } from "../crypto.ts";
-import { loadMasterKey } from "../crypto.ts";
+import { load_master_key } from "../crypto.ts";
 import { internal, type CoreError } from "../errors.ts";
 
 export interface AppConfig {
   readonly env: Record<string, string | undefined>;
-  readonly coreEnv: string;
-  readonly publicBaseUrl: string;
-  readonly jwtIssuer: string;
-  readonly masterKey: MasterKey;
+  readonly core_env: string;
+  readonly public_base_url: string;
+  readonly jwt_issuer: string;
+  readonly master_key: MasterKey;
   readonly mailer: "log" | "resend";
-  readonly resendApiKey?: string;
-  readonly adminToken?: string;
+  readonly resend_api_key?: string;
+  readonly admin_token?: string;
   readonly now: () => number;
 }
 
 export class AppConfigTag extends Context.Tag("AppConfig")<AppConfigTag, AppConfig>() {}
 
-export function configFromEnv(
+export function config_from_env(
   env: Record<string, string | undefined>,
   now: () => number = Date.now,
 ): AppConfig {
-  const coreEnv = (env.CORE_ENV ?? "dev").toLowerCase();
+  const core_env = (env.CORE_ENV ?? "dev").toLowerCase();
   const mailer = (env.MAIL_PROVIDER ?? "log").toLowerCase();
   if (mailer !== "log" && mailer !== "resend") throw new Error("MAIL_PROVIDER must be log|resend");
-  if (coreEnv === "production" && mailer === "log") {
+  if (core_env === "production" && mailer === "log") {
     throw new Error("MAIL_PROVIDER=log is refused in production");
   }
   return {
     env,
-    coreEnv,
-    publicBaseUrl: env.CORE_PUBLIC_BASE_URL ?? "http://127.0.0.1:8787",
-    jwtIssuer: env.CORE_JWT_ISSUER ?? env.CORE_PUBLIC_BASE_URL ?? "http://127.0.0.1:8787",
-    masterKey: loadMasterKey(env),
+    core_env,
+    public_base_url: env.CORE_PUBLIC_BASE_URL ?? "http://127.0.0.1:8787",
+    jwt_issuer: env.CORE_JWT_ISSUER ?? env.CORE_PUBLIC_BASE_URL ?? "http://127.0.0.1:8787",
+    master_key: load_master_key(env),
     mailer,
-    resendApiKey: env.RESEND_API_KEY,
-    adminToken: env.CORE_ADMIN_TOKEN,
-    now,
-  };
+    resend_api_key: env.RESEND_API_KEY,
+    admin_token: env.CORE_ADMIN_TOKEN,
+    now };
 }
 
 export class DbTag extends Context.Tag("Db")<DbTag, { readonly db: Db }>() {}
-export const DbLive = (db: Db) => Layer.succeed(DbTag, { db });
+export const db_live = (db: Db) => Layer.succeed(DbTag, { db });
 
 // Transaction runner: Effect-composed atomic unit run with a
 // transactional client (postgres.js/PGlite adapters only).
@@ -51,11 +50,10 @@ export interface TxRunner {
 }
 export class TxTag extends Context.Tag("Tx")<TxTag, TxRunner>() {}
 
-export const dbRun = <A,>(attempt: () => Promise<A>) =>
+export const db_run = <A,>(attempt: () => Promise<A>) =>
   Effect.tryPromise({
     try: attempt,
     // Never leak driver detail to callers or logs: the driver error is
     // preserved opaquely as .cause for internal Cause chains, while HTTP
     // responses and logs only ever carry the redacted code/message.
-    catch: (cause) => internal("database unavailable", { cause }),
-  });
+    catch: (cause) => internal("database unavailable", { cause }) });

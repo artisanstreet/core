@@ -11,6 +11,6 @@ export interface R2Like {
 
 export interface AppEnv {
   readonly vars: Record<string, string | undefined>;
-  readonly hyperdriveConnectionString?: string;
-  readonly adminToken?: string;
+  readonly hyperdrive_connection_string?: string;
+  readonly admin_token?: string;
 }

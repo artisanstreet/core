@@ -21,13 +21,11 @@ describe("request body chunk processing", () => {
       start(c) {
         for (const f of fragments) c.enqueue(f);
         c.close();
-      },
-    });
+      } });
     const request = new Request("http://localhost/v1/test", {
       method: "POST",
       body: stream as unknown as BodyInit,
-      duplex: "half",
-    } as unknown as RequestInit);
+      duplex: "half" } as unknown as RequestInit);
     const exit = await run_body(request);
     if (exit._tag === "Failure") throw new Error("expected success");
     expect(exit.value).toBe(original);
@@ -43,13 +41,11 @@ describe("request body chunk processing", () => {
         pulled++;
         if (pulled <= available_chunks) c.enqueue(new Uint8Array(chunk_size));
         else c.close();
-      },
-    });
+      } });
     const request = new Request("http://localhost/v1/test", {
       method: "POST",
       body: stream as unknown as BodyInit,
-      duplex: "half",
-    } as unknown as RequestInit);
+      duplex: "half" } as unknown as RequestInit);
     const exit = await run_body(request);
     if (exit._tag === "Success") throw new Error("expected payload-too-large failure");
     const failure = Cause.failureOption(exit.cause);

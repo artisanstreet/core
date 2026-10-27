@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { api, setupRig, signup } from "../helpers/http.ts";
+import { api, setup_rig, signup } from "../helpers/http.ts";
 
 function memoryAssets(files: Record<string, { body: string; contentType: string; cache?: string }>) {
   return {
@@ -10,17 +10,16 @@ function memoryAssets(files: Record<string, { body: string; contentType: string;
       const headers: Record<string, string> = { "Content-Type": f.contentType };
       if (f.cache) headers["Cache-Control"] = f.cache;
       return new Response(f.body, { status: 200, headers });
-    },
-  };
+    } };
 }
 
 const INDEX = "<!doctype html><html><body>spa</body></html>";
 
 describe("portal confirm entry", () => {
   it("backend page by default; SPA redirect when the approve path is configured", async () => {
-    const rig = await setupRig();
+    const rig = await setup_rig();
     await signup(rig, "spa@example.com");
-    const token = rig.tokenForEmail("spa@example.com");
+    const token = rig.token_for_email("spa@example.com");
 
     const page = await api(rig.app, "GET", `/v1/auth/magic/confirm?token=${token}`);
     expect(page.status).toBe(200);
@@ -33,7 +32,7 @@ describe("portal confirm entry", () => {
     // The link GET never consumes: a fresh request stays pending after GET.
     const fresh = await api(rig.app, "POST", "/v1/auth/magic/request", { body: { email: "getcheck@example.com" } });
     const { requestId: fresh_id, requestSecret: fresh_secret } = fresh.json as { requestId: string; requestSecret: string };
-    const fresh_token = rig.tokenForEmail("getcheck@example.com");
+    const fresh_token = rig.token_for_email("getcheck@example.com");
     const peek = await api(rig.app, "GET", `/v1/auth/magic/confirm?token=${fresh_token}`);
     expect(peek.status).toBe(200);
     const pending = await api(rig.app, "POST", "/v1/auth/magic/status", { body: { requestId: fresh_id, requestSecret: fresh_secret } });
@@ -41,11 +40,10 @@ describe("portal confirm entry", () => {
     // No form endpoints exist: the removed emergency surface stays gone.
     const gone = await api(rig.app, "POST", "/ui/magic/consume", {
       headers: { "content-type": "application/x-www-form-urlencoded" },
-      rawBody: new URLSearchParams({ token: fresh_token }).toString(),
-    });
+      raw_body: new URLSearchParams({ token: fresh_token }).toString() });
     expect(gone.status).toBe(404);
 
-    rig.setVar("CORE_SPA_APPROVE_PATH", "/#/approve");
+    rig.set_var("CORE_SPA_APPROVE_PATH", "/#/approve");
     const redir = await api(rig.app, "GET", `/v1/auth/magic/confirm?token=${token}`);
     expect(redir.status).toBe(302);
     expect(redir.headers.get("location")).toBe(`/#/approve?token=${token}`);
@@ -58,14 +56,14 @@ describe("portal confirm entry", () => {
   });
 
   it("same-browser/new-tab completion works through the real HTTP service", async () => {
-    const rig = await setupRig();
-    rig.setVar("CORE_SPA_APPROVE_PATH", "/#/approve");
+    const rig = await setup_rig();
+    rig.set_var("CORE_SPA_APPROVE_PATH", "/#/approve");
     const r1 = await api(rig.app, "POST", "/v1/auth/magic/request", { body: { email: "span@example.com" } });
     const { requestId, requestSecret } = r1.json as { requestId: string; requestSecret: string };
-    const redir = await api(rig.app, "GET", `/v1/auth/magic/confirm?token=${rig.tokenForEmail("span@example.com")}`);
+    const redir = await api(rig.app, "GET", `/v1/auth/magic/confirm?token=${rig.token_for_email("span@example.com")}`);
     expect(redir.status).toBe(302);
     // The SPA then calls the same consume/finalize API (simulated here).
-    const c = await api(rig.app, "POST", "/v1/auth/magic/consume", { body: { token: rig.tokenForEmail("span@example.com") } });
+    const c = await api(rig.app, "POST", "/v1/auth/magic/consume", { body: { token: rig.token_for_email("span@example.com") } });
     expect(c.status).toBe(200);
     const f = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId, requestSecret } });
     expect(f.status).toBe(200);
@@ -75,12 +73,10 @@ describe("portal confirm entry", () => {
 
 describe("portal asset hosting", () => {
   it("serves SPA shell with strict CSP + no-store; keeps API 404s JSON", async () => {
-    const rig = await setupRig({
+    const rig = await setup_rig({
       assets: memoryAssets({
         "/index.html": { body: INDEX, contentType: "text/html" },
-        "/assets/app-abc123.js": { body: "console.log(1)", contentType: "text/javascript", cache: "public, max-age=31536000, immutable" },
-      }),
-    });
+        "/assets/app-abc123.js": { body: "console.log(1)", contentType: "text/javascript", cache: "public, max-age=31536000, immutable" } }) });
 
     const shell = await api(rig.app, "GET", "/dash/projects");
     expect(shell.status).toBe(200);
@@ -107,12 +103,10 @@ describe("portal asset hosting", () => {
   });
 
   it("shell serves html mime on the final response; file-like misses stay JSON", async () => {
-    const rig = await setupRig({
+    const rig = await setup_rig({
       assets: memoryAssets({
         "/index.html": { body: INDEX, contentType: "text/html" },
-        "/assets/app-abc123.js": { body: "console.log(1)", contentType: "text/javascript", cache: "public, max-age=31536000, immutable" },
-      }),
-    });
+        "/assets/app-abc123.js": { body: "console.log(1)", contentType: "text/javascript", cache: "public, max-age=31536000, immutable" } }) });
 
     const shell = await api(rig.app, "GET", "/");
     expect(shell.status).toBe(200);
@@ -129,13 +123,11 @@ describe("portal asset hosting", () => {
   });
 
   it("rejecting asset backend degrades to JSON 404, not shell bytes", async () => {
-    const rig = await setupRig({
+    const rig = await setup_rig({
       assets: {
         fetch: async () => {
           throw new Error("backend down");
-        },
-      },
-    });
+        } } });
     const shell = await api(rig.app, "GET", "/");
     expect(shell.status).toBe(404);
     expect((shell.json as { error: { code: string } }).error.code).toBe("not_found");
@@ -145,7 +137,7 @@ describe("portal asset hosting", () => {
   });
 
   it("without assets, unknown paths stay JSON 404 and legacy UI explains unavailability", async () => {
-    const rig = await setupRig();
+    const rig = await setup_rig();
     const r = await api(rig.app, "GET", "/dash/projects");
     expect(r.status).toBe(404);
     expect((r.json as { error: { code: string } }).error.code).toBe("not_found");

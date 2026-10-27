@@ -1,16 +1,15 @@
 import { ROUTES, type RouteDef } from "./registry.ts";
-import { ErrorBody, jsonSchemaFor } from "./v1.ts";
+import { ErrorBody, json_schema_for } from "./v1.ts";
 
 const STATUS_BY_AUTH: Record<RouteDef["auth"], string[]> = {
   none: ["400", "429"],
   session: ["400", "401", "403", "429"],
   machine: ["400", "401", "403"],
   either: ["400", "401", "403"],
-  admin: ["400", "404"],
-};
+  admin: ["400", "404"] };
 
-function openapiPath(honoPath: string): string {
-  return honoPath.replace(/:([A-Za-z0-9_]+)/g, "{$1}");
+function openapi_path(hono_path: string): string {
+  return hono_path.replace(/:([A-Za-z0-9_]+)/g, "{$1}");
 }
 
 // Routes with checksum-based invalidation: authenticated conditional GET
@@ -20,10 +19,10 @@ const CONDITIONAL_GET = new Set(["/v1/config/bundles/latest", "/v1/config/bundle
 // Generated from the runtime route registry (same Effect Schemas the HTTP
 // boundary decodes/encodes). The committed contracts/v1.openapi.json must
 // equal this output; tests enforce it.
-export function buildOpenApi() {
+export function build_open_api() {
   const paths: Record<string, Record<string, unknown>> = {};
   for (const r of ROUTES) {
-    const p = openapiPath(r.path);
+    const p = openapi_path(r.path);
     const method = r.method.toLowerCase();
     const op: Record<string, unknown> = {
       summary: r.summary,
@@ -34,18 +33,13 @@ export function buildOpenApi() {
           headers: CONDITIONAL_GET.has(p) && r.method === "GET"
             ? {
               ETag: { description: "Strong validator: quoted content SHA-256 hex. Persist and send back in If-None-Match.", schema: { type: "string" } },
-              "Cache-Control": { description: "private cache semantics; manifests are immutable, latest must revalidate", schema: { type: "string" } },
-            }
+              "Cache-Control": { description: "private cache semantics; manifests are immutable, latest must revalidate", schema: { type: "string" } } }
             : undefined,
-          content: { "application/json": { schema: jsonSchemaFor(r.responseSchema as never) } },
-        },
-      },
-    };
-    if (r.requestSchema) {
+          content: { "application/json": { schema: json_schema_for(r.response_schema as never) } } } } };
+    if (r.request_schema) {
       (op as Record<string, unknown>).requestBody = {
         required: true,
-        content: { "application/json": { schema: jsonSchemaFor(r.requestSchema as never) } },
-      };
+        content: { "application/json": { schema: json_schema_for(r.request_schema as never) } } };
     }
     if (r.method === "GET" && CONDITIONAL_GET.has(p)) {
       (op as Record<string, unknown>).parameters = [
@@ -54,27 +48,22 @@ export function buildOpenApi() {
           in: "header",
           required: false,
           description: "Previously seen content-hash ETag (quoted) or *; evaluated only after authentication. Match → 304 with empty body.",
-          schema: { type: "string" },
-        },
+          schema: { type: "string" } },
       ];
       (op.responses as Record<string, unknown>)["304"] = {
         description: "not modified: the persisted hash/revision is current; empty body",
         headers: {
-          ETag: { description: "Current strong validator", schema: { type: "string" } },
-        },
-      };
+          ETag: { description: "Current strong validator", schema: { type: "string" } } } };
     }
     for (const code of STATUS_BY_AUTH[r.auth]) {
       (op.responses as Record<string, unknown>)[code] = {
         description: code,
-        content: { "application/json": { schema: jsonSchemaFor(ErrorBody as never) } },
-      };
+        content: { "application/json": { schema: json_schema_for(ErrorBody as never) } } };
     }
     (paths[p] ??= {})[method] = op;
   }
   return {
     openapi: "3.1.0",
     info: { title: "AST Core", version: "1.0.0", description: "AST account authority: identity, machines, grants, vault, config. Generated from runtime Effect Schemas; do not hand-edit." },
-    paths,
-  };
+    paths };
 }

@@ -16,17 +16,17 @@ const me_handler = Effect.gen(function* () {
   const { principal: s } = yield* session_of;
   const [machines, providers, latest_config_version] = yield* Effect.all(
     [
-      Machines.listMachines(s.accountId),
-      Vault.listProviderConnections(s.accountId),
-      editor_config_version(s.accountId),
+      Machines.list_machines(s.account_id),
+      Vault.list_provider_connections(s.account_id),
+      editor_config_version(s.account_id),
     ],
     { concurrency: 3 },
   );
   return encode_ok(C.MeResp, {
-    accountId: s.accountId,
+    accountId: s.account_id,
     email: s.email,
-    displayName: s.displayName,
-    totpEnrolled: s.totpEnrolled,
+    displayName: s.display_name,
+    totpEnrolled: s.totp_enrolled,
     machines: machines.machines,
     providerConnections: providers.connections.map((p) => ({
       id: p.id,
@@ -38,7 +38,7 @@ const me_handler = Effect.gen(function* () {
 });
 const sessions_handler = Effect.gen(function* () {
   const { principal: s } = yield* session_of;
-  const data = yield* Auth.listSessions(s.accountId, 50);
+  const data = yield* Auth.list_sessions(s.account_id, 50);
   return encode_ok(C.SessionListResp, data);
 });
 const logout_handler = Effect.gen(function* () {
@@ -48,17 +48,17 @@ const logout_handler = Effect.gen(function* () {
     yield* session_for_mutation;
   }
   const token = yield* current_token;
-  yield* Auth.revokeCurrentSession(token);
-  const secure = cfg.publicBaseUrl.startsWith("https://");
-  const ok = encode_ok(R.logout.responseSchema, { revoked: true });
+  yield* Auth.revoke_current_session(token);
+  const secure = cfg.public_base_url.startsWith("https://");
+  const ok = encode_ok(R.logout.response_schema, { revoked: true });
   return ok.pipe(HttpServerResponse.setHeader("Set-Cookie", session_cookie_value(null, 0, secure)));
 });
 const sessions_revoke_all_handler = Effect.gen(function* () {
   const cfg = yield* AppConfigTag;
   const s = yield* session_for_mutation;
-  yield* Auth.revokeAllSessions(s.accountId);
-  const secure = cfg.publicBaseUrl.startsWith("https://");
-  const ok = encode_ok(R.sessionsRevokeAll.responseSchema, { revoked: true });
+  yield* Auth.revoke_all_sessions(s.account_id);
+  const secure = cfg.public_base_url.startsWith("https://");
+  const ok = encode_ok(R.sessions_revoke_all.response_schema, { revoked: true });
   return ok.pipe(HttpServerResponse.setHeader("Set-Cookie", session_cookie_value(null, 0, secure)));
 });
 
@@ -76,7 +76,7 @@ export const router = HttpRouter.empty.pipe(
       logout_handler,
   ),
   register_route(
-    R.sessionsRevokeAll,
+    R.sessions_revoke_all,
       sessions_revoke_all_handler,
   ),
 );

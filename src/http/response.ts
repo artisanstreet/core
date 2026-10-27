@@ -12,7 +12,7 @@ export class RequestIdTag extends Context.Tag("RequestId")<RequestIdTag, string>
 export const current_request_id: Effect.Effect<string, never, RequestIdTag> = RequestIdTag;
 
 export function encode_ok<A, I>(schema: Schema.Schema<A, I>, value: NoInfer<A>, status: number = 200) {
-  const encoded = C.encodeResponse(schema, value);
+  const encoded = C.encode_response(schema, value);
   return HttpServerResponse.unsafeJson(encoded, { status });
 }
 

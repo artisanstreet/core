@@ -11,7 +11,7 @@
 // `c.unsafe(text, params)` with no options, so without this adapter every
 // query runs unprepared — unreliable under Hyperdrive pooling.
 //
-// prepareDb wraps a postgres.js client (or transaction client) and forces
+// prepare_db wraps a postgres.js client (or transaction client) and forces
 // `{ prepare: true, simple: false }` on every Reylo query: named prepared
 // statements over the extended protocol, params or not. The real Query
 // object (including `.raw()`, which Reylo's decoder requires) passes
@@ -31,12 +31,11 @@ export interface UnsafeLike {
  * runs as a named prepared statement. Structurally satisfies Reylo's
  * UnsafeClient, so it stays a valid Db.
  */
-export function prepareDb<C extends UnsafeLike>(client: C): Db {
+export function prepare_db<C extends UnsafeLike>(client: C): Db {
   const db = {
     unsafe: (text: string, params?: unknown[]) =>
       (client as unknown as {
         unsafe(text: string, params: unknown[], options: { prepare: boolean; simple: boolean }): unknown;
-      }).unsafe(text, params ?? [], { prepare: true, simple: false }),
-  };
+      }).unsafe(text, params ?? [], { prepare: true, simple: false }) };
   return db as unknown as Db;
 }

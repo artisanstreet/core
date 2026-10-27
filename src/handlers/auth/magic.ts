@@ -16,20 +16,29 @@ const magic_request_handler = Effect.gen(function* () {
   const { json } = yield* read_json_body;
   const input = yield* decode_request(C.MagicRequest, json);
   const ip = yield* client_ip;
-  const data = yield* Auth.requestMagicLink({ ...input, ip });
+  const data = yield* Auth.request_magic_link({
+    email: input.email,
+    display_name: input.displayName,
+    device_name: input.deviceName,
+    ip });
   return encode_ok(C.MagicRequestResp, data);
 });
 const magic_status_handler = Effect.gen(function* () {
   const { json } = yield* read_json_body;
   const input = yield* decode_request(C.MagicStatusReq, json);
-  const data = yield* Auth.loginRequestStatus(input);
+  const data = yield* Auth.login_request_status({
+    request_id: input.requestId,
+    request_secret: input.requestSecret });
   return encode_ok(C.MagicStatusResp, data);
 });
 const magic_consume_handler = Effect.gen(function* () {
   const { json } = yield* read_json_body;
   const input = yield* decode_request(C.MagicConsumeReq, json);
   const ip = yield* client_ip;
-  const data = yield* Auth.consumeMagicLink({ ...input, ip });
+  const data = yield* Auth.consume_magic_link({
+    token: input.token,
+    request_secret: input.requestSecret,
+    ip });
   return encode_ok(C.MagicConsumeResp, data);
 });
 const magic_finalize_handler = Effect.gen(function* () {
@@ -39,9 +48,16 @@ const magic_finalize_handler = Effect.gen(function* () {
   const input = yield* decode_request(C.MagicFinalizeReq, json);
   const ip = yield* client_ip;
   const ua = (req.headers["user-agent"] as unknown as string | undefined) ?? null;
-  const r = yield* Auth.finalizeMagicLink({ ...input, ip, userAgent: typeof ua === "string" ? ua : null });
-  const secure = cfg.publicBaseUrl.startsWith("https://");
-  const { rawToken: raw_token, ...rest } = r;
+  const r = yield* Auth.finalize_magic_link({
+    request_id: input.requestId,
+    request_secret: input.requestSecret,
+    totp_code: input.totpCode,
+    recovery_code: input.recoveryCode,
+    device_name: undefined,
+    ip,
+    user_agent: typeof ua === "string" ? ua : null });
+  const secure = cfg.public_base_url.startsWith("https://");
+  const { raw_token, ...rest } = r;
   const ok = encode_ok(C.MagicFinalizeResp, rest);
   return ok.pipe(
     HttpServerResponse.setHeader("Set-Cookie", session_cookie_value(raw_token, finalize_cookie_max_age, secure)),
@@ -50,19 +66,19 @@ const magic_finalize_handler = Effect.gen(function* () {
 
 export const router = HttpRouter.empty.pipe(
   register_route(
-    R.magicRequest,
+    R.magic_request,
       magic_request_handler,
   ),
   register_route(
-    R.magicStatus,
+    R.magic_status,
       magic_status_handler,
   ),
   register_route(
-    R.magicConsume,
+    R.magic_consume,
       magic_consume_handler,
   ),
   register_route(
-    R.magicFinalize,
+    R.magic_finalize,
       magic_finalize_handler,
   ),
 );

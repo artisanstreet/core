@@ -5,7 +5,7 @@ import { http_effect } from "./http/app.ts";
 export type { RequestContext };
 export type { ServiceEnv } from "./http/context.ts";
 
-export function createApp(ctx: RequestContext) {
+export function create_app(ctx: RequestContext) {
   const run_fetch = async (request: Request): Promise<Response> => {
     return Effect.runPromise(Effect.scoped(http_effect(request, make_service_layers(ctx))));
   };

@@ -1,27 +1,27 @@
 import { Effect } from "effect";
-import { DbTag, dbRun } from "./deps.ts";
-import { purgeDueAccounts } from "./deletion.ts";
-import expireOverdueLogins from "../db/queries/login/expireOverdueLogins.sql";
-import expireOverdueEnrollments from "../db/queries/enrollments/expireOverdueEnrollments.sql";
-import pruneNonces from "../db/queries/nonces/pruneNonces.sql";
-import pruneSessions from "../db/queries/sessions/pruneSessions.sql";
-import pruneRateCounters from "../db/queries/rate/pruneRateCounters.sql";
-import pruneTotpSteps from "../db/queries/totp/pruneTotpSteps.sql";
+import { DbTag, db_run } from "./deps.ts";
+import { purge_due_accounts } from "./deletion.ts";
+import expire_overdue_logins from "../db/queries/login/expireOverdueLogins.sql";
+import expire_overdue_enrollments from "../db/queries/enrollments/expireOverdueEnrollments.sql";
+import prune_nonces from "../db/queries/nonces/pruneNonces.sql";
+import prune_sessions from "../db/queries/sessions/pruneSessions.sql";
+import prune_rate_counters from "../db/queries/rate/pruneRateCounters.sql";
+import prune_totp_steps from "../db/queries/totp/pruneTotpSteps.sql";
 
 // Scheduled maintenance: expire stale requests, drop used nonces and old
 // counters, purge accounts past their deletion grace period.
-export const janitor = (nowMs: number) =>
+export const janitor = (now_ms: number) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const now = new Date(nowMs).toISOString();
-    const dayAgo = new Date(nowMs - 24 * 60 * 60 * 1000).toISOString();
-    const logins = yield* dbRun(() => expireOverdueLogins.run(db, {}));
-    const enrollments = yield* dbRun(() => expireOverdueEnrollments.run(db, {}));
-    const nonces = yield* dbRun(() => pruneNonces.run(db, { before: dayAgo }));
-    const sessions = yield* dbRun(() => pruneSessions.run(db, { before: dayAgo }));
-    const counters = yield* dbRun(() => pruneRateCounters.run(db, { before: dayAgo }));
-    const steps = yield* dbRun(() => pruneTotpSteps.run(db, { before: dayAgo }));
-    const { purged } = yield* purgeDueAccounts(now);
+    const now = new Date(now_ms).toISOString();
+    const day_ago = new Date(now_ms - 24 * 60 * 60 * 1000).toISOString();
+    const logins = yield* db_run(() => expire_overdue_logins.run(db, {}));
+    const enrollments = yield* db_run(() => expire_overdue_enrollments.run(db, {}));
+    const nonces = yield* db_run(() => prune_nonces.run(db, { before: day_ago }));
+    const sessions = yield* db_run(() => prune_sessions.run(db, { before: day_ago }));
+    const counters = yield* db_run(() => prune_rate_counters.run(db, { before: day_ago }));
+    const steps = yield* db_run(() => prune_totp_steps.run(db, { before: day_ago }));
+    const { purged } = yield* purge_due_accounts(now);
     return {
       expiredLogins: logins.length,
       expiredEnrollments: enrollments.length,
@@ -29,6 +29,5 @@ export const janitor = (nowMs: number) =>
       prunedSessions: sessions.length,
       prunedCounters: counters.length,
       prunedTotpSteps: steps.length,
-      purgedAccounts: purged,
-    };
+      purgedAccounts: purged };
   });

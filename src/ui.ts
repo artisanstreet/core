@@ -14,14 +14,14 @@ function shell(title: string, body: string): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>${css}</style></head><body><main>${body}</main></body></html>`;
 }
 
-export function unavailablePage(): string {
+export function unavailable_page(): string {
   return shell(
     "Portal unavailable",
     `<h1>Portal unavailable</h1><p class="muted">The account portal is not deployed on this instance. Use the API directly.</p>`,
   );
 }
 
-export function confirmPage(): string {
+export function confirm_page(): string {
   return shell(
     "Approve sign-in",
     `<h1>Approve this sign-in?</h1>

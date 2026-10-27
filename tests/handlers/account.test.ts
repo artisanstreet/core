@@ -1,18 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { admin, api, enrollMachine, setupRig, signup, totpCodeAt } from "../helpers/http.ts";
+import { admin, api, enroll_machine, setup_rig, signup, totp_code_at } from "../helpers/http.ts";
 
 const ORIGIN = { origin: "http://localhost" };
 
 describe("account deletion lifecycle", () => {
   it("requests with a grace period, cancels, and purges via janitor", async () => {
-    const rig = await setupRig();
+    const rig = await setup_rig();
     const acct = await signup(rig, "del@example.com");
     const cookie = { cookie: acct.cookie, ...ORIGIN };
-    const { machineId } = await enrollMachine(rig, { cookie: acct.cookie }, "forge-del");
+    const { machine_id } = await enroll_machine(rig, { cookie: acct.cookie }, "forge-del");
     const conn = await api(rig.app, "POST", "/v1/vault/connections", {
       headers: cookie,
-      body: { provider: "openai", label: "k", apiKey: "sk-test-12345678" },
-    });
+      body: { provider: "openai", label: "k", apiKey: "sk-test-12345678" } });
     expect(conn.status).toBe(201);
 
     const d0 = await api(rig.app, "GET", "/v1/account/deletion", { headers: { cookie: acct.cookie } });
@@ -37,36 +36,35 @@ describe("account deletion lifecycle", () => {
     // Re-request, then expire the grace by direct SQL and purge.
     await api(rig.app, "POST", "/v1/account/deletion/request", { headers: cookie, body: {} });
     await rig.db.exec(
-      `update deletion_requests set purge_after = now() - interval '1 minute' where account_id = '${acct.accountId}'`,
+      `update deletion_requests set purge_after = now() - interval '1 minute' where account_id = '${acct.account_id}'`,
     );
     const j2 = await api(rig.app, "POST", "/v1/admin/janitor", { headers: admin });
     expect(j2.status).toBe(200);
-    expect((j2.json as { purgedAccounts: string[] }).purgedAccounts).toContain(acct.accountId);
+    expect((j2.json as { purgedAccounts: string[] }).purgedAccounts).toContain(acct.account_id);
 
     // Everything account-owned is gone: sessions, machines, vault rows.
     const me2 = await api(rig.app, "GET", "/v1/me", { headers: { cookie: acct.cookie } });
     expect(me2.status).toBe(401);
     const machines = await api(rig.app, "GET", "/v1/machines", { headers: { cookie: acct.cookie } });
     expect(machines.status).toBe(401);
-    void machineId;
+    void machine_id;
   });
 
   it("deletion requires the second factor when enrolled", async () => {
-    const rig = await setupRig();
-    rig.setNow(Date.now());
+    const rig = await setup_rig();
+    rig.set_now(Date.now());
     const acct = await signup(rig, "del2@example.com");
     const cookie = { cookie: acct.cookie, ...ORIGIN };
     const en = await api(rig.app, "POST", "/v1/auth/totp/enroll", { headers: cookie });
     const { otpauthUrl } = en.json as { otpauthUrl: string };
-    await api(rig.app, "POST", "/v1/auth/totp/verify", { headers: cookie, body: { code: totpCodeAt(otpauthUrl, rig.now()) } });
+    await api(rig.app, "POST", "/v1/auth/totp/verify", { headers: cookie, body: { code: totp_code_at(otpauthUrl, rig.now()) } });
 
     const noCode = await api(rig.app, "POST", "/v1/account/deletion/request", { headers: cookie, body: {} });
     expect(noCode.status).toBe(403);
-    rig.setNow(rig.now() + 120_000);
+    rig.set_now(rig.now() + 120_000);
     const withCode = await api(rig.app, "POST", "/v1/account/deletion/request", {
       headers: cookie,
-      body: { totpCode: totpCodeAt(otpauthUrl, rig.now()) },
-    });
+      body: { totpCode: totp_code_at(otpauthUrl, rig.now()) } });
     expect(withCode.status).toBe(200);
   });
 });

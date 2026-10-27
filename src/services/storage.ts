@@ -6,30 +6,27 @@ export class StorageTag extends Context.Tag("Storage")<StorageTag, { readonly r2
 
 // R2 in production (binding injected by the Worker entry), in-memory in
 // tests and local dev without R2. Manifests are content-addressed blobs.
-export const memoryR2 = (): { r2: R2Like; layer: Layer.Layer<StorageTag> } => {
+export const memory_r2 = (): { r2: R2Like; layer: Layer.Layer<StorageTag> } => {
   const store = new Map<string, Uint8Array>();
   const r2: R2Like = {
     put: (key, body) =>
       Promise.resolve(void store.set(key, typeof body === "string" ? new TextEncoder().encode(body) : body)),
-    get: (key) => Promise.resolve(store.get(key) ?? null),
-  };
+    get: (key) => Promise.resolve(store.get(key) ?? null) };
   return { r2, layer: Layer.succeed(StorageTag, { r2 }) };
 };
 
-export const putBlob = (key: string, body: Uint8Array | string) =>
+export const put_blob = (key: string, body: Uint8Array | string) =>
   Effect.gen(function* () {
     const { r2 } = yield* StorageTag;
     yield* Effect.tryPromise({
       try: () => r2.put(key, body),
-      catch: () => internal("storage unavailable"),
-    });
+      catch: () => internal("storage unavailable") });
   });
 
-export const getBlob = (key: string) =>
+export const get_blob = (key: string) =>
   Effect.gen(function* () {
     const { r2 } = yield* StorageTag;
     return yield* Effect.tryPromise({
       try: () => r2.get(key),
-      catch: () => internal("storage unavailable"),
-    });
+      catch: () => internal("storage unavailable") });
   });

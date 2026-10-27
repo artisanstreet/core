@@ -1,33 +1,31 @@
 import { describe, expect, it } from "vitest";
-import { api, setupRig, signup } from "../helpers/http.ts";
+import { api, setup_rig, signup } from "../helpers/http.ts";
 
 // Negative HTTP behavior: strict bodies, bounded reads, CSRF, trusted IP,
 // unknown routes, and auth failures carry stable codes without leaking detail.
 describe("http boundary negatives", () => {
   it("rejects unknown fields, wrong content-type, and oversized bodies", async () => {
-    const rig = await setupRig();
+    const rig = await setup_rig();
 
     const extra = await api(rig.app, "POST", "/v1/auth/magic/request", {
-      body: { email: "z@example.com", admin: true },
-    });
+      body: { email: "z@example.com", admin: true } });
     expect(extra.status).toBe(400);
     expect((extra.json as { error: { code: string } }).error.code).toBe("bad_request");
 
     const noCt = await api(rig.app, "POST", "/v1/auth/magic/request", {
       headers: { "content-type": "text/plain" },
-      rawBody: JSON.stringify({ email: "z@example.com" }),
-    });
+      raw_body: JSON.stringify({ email: "z@example.com" }) });
     expect(noCt.status).toBe(400);
 
-    const broken = await api(rig.app, "POST", "/v1/auth/magic/request", { rawBody: "{not json" });
+    const broken = await api(rig.app, "POST", "/v1/auth/magic/request", { raw_body: "{not json" });
     expect(broken.status).toBe(400);
 
-    const big = await api(rig.app, "POST", "/v1/auth/magic/request", { rawBody: `{"email":"${"a".repeat(2 * 1024 * 1024)}@x.com"}` });
+    const big = await api(rig.app, "POST", "/v1/auth/magic/request", { raw_body: `{"email":"${"a".repeat(2 * 1024 * 1024)}@x.com"}` });
     expect(big.status).toBe(413);
   });
 
   it("cookie-authenticated mutations require same-origin; bearer is exempt", async () => {
-    const rig = await setupRig();
+    const rig = await setup_rig();
     const acct = await signup(rig, "csrf@example.com");
 
     // No Origin on a cookie POST is rejected.
@@ -36,31 +34,27 @@ describe("http boundary negatives", () => {
 
     // Cross-origin is rejected.
     const cross = await api(rig.app, "POST", "/v1/auth/totp/enroll", {
-      headers: { cookie: acct.cookie, origin: "https://evil.invalid" },
-    });
+      headers: { cookie: acct.cookie, origin: "https://evil.invalid" } });
     expect(cross.status).toBe(403);
 
     // Malformed Origin is rejected as bad origin (URL parse failure, still 403).
     const malformed = await api(rig.app, "POST", "/v1/auth/totp/enroll", {
-      headers: { cookie: acct.cookie, origin: ":::not-a-url:::" },
-    });
+      headers: { cookie: acct.cookie, origin: ":::not-a-url:::" } });
     expect(malformed.status).toBe(403);
 
     // Bearer bypasses the Origin check entirely.
     const viaBearer = await api(rig.app, "POST", "/v1/auth/totp/enroll", {
-      headers: { authorization: `Bearer ${acct.token}` },
-    });
+      headers: { authorization: `Bearer ${acct.token}` } });
     expect(viaBearer.status).toBe(200);
 
     // Same-origin works.
     const same = await api(rig.app, "POST", "/v1/auth/totp/enroll", {
-      headers: { cookie: acct.cookie, origin: "http://localhost" },
-    });
+      headers: { cookie: acct.cookie, origin: "http://localhost" } });
     expect(same.status).toBe(200);
   });
 
   it("auth failures are generic; unknown routes 404", async () => {
-    const rig = await setupRig();
+    const rig = await setup_rig();
     const bad = await api(rig.app, "GET", "/v1/me", { headers: { authorization: "Bearer ast_sess_nope" } });
     expect(bad.status).toBe(401);
     expect((bad.json as { error: { code: string; message: string } }).error.code).toBe("unauthorized");
@@ -71,7 +65,7 @@ describe("http boundary negatives", () => {
   });
 
   it("public metadata is cacheable; credential responses are not", async () => {
-    const rig = await setupRig();
+    const rig = await setup_rig();
     const v = await api(rig.app, "GET", "/v1/version");
     expect(v.status).toBe(200);
     expect(v.headers.get("cache-control")).toContain("max-age");

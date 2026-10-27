@@ -1,9 +1,9 @@
 import { Cause, Effect, Layer } from "effect";
 import postgres from "postgres";
-import { createApp, type RequestContext } from "./http.ts";
+import { create_app, type RequestContext } from "./http.ts";
 import type { Db, R2Like } from "./db.ts";
-import { prepareDb, type UnsafeLike } from "./db/prepared.ts";
-import { configFromEnv, DbTag } from "./services/deps.ts";
+import { prepare_db, type UnsafeLike } from "./db/prepared.ts";
+import { config_from_env, DbTag } from "./services/deps.ts";
 import { CoreError, internal } from "./errors.ts";
 import { make_service_layers } from "./http/context.ts";
 import { http_effect } from "./http/app.ts";
@@ -32,16 +32,14 @@ function string_vars(env: WorkerEnv): Record<string, string | undefined> {
     MAIL_PROVIDER: pick(env.MAIL_PROVIDER),
     MAIL_FROM: pick(env.MAIL_FROM),
     CORE_SPA_APPROVE_PATH: pick(env.CORE_SPA_APPROVE_PATH),
-    CORE_RELAY_ORIGIN: pick(env.CORE_RELAY_ORIGIN),
-  };
+    CORE_RELAY_ORIGIN: pick(env.CORE_RELAY_ORIGIN) };
 }
 
 function r2_adapter(bucket: NonNullable<WorkerEnv["CONFIG_BUCKET"]>): R2Like {
   return {
     put: (key: string, body: Uint8Array | string) => bucket.put(key, body).then(() => undefined),
     get: (key: string) =>
-      bucket.get(key).then((o) => (o ? o.arrayBuffer().then((b) => new Uint8Array(b)) : null)),
-  };
+      bucket.get(key).then((o) => (o ? o.arrayBuffer().then((b) => new Uint8Array(b)) : null)) };
 }
 
 function memory_r2(): R2Like {
@@ -51,8 +49,7 @@ function memory_r2(): R2Like {
       Promise.resolve(
         void store.set(key, typeof body === "string" ? new TextEncoder().encode(body) : body),
       ),
-    get: (key: string) => Promise.resolve(store.get(key) ?? null),
-  };
+    get: (key: string) => Promise.resolve(store.get(key) ?? null) };
 }
 
 function open_db(env: WorkerEnv) {
@@ -65,7 +62,7 @@ function request_layers_from_client(
   env: WorkerEnv,
   client: ReturnType<typeof open_db>,
 ): ReturnType<typeof make_service_layers> {
-  const db = prepareDb(client);
+  const db = prepare_db(client);
   const bucket = env.CONFIG_BUCKET;
   const vars = string_vars(env);
   if (!bucket && (vars.CORE_ENV ?? "dev").toLowerCase() === "production") {
@@ -74,33 +71,30 @@ function request_layers_from_client(
   // Driver-boundary Promise bridge: postgres.js begin() takes a callback.
   // Uninterruptible so aborts wait for commit/rollback instead of closing
   // the client mid-transaction; typed failures roll back and rethrow.
-  const tx_runner: RequestContext["txRunner"] = {
+  const tx_runner: RequestContext["tx_runner"] = {
     transaction: <A, E>(effect: Effect.Effect<A, E, DbTag>): Effect.Effect<A, E | CoreError> =>
       Effect.uninterruptible(
         Effect.tryPromise({
           try: () =>
             (client as unknown as { begin: (f: (tx: unknown) => Promise<A>) => Promise<A> }).begin(async (tx) => {
               const exit = await Effect.runPromiseExit(
-                Effect.provide(effect, Layer.succeed(DbTag, { db: prepareDb(tx as unknown as UnsafeLike) })),
+                Effect.provide(effect, Layer.succeed(DbTag, { db: prepare_db(tx as unknown as UnsafeLike) })),
               );
               if (exit._tag === "Success") return exit.value;
               const failure = Cause.failureOption(exit.cause);
               if (failure._tag === "Some") throw failure.value;
               throw internal("database unavailable", { cause: exit.cause });
             }),
-          catch: (cause) => (cause instanceof CoreError ? cause : internal("database unavailable", { cause })),
-        }),
-      ),
-  };
+          catch: (cause) => (cause instanceof CoreError ? cause : internal("database unavailable", { cause })) }),
+      ) };
   const ctx: RequestContext = {
     db,
-    env: { vars, hyperdriveConnectionString: env.HYPERDRIVE?.connectionString, adminToken: env.CORE_ADMIN_TOKEN },
+    env: { vars, hyperdrive_connection_string: env.HYPERDRIVE?.connectionString, admin_token: env.CORE_ADMIN_TOKEN },
     mailer: (vars.MAIL_PROVIDER ?? "log") === "resend" ? "resend" : "log",
-    resendApiKey: env.RESEND_API_KEY,
+    resend_api_key: env.RESEND_API_KEY,
     r2: bucket ? r2_adapter(bucket) : memory_r2(),
     assets: env.ASSETS,
-    txRunner: tx_runner,
-  };
+    tx_runner: tx_runner };
   return make_service_layers(ctx);
 }
 
@@ -126,8 +120,8 @@ export default {
     const program = with_scoped_db(
       Effect.sync(() => open_db(env)),
       (client) => {
-        const db = prepareDb(client);
-        const cfg = configFromEnv(string_vars(env));
+        const db = prepare_db(client);
+        const cfg = config_from_env(string_vars(env));
         return janitor(cfg.now()).pipe(Effect.provide(Layer.succeed(DbTag, { db })));
       },
       (client) => Effect.promise(() => client.end()),
@@ -135,7 +129,6 @@ export default {
     const task = Effect.runPromise(program as Effect.Effect<unknown>);
     ctx.waitUntil(task);
     await task;
-  },
-};
+  } };
 
-export { createApp };
+export { create_app };

@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile as read_file } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 
@@ -19,14 +19,13 @@ async function shape(db: PGlite) {
   return {
     tables: tables.rows.map((r) => r.table_name),
     columns: columns.rows,
-    constraints: constraints.rows.map((r) => `${r.conname} ${r.contype} ${r.def}`).sort(),
-  };
+    constraints: constraints.rows.map((r) => `${r.conname} ${r.contype} ${r.def}`).sort() };
 }
 
 describe("schema parity", () => {
   it("db/schema.sql equals db/migrations/*.sql applied in order", async () => {
     const root = new URL("../..", import.meta.url);
-    const schemaSql = await readFile(new URL("db/schema.sql", root), "utf8");
+    const schemaSql = await read_file(new URL("db/schema.sql", root), "utf8");
     const a = new PGlite();
     await a.exec(schemaSql);
 

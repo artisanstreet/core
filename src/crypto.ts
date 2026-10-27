@@ -1,107 +1,72 @@
-// Vetted-primitive crypto only: WebCrypto SHA-256 / AES-GCM / Ed25519 /
-// getRandomValues, constant-time comparison. No custom constructions.
-export function randomBytes(n: number): Uint8Array {
-  const b = new Uint8Array(n);
-  crypto.getRandomValues(b);
-  return b;
+import { base64urlnopad as base64url_nopad } from "@scure/base";
+import { sha256 as noble_sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex as bytes_to_hex, randomBytes as noble_random_bytes, utf8ToBytes as utf8_to_bytes } from "@noble/hashes/utils.js";
+import { gcm as noble_gcm } from "@noble/ciphers/aes.js";
+import { equalBytes as equal_bytes } from "@noble/ciphers/utils.js";
+
+export { randomBytes as random_bytes } from "@noble/hashes/utils.js";
+
+export const base64url_encode = base64url_nopad.encode;
+export const base64url_decode = base64url_nopad.decode;
+
+export function constant_time_equal(a: string, b: string): boolean {
+  return equal_bytes(utf8_to_bytes(a), utf8_to_bytes(b));
 }
 
-export function base64urlEncode(bytes: Uint8Array): string {
-  let s = "";
-  for (const b of bytes) s += String.fromCharCode(b);
-  return btoa(s).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+export function sha256_hex(data: Uint8Array | string): string {
+  const bytes = typeof data === "string" ? utf8_to_bytes(data) : data;
+  return bytes_to_hex(noble_sha256(bytes));
 }
 
-export function base64urlDecode(s: string): Uint8Array {
-  const t = s.replaceAll("-", "+").replaceAll("_", "/");
-  const bin = atob(t + "=".repeat((4 - (t.length % 4)) % 4));
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-
-export function constantTimeEqualHex(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let d = 0;
-  for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return d === 0;
-}
-
-export function constantTimeEqual(a: string, b: string): boolean {
-  const ab = new TextEncoder().encode(a);
-  const bb = new TextEncoder().encode(b);
-  if (ab.length !== bb.length) return false;
-  let d = 0;
-  for (let i = 0; i < ab.length; i++) d |= ab[i]! ^ bb[i]!;
-  return d === 0;
-}
-
-export async function sha256Hex(data: Uint8Array | string): Promise<string> {
-  const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
-  const digest = await crypto.subtle.digest("SHA-256", bytes.buffer as ArrayBuffer);
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-export async function sha256Bytes(data: Uint8Array | string): Promise<Uint8Array> {
-  const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
-  return new Uint8Array(await crypto.subtle.digest("SHA-256", bytes.buffer as ArrayBuffer));
+export function sha256_bytes(data: Uint8Array | string): Uint8Array {
+  const bytes = typeof data === "string" ? utf8_to_bytes(data) : data;
+  return noble_sha256(bytes);
 }
 
 export interface MasterKey {
   readonly raw: Uint8Array;
-  readonly isDevDefault: boolean;
+  readonly is_dev_default: boolean;
 }
 
 const DEV_DEFAULT_B64 = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
-export function loadMasterKey(env: Record<string, string | undefined>): MasterKey {
+export function load_master_key(env: Record<string, string | undefined>): MasterKey {
   const raw = env.CORE_MASTER_KEY;
   if (!raw) throw new Error("CORE_MASTER_KEY is not set");
-  const bytes = base64urlDecode(raw);
+  const bytes = base64url_decode(raw);
   if (bytes.length !== 32) throw new Error("CORE_MASTER_KEY must be 32 bytes base64url");
-  const isDevDefault = raw === DEV_DEFAULT_B64;
-  if (env.CORE_ENV === "production" && isDevDefault) {
+  const is_dev_default = raw === DEV_DEFAULT_B64;
+  if (env.CORE_ENV === "production" && is_dev_default) {
     throw new Error("refusing dev default CORE_MASTER_KEY in production");
   }
-  return { raw: bytes, isDevDefault };
+  return { raw: bytes, is_dev_default };
 }
 
-// Envelope: nonce(12) || ciphertext. Associated data binds a purpose string.
-export async function encryptWithKey(
+// Envelope: nonce(12) || ciphertext+tag(16). AAD binds a purpose string.
+export function encrypt_with_key(
   key: Uint8Array,
   plaintext: Uint8Array,
   purpose: string,
-): Promise<Uint8Array> {
-  const nonce = randomBytes(12);
-  const k = await crypto.subtle.importKey("raw", key.buffer as ArrayBuffer, "AES-GCM", false, [
-    "encrypt",
-  ]);
-  const ct = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: nonce.buffer as ArrayBuffer, additionalData: new TextEncoder().encode(purpose) },
-    k,
-    plaintext.buffer as ArrayBuffer,
-  );
-  const out = new Uint8Array(12 + ct.byteLength);
+): Uint8Array {
+  if (key.length !== 32) throw new Error("key must be 32 bytes (AES-256)");
+  const nonce = noble_random_bytes(12);
+  const cipher = noble_gcm(key, nonce, utf8_to_bytes(purpose));
+  const ct = cipher.encrypt(plaintext);
+  const out = new Uint8Array(12 + ct.length);
   out.set(nonce, 0);
-  out.set(new Uint8Array(ct), 12);
+  out.set(ct, 12);
   return out;
 }
 
-export async function decryptWithKey(
+export function decrypt_with_key(
   key: Uint8Array,
   envelope: Uint8Array,
   purpose: string,
-): Promise<Uint8Array> {
+): Uint8Array {
+  if (key.length !== 32) throw new Error("key must be 32 bytes (AES-256)");
   if (envelope.length < 12 + 16) throw new Error("ciphertext too short");
-  const nonce = envelope.slice(0, 12);
-  const ct = envelope.slice(12);
-  const k = await crypto.subtle.importKey("raw", key.buffer as ArrayBuffer, "AES-GCM", false, [
-    "decrypt",
-  ]);
-  const pt = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: nonce.buffer as ArrayBuffer, additionalData: new TextEncoder().encode(purpose) },
-    k,
-    ct.buffer as ArrayBuffer,
-  );
-  return new Uint8Array(pt);
+  const nonce = envelope.subarray(0, 12);
+  const ct = envelope.subarray(12);
+  const cipher = noble_gcm(key, nonce, utf8_to_bytes(purpose));
+  return cipher.decrypt(ct);
 }
