@@ -23,11 +23,11 @@ export const janitor = (now_ms: number) =>
     const steps = yield* db_run(() => prune_totp_steps.run(db, { before: day_ago }));
     const { purged } = yield* purge_due_accounts(now);
     return {
-      expiredLogins: logins.length,
-      expiredEnrollments: enrollments.length,
-      prunedNonces: nonces.length,
-      prunedSessions: sessions.length,
-      prunedCounters: counters.length,
-      prunedTotpSteps: steps.length,
-      purgedAccounts: purged };
+      expired_logins: logins.length,
+      expired_enrollments: enrollments.length,
+      pruned_nonces: nonces.length,
+      pruned_sessions: sessions.length,
+      pruned_counters: counters.length,
+      pruned_totp_steps: steps.length,
+      purged_accounts: purged };
   });

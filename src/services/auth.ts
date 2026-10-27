@@ -115,7 +115,7 @@ export const request_magic_link = (opts: {
         `If you did not request this, ignore this message.`,
       confirm_url });
     yield* record(account.id, "login.requested", { ip: opts.ip ?? null });
-    return { requestId: request_id, requestSecret: request_secret, expiresAt: expires_at };
+    return { request_id: request_id, request_secret: request_secret, expires_at: expires_at };
   });
 
 function request_status_of(row: { status: string; expires_at: string }, now_ms: number) {
@@ -139,15 +139,15 @@ export const consume_magic_link = (opts: { token: string; request_secret?: strin
     if (!row) return yield* Effect.fail(unauthorized("invalid or expired link"));
     const status = request_status_of(row, now_ms);
     if (status !== "pending") {
-      return { requestId: row.id, status, totpRequired: row.totp_required };
+      return { request_id: row.id, status, totp_required: row.totp_required };
     }
     const approved = yield* db_run(() => mark_email_approved.run(db, { id: row.id }));
     if (approved) {
       const acct = yield* db_run(() => get_account_by_email.run(db, { email: row.email }));
       if (acct) yield* record(acct.id, "login.email_approved", {});
-      return { requestId: row.id, status: "email_approved" as const, totpRequired: row.totp_required };
+      return { request_id: row.id, status: "email_approved" as const, totp_required: row.totp_required };
     }
-    return { requestId: row.id, status: request_status_of({ ...row, status: "expired" }, now_ms), totpRequired: row.totp_required };
+    return { request_id: row.id, status: request_status_of({ ...row, status: "expired" }, now_ms), totp_required: row.totp_required };
   });
 
 export const login_request_status = (opts: { request_id: string; request_secret: string }) =>
@@ -159,11 +159,11 @@ export const login_request_status = (opts: { request_id: string; request_secret:
     const secret_hash = yield* hash_secret(opts.request_secret);
     if (secret_hash !== row.request_secret_hash) return yield* Effect.fail(unauthorized("invalid request"));
     return {
-      requestId: row.id,
+      request_id: row.id,
       status: request_status_of(row, cfg.now()),
-      totpRequired: row.totp_required,
+      totp_required: row.totp_required,
       email: row.email,
-      expiresAt: row.expires_at };
+      expires_at: row.expires_at };
   });
 
 export const finalize_magic_link = (opts: {
@@ -235,11 +235,11 @@ export const finalize_magic_link = (opts: {
       finalize_tx,
     );
     return {
-      sessionId: sess.id,
+      session_id: sess.id,
       raw_token: token,
-      accountId: account.id,
-      expiresAt: expires_at,
-      totpVerified: totp_verified };
+      account_id: account.id,
+      expires_at: expires_at,
+      totp_verified: totp_verified };
   });
 
 // Match a 6-digit code against explicit time-steps around now (±2 steps
@@ -349,11 +349,11 @@ export const list_sessions = (account_id: string, limit: number) =>
     return {
       sessions: rows.map((r) => ({
         id: r.id,
-        deviceName: r.device_name,
-        totpVerifiedAt: r.totp_verified_at,
-        createdAt: r.created_at,
-        expiresAt: r.expires_at,
-        revokedAt: r.revoked_at })) };
+        device_name: r.device_name,
+        totp_verified_at: r.totp_verified_at,
+        created_at: r.created_at,
+        expires_at: r.expires_at,
+        revoked_at: r.revoked_at })) };
   });
 
 // ---------------------------------------------------------------------------
@@ -384,7 +384,7 @@ export const enroll_totp = (account_id: string) =>
     }
     const otpauth_url = create_totp_key_uri("Ast", account_id, secret, 30, 6);
     yield* record(account_id, "totp.enroll_started", {});
-    return { otpauthUrl: otpauth_url, recoveryCodes: codes };
+    return { otpauth_url: otpauth_url, recovery_codes: codes };
   });
 
 export const verify_totp_enroll = (account_id: string, code: string) =>

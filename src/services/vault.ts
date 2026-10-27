@@ -5,6 +5,7 @@ import { new_id } from "../ids.ts";
 import { AppConfigTag, DbTag, db_run } from "./deps.ts";
 import { record } from "./activity.ts";
 import { EngineArtifactEnvelope } from "../contracts/v1.ts";
+import { StoredEnvelope, is_envelope_resp, to_envelope_resp } from "../contracts/response.ts";
 
 // Validated envelope shape (shared wire language). Domain validation lives
 // in the Editor product layer (products/editor/artifacts.ts); the generic
@@ -60,7 +61,7 @@ export const create_provider_connection = (opts: {
         secret_enc: enc }),
     );
     yield* record(opts.account_id, "vault.connection_created", {});
-    return { id: row.id, provider: row.provider, label: row.label, createdAt: row.created_at };
+    return { id: row.id, provider: row.provider, label: row.label, created_at: row.created_at };
   });
 
 export const list_provider_connections = (account_id: string) =>
@@ -73,9 +74,9 @@ export const list_provider_connections = (account_id: string) =>
         id: c.id,
         provider: c.provider,
         label: c.label,
-        createdAt: c.created_at,
-        revokedAt: c.revoked_at,
-        assignedMachineIds: assigns.filter((a) => a.connection_id === c.id).map((a) => a.machine_id) })) };
+        created_at: c.created_at,
+        revoked_at: c.revoked_at,
+        assigned_machine_ids: assigns.filter((a) => a.connection_id === c.id).map((a) => a.machine_id) })) };
   });
 
 export const revoke_provider_connection_by_id = (account_id: string, connection_id: string) =>
@@ -88,7 +89,7 @@ export const revoke_provider_connection_by_id = (account_id: string, connection_
   });
 
 // Machine discovery for sync: only this machine's own assigned connections.
-// assignedMachineIds is scoped to the caller so one machine never learns
+// assigned_machine_ids is scoped to the caller so one machine never learns
 // which other machines hold the same credential.
 export const list_assigned_provider_connections = (account_id: string, machine_id: string) =>
   Effect.gen(function* () {
@@ -99,9 +100,9 @@ export const list_assigned_provider_connections = (account_id: string, machine_i
         id: c.id,
         provider: c.provider,
         label: c.label,
-        createdAt: c.created_at,
-        revokedAt: c.revoked_at,
-        assignedMachineIds: [machine_id] })) };
+        created_at: c.created_at,
+        revoked_at: c.revoked_at,
+        assigned_machine_ids: [machine_id] })) };
   });
 
 export const assign_connection = (account_id: string, connection_id: string, machine_id: string) =>
@@ -113,7 +114,7 @@ export const assign_connection = (account_id: string, connection_id: string, mac
     const done = rows[0] ?? null;
     if (!done) return yield* Effect.fail(forbidden("unknown connection or machine in this account"));
     yield* record(account_id, "vault.assigned", {});
-    return { connectionId: done.connection_id, machineId: done.machine_id };
+    return { connection_id: done.connection_id, machine_id: done.machine_id };
   });
 
 export const unassign_connection = (account_id: string, connection_id: string, machine_id: string) =>
@@ -144,8 +145,9 @@ export const store_artifact = (opts: { account_id: string; label: string; envelo
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
     const env = opts.envelope;
+    const snake = to_envelope_resp(env);
     const enc = yield* Effect.sync(() =>
-      encrypt_with_key(cfg.master_key.raw, new TextEncoder().encode(JSON.stringify(env)), ARTIFACT_PURPOSE),
+      encrypt_with_key(cfg.master_key.raw, new TextEncoder().encode(JSON.stringify(snake)), ARTIFACT_PURPOSE),
     );
     const id = new_id("art");
     yield* db_run(() =>
@@ -157,7 +159,7 @@ export const store_artifact = (opts: { account_id: string; label: string; envelo
         label: opts.label.slice(0, 120),
         format_version: env.format,
         envelope_enc: enc,
-        exported_at: env.exportedAt }),
+        exported_at: snake.exported_at }),
     );
     yield* record(opts.account_id, "artifact.stored", {});
     return { id };
@@ -174,11 +176,11 @@ export const list_artifacts = (account_id: string) =>
         engine: a.engine,
         kind: a.kind,
         label: a.label,
-        formatVersion: a.format_version,
-        exportedAt: a.exported_at,
-        createdAt: a.created_at,
-        revokedAt: a.revoked_at,
-        assignedMachineIds: assigns.filter((x) => x.artifact_id === a.id).map((x) => x.machine_id) })) };
+        format_version: a.format_version,
+        exported_at: a.exported_at,
+        created_at: a.created_at,
+        revoked_at: a.revoked_at,
+        assigned_machine_ids: assigns.filter((x) => x.artifact_id === a.id).map((x) => x.machine_id) })) };
   });
 
 export const revoke_artifact = (account_id: string, artifact_id: string) =>
@@ -191,7 +193,7 @@ export const revoke_artifact = (account_id: string, artifact_id: string) =>
   });
 
 // Machine discovery for sync: only this machine's own assigned artifacts.
-// assignedMachineIds is scoped to the caller; envelopes are never listed.
+// assigned_machine_ids is scoped to the caller; envelopes are never listed.
 export const list_assigned_artifacts = (account_id: string, machine_id: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
@@ -202,11 +204,11 @@ export const list_assigned_artifacts = (account_id: string, machine_id: string) 
         engine: a.engine,
         kind: a.kind,
         label: a.label,
-        formatVersion: a.format_version,
-        exportedAt: a.exported_at,
-        createdAt: a.created_at,
-        revokedAt: a.revoked_at,
-        assignedMachineIds: [machine_id] })) };
+        format_version: a.format_version,
+        exported_at: a.exported_at,
+        created_at: a.created_at,
+        revoked_at: a.revoked_at,
+        assigned_machine_ids: [machine_id] })) };
   });
 
 export const assign_artifact = (account_id: string, artifact_id: string, machine_id: string) =>
@@ -216,7 +218,7 @@ export const assign_artifact = (account_id: string, artifact_id: string, machine
     const done = rows[0] ?? null;
     if (!done) return yield* Effect.fail(forbidden("unknown artifact or machine in this account"));
     yield* record(account_id, "artifact.assigned", {});
-    return { artifactId: done.artifact_id, machineId: done.machine_id };
+    return { artifact_id: done.artifact_id, machine_id: done.machine_id };
   });
 
 export const unassign_artifact = (account_id: string, artifact_id: string, machine_id: string) =>
@@ -237,8 +239,12 @@ export const download_artifact = (account_id: string, machine_id: string, artifa
     const pt = yield* Effect.try({
         try: () => decrypt_with_key(cfg.master_key.raw, new Uint8Array(row.envelope_enc), ARTIFACT_PURPOSE),
       catch: () => forbidden("no artifact available to this machine") });
-    const envelope = yield* Schema.decodeUnknown(Schema.parseJson(Schema.Unknown))(new TextDecoder().decode(pt)).pipe(
+    const envelope_raw = yield* Schema.decodeUnknown(Schema.parseJson(Schema.Unknown))(new TextDecoder().decode(pt)).pipe(
       Effect.mapError(() => forbidden("no artifact available to this machine")),
     );
+    const stored = yield* Schema.decodeUnknown(StoredEnvelope)(envelope_raw).pipe(
+      Effect.mapError(() => forbidden("no artifact available to this machine")),
+    );
+    const envelope = is_envelope_resp(stored) ? stored : to_envelope_resp(stored);
     return { envelope };
   });

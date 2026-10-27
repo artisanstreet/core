@@ -136,7 +136,7 @@ export const start_enrollment = (opts: {
         expires_at: expires_at }),
     );
     const fingerprint = yield* fingerprint_of_public_key_x(opts.public_key_x);
-    return { enrollmentId: enrollment_id, code, expiresAt: expires_at, keyFingerprint: fingerprint };
+    return { enrollment_id: enrollment_id, code, expires_at: expires_at, key_fingerprint: fingerprint };
   });
 
 export const claim_enrollment_with_code = (opts: {
@@ -161,7 +161,7 @@ export const claim_enrollment_with_code = (opts: {
     );
     if (!claimed) return yield* Effect.fail(unauthorized("invalid or expired code"));
     yield* record(opts.account_id, "machine.claimed", { ip: opts.ip ?? null });
-    return { enrollmentId: found.id, status: "claimed" as const };
+    return { enrollment_id: found.id, status: "claimed" as const };
   });
 
 export const enrollment_status = (enrollment_id: string, subject_public_key_x: string) =>
@@ -181,12 +181,12 @@ export const enrollment_status = (enrollment_id: string, subject_public_key_x: s
       display_name = acct?.display_name ?? "";
     }
     return {
-      enrollmentId: row.id,
+      enrollment_id: row.id,
       status: status as "pending" | "claimed" | "confirmed" | "expired" | "voided",
-      accountId: status === "claimed" || status === "confirmed" ? row.account_id : null,
+      account_id: status === "claimed" || status === "confirmed" ? row.account_id : null,
       email: status === "claimed" || status === "confirmed" ? row.email : null,
-      displayName: display_name,
-      expiresAt: row.expires_at };
+      display_name: display_name,
+      expires_at: row.expires_at };
   });
 
 // Authenticate a machine-proof request: resolves the subject id (enrollment
@@ -233,7 +233,7 @@ export const confirm_enrollment_with_key = (opts: {
     const row = yield* db_run(() => get_enrollment_by_id.run(db, { id: opts.enrollment_id }));
     if (!row) return yield* Effect.fail(unauthorized("unknown enrollment"));
     if (row.status === "confirmed" && row.machine_id && row.account_id === opts.account_id) {
-      return { machineId: row.machine_id, accountId: row.account_id };
+      return { machine_id: row.machine_id, account_id: row.account_id };
     }
     if (row.status !== "claimed" || row.account_id !== opts.account_id) {
       return yield* Effect.fail(forbidden("enrollment is not claimed to this account"));
@@ -255,7 +255,7 @@ export const confirm_enrollment_with_key = (opts: {
       insert_machine.run(db, { id: machine_id, account_id: opts.account_id, public_key_x: row.public_key_x, label: row.label }),
     );
     yield* record(opts.account_id, "machine.enrolled", {});
-    return { machineId: machine_id, accountId: opts.account_id };
+    return { machine_id: machine_id, account_id: opts.account_id };
   });
 
 // ---------------------------------------------------------------------------
@@ -279,11 +279,11 @@ export const list_machines = (account_id: string) =>
     return {
       machines: rows.map((r) => ({
         id: r.id,
-        publicKey: { kty: "OKP" as const, crv: "Ed25519" as const, x: r.public_key_x },
+        public_key: { kty: "OKP" as const, crv: "Ed25519" as const, x: r.public_key_x },
         label: r.label,
-        createdAt: r.created_at,
-        revokedAt: r.revoked_at,
-        lastSeenAt: r.last_seen_at })) };
+        created_at: r.created_at,
+        revoked_at: r.revoked_at,
+        last_seen_at: r.last_seen_at })) };
   });
 
 export const revoke_machine_by_id = (account_id: string, machine_id: string) =>

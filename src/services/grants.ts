@@ -144,7 +144,7 @@ export const issue_grant = (input: IssueGrantInput) =>
     yield* record(input.account_id, "grant.issued", {});
     return {
       token,
-      expiresAt: new Date((now_sec + ttl) * 1000).toISOString(),
+      expires_at: new Date((now_sec + ttl) * 1000).toISOString(),
       claims };
   });
 
@@ -168,9 +168,9 @@ export const revocations = Effect.gen(function* () {
     const machines = yield* db_run(() => list_revoked_machine_ids.run(db, { limit: 1000 }));
     const keys = yield* db_run(() => list_retired_key_ids.run(db, { limit: 100 }));
     return {
-      revokedMachineIds: machines.map((m) => m.id),
-      revokedKeyIds: keys.map((k) => k.kid),
-      asOf: new Date(cfg.now()).toISOString() };
+      revoked_machine_ids: machines.map((m) => m.id),
+      revoked_key_ids: keys.map((k) => k.kid),
+      as_of: new Date(cfg.now()).toISOString() };
   });
 
 // Admin rotation (deployment credential CORE_ADMIN_TOKEN; endpoint 404s

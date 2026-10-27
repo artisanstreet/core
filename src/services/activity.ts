@@ -34,10 +34,10 @@ export const list_for_account = (account_id: string, limit: number) =>
           : raw_detail;
         return {
           id: r.id,
-          machineId: r.machine_id,
+          machine_id: r.machine_id,
           kind: r.kind,
           detail,
           ip: r.ip,
-          createdAt: r.created_at };
+          created_at: r.created_at };
       }) };
   });

@@ -32,19 +32,19 @@ export const request_account_deletion = (account_id: string) =>
     if (!row) return yield* Effect.fail(forbidden("could not open deletion request"));
     yield* db_run(() => request_deletion.run(db, { id: account_id }));
     yield* record(account_id, "account.deletion_requested", {});
-    return { status: row.status, requestedAt: row.requested_at, purgeAfter: row.purge_after };
+    return { status: row.status, requested_at: row.requested_at, purge_after: row.purge_after };
   });
 
 export const deletion_status = (account_id: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
     const row = yield* db_run(() => get_deletion_request.run(db, { account_id: account_id }));
-    if (!row) return { status: "none" as const, requestedAt: null, purgeAfter: null, completedAt: null };
+    if (!row) return { status: "none" as const, requested_at: null, purge_after: null, completed_at: null };
     return {
       status: row.status as "pending" | "cancelled" | "done",
-      requestedAt: row.requested_at,
-      purgeAfter: row.purge_after,
-      completedAt: row.completed_at };
+      requested_at: row.requested_at,
+      purge_after: row.purge_after,
+      completed_at: row.completed_at };
   });
 
 export const cancel_account_deletion = (account_id: string) =>

@@ -11,6 +11,7 @@ import { AppConfigTag, DbTag, db_run } from "../../services/deps.ts";
 import { record } from "../../services/activity.ts";
 import { get_blob, put_blob } from "../../services/storage.ts";
 import { EditorManifest } from "../../contracts/v1.ts";
+import { StoredManifest, is_manifest_resp, to_editor_manifest_resp } from "../../contracts/response.ts";
 import insert_bundle from "../../db/queries/config/insert-bundle.sql"
 import get_latest_bundle_by_account from "../../db/queries/config/get-latest-bundle-by-account.sql"
 import get_bundle_by_id from "../../db/queries/config/get-bundle-by-id.sql"
@@ -58,9 +59,10 @@ export const publish_bundle = (account_id: string, manifest_input: unknown) =>
       return yield* Effect.fail(bad_request("manifest too large"));
     }
     yield* validate_skill_bundles(manifest);
-    // Canonical bytes: stable key order, no whitespace. The hash names the
-    // exact bytes stored in R2, so Forge can verify what it downloads.
-    const canonical = JSON.stringify(sort_keys(manifest));
+    // Canonical snake bytes: stable key order, no whitespace. The hash
+    // names the exact snake bytes stored in R2, so Forge verifies download.
+    const snake_manifest = to_editor_manifest_resp(manifest);
+    const canonical = JSON.stringify(sort_keys(snake_manifest));
     const content_hash = yield* Effect.sync(() => sha256_hex(canonical));
     // Concurrent publishes race on latest+1. The unique (account, version)
     // and (account, content_hash) constraints are the arbiters: a conflict
@@ -70,7 +72,7 @@ export const publish_bundle = (account_id: string, manifest_input: unknown) =>
     for (let attempt = 0; attempt < 4; attempt++) {
       const latest = yield* db_run(() => get_latest_bundle_by_account.run(db, { account_id: account_id }));
       if (latest && latest.content_hash === content_hash) {
-        return { id: latest.id, version: latest.version, contentHash: content_hash, r2Key: latest.r2_key, createdAt: latest.created_at, deduplicated: true as const };
+        return { id: latest.id, version: latest.version, content_hash: content_hash, r2_key: latest.r2_key, created_at: latest.created_at, deduplicated: true as const };
       }
       const id = new_id("bundle");
       // Content-addressed key: deterministic, no version to go stale in a race.
@@ -82,7 +84,7 @@ export const publish_bundle = (account_id: string, manifest_input: unknown) =>
       if (!done) continue;
       yield* put_blob(r2_key, canonical);
       yield* record(account_id, "config.published", {});
-      return { id: done.id, version: done.version, contentHash: content_hash, r2Key: done.r2_key, createdAt: done.created_at, deduplicated: false as const };
+      return { id: done.id, version: done.version, content_hash: content_hash, r2_key: done.r2_key, created_at: done.created_at, deduplicated: false as const };
     }
     return yield* Effect.fail(internal("concurrent publish, retry"));
   });
@@ -102,14 +104,21 @@ export const latest_bundle = (account_id: string) =>
     const { db } = yield* DbTag;
     const row = yield* db_run(() => get_latest_bundle_by_account.run(db, { account_id: account_id }));
     if (!row) return { bundle: null, manifest: null };
-    const manifest = typeof row.manifest === "string"
+    const parsed = typeof row.manifest === "string"
       ? yield* Schema.decodeUnknown(Schema.parseJson(Schema.Unknown))(row.manifest).pipe(
         Effect.mapError(() => internal("bundle manifest corrupt")),
       )
       : row.manifest as unknown;
+    const stored = yield* Schema.decodeUnknown(StoredManifest)(parsed).pipe(
+      Effect.mapError(() => internal("bundle manifest corrupt")),
+    );
+    const snake_manifest = is_manifest_resp(stored) ? stored : to_editor_manifest_resp(stored);
+    // content_hash always names the exact snake bytes served.
+    const canonical = JSON.stringify(sort_keys(snake_manifest));
+    const content_hash = yield* Effect.sync(() => sha256_hex(canonical));
     return {
-      bundle: { id: row.id, version: row.version, contentHash: row.content_hash, r2Key: row.r2_key, createdAt: row.created_at },
-      manifest };
+      bundle: { id: row.id, version: row.version, content_hash: content_hash, r2_key: row.r2_key, created_at: row.created_at },
+      manifest: snake_manifest };
   });
 
 export const bundle_manifest_bytes = (account_id: string, version: number) =>
@@ -122,9 +131,21 @@ export const bundle_manifest_bytes = (account_id: string, version: number) =>
     // breaking verification (the hash check still applies either way).
     const from_r2 = yield* get_blob(row.r2_key);
     const raw = from_r2 ?? new TextEncoder().encode(typeof row.manifest === "string" ? row.manifest : JSON.stringify(row.manifest));
-    const hash = yield* Effect.sync(() => sha256_hex(raw));
-    if (hash !== row.content_hash) return yield* Effect.fail(forbidden("manifest object mismatch"));
-    return { bytes: raw, contentHash: row.content_hash };
+    const raw_hash = yield* Effect.sync(() => sha256_hex(raw));
+    if (raw_hash !== row.content_hash) return yield* Effect.fail(forbidden("manifest object mismatch"));
+    // Legacy rows stored camel bytes: normalize to snake, re-encode
+    // canonical snake bytes and recompute so the hash names bytes served.
+    const parsed = yield* Schema.decodeUnknown(Schema.parseJson(Schema.Unknown))(new TextDecoder().decode(raw)).pipe(
+      Effect.mapError(() => forbidden("manifest object mismatch")),
+    );
+    const stored = yield* Schema.decodeUnknown(StoredManifest)(parsed).pipe(
+      Effect.mapError(() => forbidden("manifest object mismatch")),
+    );
+    const snake_manifest = is_manifest_resp(stored) ? stored : to_editor_manifest_resp(stored);
+    const canonical = JSON.stringify(sort_keys(snake_manifest));
+    const snake_bytes = new TextEncoder().encode(canonical);
+    const content_hash = yield* Effect.sync(() => sha256_hex(canonical));
+    return { bytes: snake_bytes, content_hash: content_hash };
   });
 
 export const report_machine_state = (machine_id: string, account_id: string, opts: { bundle_id: string; status: "applied" | "failed"; detail?: string }) =>
@@ -144,7 +165,7 @@ export const report_machine_state = (machine_id: string, account_id: string, opt
     const done = rows[0] ?? null;
     if (done) {
       yield* record(account_id, "config.state_reported", { machine_id });
-      return { machineId: done.machine_id, bundleId: done.bundle_id, status: done.status, appliedAt: done.applied_at };
+      return { machine_id: done.machine_id, bundle_id: done.bundle_id, status: done.status, applied_at: done.applied_at };
     }
     const [state, bundle] = yield* Effect.all([
       db_run(() => get_machine_config_state.run(db, { machine_id: machine_id, account_id: account_id })),
@@ -162,11 +183,11 @@ export const read_machine_state = (account_id: string, machine_id: string) =>
     const row = yield* db_run(() => get_machine_config_state.run(db, { machine_id: machine_id, account_id: account_id }));
     if (!row) return yield* Effect.fail(forbidden("no such machine or state"));
     return {
-      machineId: row.machine_id,
-      bundleId: row.bundle_id,
+      machine_id: row.machine_id,
+      bundle_id: row.bundle_id,
       status: row.status,
       detail: row.detail,
-      appliedAt: row.applied_at,
+      applied_at: row.applied_at,
       version: row.version,
-      contentHash: row.content_hash };
+      content_hash: row.content_hash };
   });
