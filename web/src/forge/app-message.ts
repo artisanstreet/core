@@ -2,7 +2,7 @@
 // `ForgeSession` (unary) and `ForgeStream` (SUBSCRIBE answer).
 
 import { Either, Match, Schema } from "effect";
-import { isChunkFrame, TunnelChunk } from "./chunk.ts";
+import { is_chunk_frame, TunnelChunk } from "./chunk.ts";
 import { TunnelResponse } from "./codec.ts";
 
 export type AppMessage =
@@ -13,7 +13,7 @@ export type AppMessage =
 
 export const decode_app_message = (json: unknown): AppMessage =>
   Match.value(json).pipe(
-    Match.when(isChunkFrame, (chunk_frame) =>
+    Match.when(is_chunk_frame, (chunk_frame) =>
       Either.match(Schema.decodeUnknownEither(TunnelChunk)(chunk_frame), {
         onLeft: (e): AppMessage => ({ _tag: "BadChunk", transfer: chunk_frame.transfer, reason: e.message }),
         onRight: (chunk): AppMessage => ({ _tag: "Chunk", chunk }),

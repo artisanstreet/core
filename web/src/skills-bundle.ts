@@ -11,6 +11,9 @@
 // 512 KiB total raw).
 
 import { Schema } from "effect";
+import { base64urlnopad as base64url_nopad } from "@scure/base";
+import { sha256 as sha256_hash } from "@noble/hashes/sha2.js";
+import { bytesToHex as bytes_to_hex } from "@noble/hashes/utils.js";
 import * as C from "../../src/contracts/v1.ts";
 
 export const MAX_BUNDLE_FILES = 64;
@@ -22,7 +25,7 @@ const BLOCKED_SEGMENT = /^(node_modules|\.git|\.hg|\.svn|dist|build|target)$/;
 
 export interface SkillFolderPick {
   /** Directory name the picker reported (default skill name). */
-  folderName: string;
+  folder_name: string;
   files: File[];
 }
 
@@ -34,24 +37,13 @@ export interface BuiltSkillRef {
   skipped: string[];
 }
 
-function base64urlEncode(bytes: Uint8Array): string {
-  let s = "";
-  for (let i = 0; i < bytes.length; i += 8192) s += String.fromCharCode(...bytes.subarray(i, i + 8192));
-  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", bytes as unknown as ArrayBuffer);
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
 /**
  * Build a bundled skill ref from picked files. Throws a human-readable
  * error naming every refused file — nothing secret is ever included.
  * The result validates strictly against Core's SkillRef (unknown fields
  * rejected, sha256 hex + base64url charset enforced).
  */
-export async function buildSkillBundle(pick: SkillFolderPick, opts?: { name?: string; source?: string }): Promise<BuiltSkillRef> {
+export async function build_skill_bundle(pick: SkillFolderPick, opts?: { name?: string; source?: string }): Promise<BuiltSkillRef> {
   const rel = (f: File): string => {
     const p = (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name;
     const parts = p.split("/");
@@ -60,7 +52,7 @@ export async function buildSkillBundle(pick: SkillFolderPick, opts?: { name?: st
   };
   const entries = pick.files.map((file) => ({ file, path: rel(file) })).filter((e) => e.path.length > 0);
   if (!entries.some((e) => e.path === "SKILL.md")) {
-    throw new Error(`“${pick.folderName}” has no SKILL.md at its root — pick a skill folder, not its parent.`);
+    throw new Error(`“${pick.folder_name}” has no SKILL.md at its root — pick a skill folder, not its parent.`);
   }
   const refused: string[] = [];
   const kept = entries.filter((e) => {
@@ -86,7 +78,7 @@ export async function buildSkillBundle(pick: SkillFolderPick, opts?: { name?: st
   const files: Array<{ path: string; contentBase64: string; sha256: string }> = [];
   for (const e of kept) {
     const bytes = new Uint8Array(await e.file.arrayBuffer());
-    files.push({ path: e.path, contentBase64: base64urlEncode(bytes), sha256: await sha256Hex(bytes) });
+    files.push({ path: e.path, contentBase64: base64url_nopad.encode(bytes), sha256: bytes_to_hex(sha256_hash(bytes)) });
   }
   if (!files.some((f) => f.path === "SKILL.md")) {
     throw new Error("SKILL.md was filtered out; refusing to build a bundle without it. " + refused.join("; "));
@@ -95,6 +87,6 @@ export async function buildSkillBundle(pick: SkillFolderPick, opts?: { name?: st
   for (const f of files) {
     Schema.decodeUnknownSync(C.SkillFile, { onExcessProperty: "error" })(f);
   }
-  const name = (opts?.name ?? "").trim() || pick.folderName;
+  const name = (opts?.name ?? "").trim() || pick.folder_name;
   return { name, source: (opts?.source ?? "").trim() || "bundle", bundle: { files }, skipped: refused };
 }

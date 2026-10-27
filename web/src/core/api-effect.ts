@@ -81,7 +81,7 @@ export const api_get = <A, I>(
     );
     const url = yield* absolute_url_effect(base, path);
     const request = HttpClientRequest.setHeaders(HttpClientRequest.get(url), { accept: "application/json" });
-    // Without `filterStatus`, error channel carries transport
+    // Without `filter_status`, error channel carries transport
     // `RequestError` only — statuses are checked explicitly below.
     const res = yield* Effect.mapError(client.execute(request), to_transport);
     const json = yield* read_json(res);
@@ -98,7 +98,7 @@ export interface HttpSeam {
   readonly base: string;
 }
 
-/** Internal Effect API for login-status polling; `CoreApi.loginStatus` is the Promise boundary over this. */
+/** Internal Effect API for login-status polling; `CoreApi.login_status` is the Promise boundary over this. */
 export const login_status_effect = (
   fetch_impl: FetchLike,
   base: string,
@@ -115,7 +115,7 @@ export const login_status_effect = (
     () => new ApiFailure({ status: 400, code: "bad_request", message: "bad request", request_id: "" }),
   );
 
-/** Internal Effect API for editor grant issue; `CoreApi.issueGrant` is the Promise boundary over this. */
+/** Internal Effect API for editor grant issue; `CoreApi.issue_grant` is the Promise boundary over this. */
 export const issue_grant_effect = (
   fetch_impl: FetchLike,
   base: string,

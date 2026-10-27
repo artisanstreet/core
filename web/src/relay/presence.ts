@@ -8,7 +8,7 @@ import { FetchHttpClient, HttpClient, HttpClientRequest } from "@effect/platform
 import { run_effect } from "../core/run-promise.ts";
 
 export interface Presence {
-  forgeOnline: boolean;
+  forge_online: boolean;
   clients: number;
 }
 
@@ -52,21 +52,21 @@ const presence_program = (
         new PresenceFailure({ reason: `presence check failed (${res.status})`, status: res.status }),
       );
     }
-    return { forgeOnline: json?.forge_online === true, clients: typeof json?.clients === "number" ? json.clients : 0 };
+    return { forge_online: json?.forge_online === true, clients: typeof json?.clients === "number" ? json.clients : 0 };
   });
 
 /** Authenticated presence read (Bearer grant, same account+machine). */
-export async function fetchPresence(
-  relayHttpUrl: string,
+export async function fetch_presence(
+  relay_http_url: string,
   accountId: string,
   machineId: string,
-  grantJwt: string,
-  fetchImpl: typeof fetch = fetch,
+  grant_jwt: string,
+  fetch_impl: typeof fetch = fetch,
 ): Promise<Presence> {
   return run_effect(
-    presence_program(relayHttpUrl, accountId, machineId, grantJwt).pipe(
+    presence_program(relay_http_url, accountId, machineId, grant_jwt).pipe(
       Effect.provide(FetchHttpClient.layer),
-      Effect.provideService(FetchHttpClient.Fetch, fetchImpl),
+      Effect.provideService(FetchHttpClient.Fetch, fetch_impl),
     ) as Effect.Effect<Presence, PresenceFailure>,
   ).catch((err) => {
     if (err instanceof PresenceFailure) throw new Error(err.reason);

@@ -5,32 +5,32 @@ export interface LiveFeed {
   readonly transport: "polling" | "stream";
   start(): void;
   stop(): void;
-  needsRefresh?(nowMs?: number): boolean;
+  needs_refresh?(now_ms?: number): boolean;
 }
 
 export interface PollingFeedOptions<T extends { position?: number }> {
-  threadPoll: (after: number) => Promise<T[]>;
-  getAfter: () => number;
-  onItems: (items: T[]) => void;
-  visibleMs?: number;
-  hiddenMs?: number;
+  thread_poll: (after: number) => Promise<T[]>;
+  get_after: () => number;
+  on_items: (items: T[]) => void;
+  visible_ms?: number;
+  hidden_ms?: number;
 }
 
-export function createPollingFeed<T extends { position?: number }>(opts: PollingFeedOptions<T>): LiveFeed {
+export function create_polling_feed<T extends { position?: number }>(opts: PollingFeedOptions<T>): LiveFeed {
   let fiber: Fiber.RuntimeFiber<void> | null = null;
   let stopped = false;
 
   const cadence_ms = (): number =>
-    typeof document !== "undefined" && document.visibilityState === "hidden" ? (opts.hiddenMs ?? 20000) : (opts.visibleMs ?? 4000);
+    typeof document !== "undefined" && document.visibilityState === "hidden" ? (opts.hidden_ms ?? 20000) : (opts.visible_ms ?? 4000);
 
   const poll_once: Effect.Effect<void> = Effect.gen(function* () {
     if (stopped) return;
     const items = yield* Effect.orElseSucceed(
-      Effect.tryPromise({ try: () => opts.threadPoll(opts.getAfter()), catch: () => null }),
+      Effect.tryPromise({ try: () => opts.thread_poll(opts.get_after()), catch: () => null }),
       () => [] as Array<T>,
     );
     if (!stopped && items.length > 0) {
-      yield* Effect.sync(() => opts.onItems(items));
+      yield* Effect.sync(() => opts.on_items(items));
     }
   });
 
@@ -60,26 +60,26 @@ export function createPollingFeed<T extends { position?: number }>(opts: Polling
 }
 
 export interface StreamHandle {
-  start(subscribePath: string): Promise<string>;
+  start(subscribe_path: string): Promise<string>;
   stop(): void;
-  needsRefresh(nowMs?: number): boolean;
+  needs_refresh(now_ms?: number): boolean;
 }
 
 export interface StreamEvents {
-  onEnvelope(env: LiveEnvelope): void;
-  onReset(): void;
-  onEnd(reason: string): void;
-  onError(code: string, message: string): void;
+  on_envelope(env: LiveEnvelope): void;
+  on_reset(): void;
+  on_end(reason: string): void;
+  on_error(code: string, message: string): void;
 }
 
 export interface StreamFeedOptions {
   open: (events: StreamEvents) => StreamHandle;
   path: (since: number | null) => string;
-  getSince: () => number | null;
-  setSince: (seq: number) => void;
-  onEnvelope: (env: LiveEnvelope) => void;
-  onStreamLost: (message: string) => void;
-  onResetNotice?: () => void;
+  get_since: () => number | null;
+  set_since: (seq: number) => void;
+  on_envelope: (env: LiveEnvelope) => void;
+  on_stream_lost: (message: string) => void;
+  on_reset_notice?: () => void;
 }
 
 const stop_quietly = (handle: StreamHandle | null): void => {
@@ -87,7 +87,7 @@ const stop_quietly = (handle: StreamHandle | null): void => {
   Either.getOrNull(Either.try({ try: () => handle.stop(), catch: () => null }));
 };
 
-export function createStreamFeed(opts: StreamFeedOptions): LiveFeed {
+export function create_stream_feed(opts: StreamFeedOptions): LiveFeed {
   let stream: StreamHandle | null = null;
   let stopped = false;
   let resets = 0;
@@ -96,23 +96,23 @@ export function createStreamFeed(opts: StreamFeedOptions): LiveFeed {
   const lost = (message: string): void => {
     if (stopped) return;
     stop();
-    opts.onStreamLost(message);
+    opts.on_stream_lost(message);
   };
 
-  const events_for = (getHandle: () => StreamHandle | null): StreamEvents => ({
-    onEnvelope: (env) => {
-      const handle = getHandle();
+  const events_for = (get_handle: () => StreamHandle | null): StreamEvents => ({
+    on_envelope: (env) => {
+      const handle = get_handle();
       if (stopped || handle === null || stream !== handle) return;
       if (env.seq !== null) {
-        const cur = opts.getSince();
-        if (cur === null || env.seq > cur) opts.setSince(env.seq);
+        const cur = opts.get_since();
+        if (cur === null || env.seq > cur) opts.set_since(env.seq);
       }
-      opts.onEnvelope(env);
+      opts.on_envelope(env);
     },
-    onReset: () => {
-      const handle = getHandle();
+    on_reset: () => {
+      const handle = get_handle();
       if (stopped || handle === null || stream !== handle) return;
-      opts.onResetNotice?.();
+      opts.on_reset_notice?.();
       const now = Date.now();
       if (now - reset_window_start > 30_000) {
         reset_window_start = now;
@@ -127,13 +127,13 @@ export function createStreamFeed(opts: StreamFeedOptions): LiveFeed {
       if (stream === handle) stream = null;
       subscribe_now();
     },
-    onEnd: (reason) => {
-      const handle = getHandle();
+    on_end: (reason) => {
+      const handle = get_handle();
       if (stopped || handle === null || stream !== handle) return;
       lost(`Stream ended (${reason}).`);
     },
-    onError: (code, message) => {
-      const handle = getHandle();
+    on_error: (code, message) => {
+      const handle = get_handle();
       if (stopped || handle === null || stream !== handle) return;
       lost(`${code}: ${message}`);
     },
@@ -146,7 +146,7 @@ export function createStreamFeed(opts: StreamFeedOptions): LiveFeed {
     handle = opts.open(events);
     const current = handle;
     stream = current;
-    const path = opts.path(opts.getSince());
+    const path = opts.path(opts.get_since());
     const program: Effect.Effect<void> = Effect.gen(function* () {
       yield* Effect.tryPromise({ try: () => current.start(path), catch: (e) => e });
     }).pipe(
@@ -175,8 +175,8 @@ export function createStreamFeed(opts: StreamFeedOptions): LiveFeed {
       subscribe_now();
     },
     stop,
-    needsRefresh(nowMs?: number) {
-      return stream?.needsRefresh(nowMs) ?? false;
+    needs_refresh(now_ms?: number) {
+      return stream?.needs_refresh(now_ms) ?? false;
     },
   };
 }

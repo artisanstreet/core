@@ -12,16 +12,16 @@ import type { SecureChannel } from "../../vendor/relay/client.ts";
 import type { GrantMaterial } from "../../vendor/relay/client.ts";
 import type { CoreApi } from "../api.ts";
 import {
-  encodeTunnelRequest,
-  newRequestId,
+  encode_tunnel_request,
+  new_request_id,
   SINGLE_FRAME_BYTES,
-  throwIfTunnelError,
+  throw_if_tunnel_error,
   type TunnelRequest,
   type TunnelResponse,
 } from "../forge/codec.ts";
-import { ChunkReassembly, chunkBytes, type TunnelChunk } from "../forge/chunk.ts";
+import { ChunkReassembly, chunk_bytes, type TunnelChunk } from "../forge/chunk.ts";
 import { decode_app_message, type AppMessage } from "../forge/app-message.ts";
-import { newChannelId } from "./cnf.ts";
+import { new_channel_id } from "./cnf.ts";
 import { channel_url, default_link_factory, flush_outbound, initiate_secure, mint_channel_grant_effect, settle_pending, wait_open_effect } from "./channel-connect.ts";
 export { grant_jti } from "./cnf.ts";
 import { run_effect } from "../core/run-promise.ts";
@@ -34,21 +34,21 @@ export type SendStatus = "sent" | "dropped-window-full";
 export interface ForgeSessionOptions {
   core: CoreApi;
   /** e.g. wss://relay.artisanstreet.dev — never carries credentials. */
-  relayWsUrl: string;
+  relay_ws_url: string;
   /** e.g. https://relay.artisanstreet.dev for presence reads. */
-  relayHttpUrl: string;
-  accountId: string;
-  machineId: string;
+  relay_http_url: string;
+  account_id: string;
+  machine_id: string;
   /** Enrolled Forge Ed25519 key (JWK x) from authenticated Core. */
-  forgeCnfX: string;
-  onEvent?: (ev: ForgeSessionEvent) => void;
-  wsImpl?: typeof WebSocket;
+  forge_cnf_x: string;
+  on_event?: (ev: ForgeSessionEvent) => void;
+  ws_impl?: typeof WebSocket;
   /**
    * Test seam: build the Relay link. Production uses EditorLink (real WS);
    * tests inject a fake enforcing the 64-frame / 1 MiB window. The seam
    * only swaps transport — Noise, grants, and framing stay real.
    */
-  createLink?: (url: string, grant: GrantMaterial, events: ChannelEvents) => RelayLinkLike;
+  create_link?: (url: string, grant: GrantMaterial, events: ChannelEvents) => RelayLinkLike;
 }
 
 
@@ -64,51 +64,51 @@ export class ForgeSession {
   private secure: SecureChannel | null = null;
   private readonly pending = new Map<string, PendingGate>();
   private closed = false;
-  readonly channel = newChannelId();
+  readonly channel = new_channel_id();
   /** Epoch ms when the current grant expires (0 until connected). */
-  grantExpiresAtMs = 0;
+  grant_expires_at_ms = 0;
 
   constructor(private readonly opts: ForgeSessionOptions) {
   }
 
   /** True when the grant dies within the margin — re-establish first. */
-  needsRefresh(nowMs = Date.now(), marginMs = 90_000): boolean {
-    if (!this.grantExpiresAtMs) return false;
-    return this.grantExpiresAtMs - nowMs < marginMs;
+  needs_refresh(now_ms = Date.now(), margin_ms = 90_000): boolean {
+    if (!this.grant_expires_at_ms) return false;
+    return this.grant_expires_at_ms - now_ms < margin_ms;
   }
 
   /** Issue the short-lived editor grant, admit to Relay, run the Noise handshake. */
-  async connect(): Promise<{ forgeOnline: boolean }> {
+  async connect(): Promise<{ forge_online: boolean }> {
     if (this.closed) throw new Error("session closed");
     const self = this;
     const connect_program = Effect.gen(function* () {
-        const { core, accountId, machineId } = self.opts;
-        const minted = yield* mint_channel_grant_effect(core, machineId);
-        self.grantExpiresAtMs = minted.grant_expires_at_ms;
+        const { core, account_id, machine_id } = self.opts;
+        const minted = yield* mint_channel_grant_effect(core, machine_id);
+        self.grant_expires_at_ms = minted.grant_expires_at_ms;
         const grant = minted.grant;
-        const secure = yield* initiate_secure(minted.cnf_sk, self.opts.forgeCnfX, grant.jwt, {
-          account: accountId,
-          machine: machineId,
+        const secure = yield* initiate_secure(minted.cnf_sk, self.opts.forge_cnf_x, grant.jwt, {
+          account: account_id,
+          machine: machine_id,
           channel: self.channel,
         });
         self.secure = secure;
-        const events = self.opts.onEvent;
-        const makeLink = self.opts.createLink ?? default_link_factory(self.opts.wsImpl);
-        const link = makeLink(
-          channel_url(self.opts.relayWsUrl, accountId, machineId),
+        const events = self.opts.on_event;
+        const make_link = self.opts.create_link ?? default_link_factory(self.opts.ws_impl);
+        const link = make_link(
+          channel_url(self.opts.relay_ws_url, account_id, machine_id),
           grant,
           {
-            onChannelOpened: (channel, peer) => {
+            on_channel_opened: (channel, peer) => {
               if (channel !== self.channel) return;
-              events?.({ type: "channel-opened", channel });
+              events?.({ type: "channel_opened", channel });
               void peer;
-              flush_outbound(secure, (body) => link.sendOpaque(channel, body));
+              flush_outbound(secure, (body) => link.send_opaque(channel, body));
             },
-            onData: (channel, _seq, body) => {
+            on_data: (channel, _seq, body) => {
               if (channel !== self.channel) return;
               Either.match(
                 Either.try({
-                  try: () => secure.handleIncoming(body),
+                  try: () => secure.handle_incoming(body),
                   catch: (e) => (e instanceof Error ? e : new Error("Channel failed.")),
                 }),
                 {
@@ -121,27 +121,27 @@ export class ForgeSession {
                     // (m3), which synchronously queues our confirm — the second
                     // flush carries it. Without this the initiator's confirm
                     // sits unsent and the channel never opens.
-                    flush_outbound(secure, (out) => link.sendOpaque(channel, out));
-                    flush_outbound(secure, (out) => link.sendOpaque(channel, out));
-                    if (app) self.onAppBytes(app);
+                    flush_outbound(secure, (out) => link.send_opaque(channel, out));
+                    flush_outbound(secure, (out) => link.send_opaque(channel, out));
+                    if (app) self.on_app_bytes(app);
                   },
                 },
               );
             },
-            onChannelClosed: (channel, reason) => {
+            on_channel_closed: (channel, reason) => {
               if (channel === self.channel) {
-                events?.({ type: "channel-closed", channel, reason });
-                self.failPending(new Error(`Channel closed (${reason}).`));
+                events?.({ type: "channel_closed", channel, reason });
+                self.fail_pending(new Error(`Channel closed (${reason}).`));
               }
             },
-            onPresence: (forgeOnline, clients) => events?.({ type: "presence", forgeOnline, clients }),
-            onAck: () => self.onAck(),
-            onError: (code, message) => {
+            on_presence: (forge_online, clients) => events?.({ type: "presence", forge_online, clients }),
+            on_ack: () => self.on_ack(),
+            on_error: (code, message) => {
               // A dropped sealed frame desyncs the Noise stream: fail the
               // session explicitly (caller re-handshakes) instead of
               // truncating or resending ciphertext out of order.
               if (code === "backpressure") {
-                self.failPending(new Error("Relay window full; channel broken, reconnect to retry."));
+                self.fail_pending(new Error("Relay window full; channel broken, reconnect to retry."));
                 self.close();
                 return;
               }
@@ -150,23 +150,23 @@ export class ForgeSession {
           },
         );
         self.link = link;
-        const { forgeOnline } = yield* Effect.tryPromise({
+        const { forge_online } = yield* Effect.tryPromise({
           try: () => link.connect(),
           catch: (e) => (e instanceof Error ? e : new Error("Relay admission failed.")),
         });
-        events?.({ type: "ready", forgeOnline });
+        events?.({ type: "ready", forge_online });
         link.open(self.channel);
-        flush_outbound(secure, (body) => link.sendOpaque(self.channel, body));
+        flush_outbound(secure, (body) => link.send_opaque(self.channel, body));
         // Wait for the Noise handshake + mutual confirm, not just Relay
         // admission: callers may tunnel immediately after connect().
         yield* wait_open_effect(
-          () => self.secure?.isOpen(),
+          () => self.secure?.is_open(),
           () => self.closed,
           "Session closed while opening.",
           "Encrypted channel did not open.",
           30_000,
         );
-        return { forgeOnline };
+        return { forge_online };
       });
     return run_effect(connect_program);
   }
@@ -176,9 +176,9 @@ export class ForgeSession {
     const link = this.link;
     const secure = this.secure;
     if (!link || !secure) throw new Error("Not connected.");
-    if (!secure.isOpen()) throw new Error("Encrypted channel is not open yet.");
+    if (!secure.is_open()) throw new Error("Encrypted channel is not open yet.");
     if (this.closed) throw new Error("Session closed.");
-    const full: TunnelRequest = { ...req, id: req.id ?? newRequestId() };
+    const full: TunnelRequest = { ...req, id: req.id ?? new_request_id() };
     const self = this;
     const as_error = (e: unknown) => (e instanceof Error ? e : new Error("Send failed."));
     const call_program = Effect.gen(function* () {
@@ -211,7 +211,7 @@ export class ForgeSession {
           if (e instanceof CallTimeoutError) return Effect.fail(e);
           if (!still_pending && self.is_channel_break(e)) {
             // Send broke after the call settled: the channel is suspect.
-            self.failPending(as_error(e));
+            self.fail_pending(as_error(e));
             self.close();
           }
           return Effect.fail(as_error(e));
@@ -242,39 +242,39 @@ export class ForgeSession {
     );
   }
 
-  private onAck(): void {
-    this.sender.onAck();
+  private on_ack(): void {
+    this.sender.on_ack();
   }
 
   /** Request plaintexts in send order (single frame or chunk frames). */
   private request_texts(full: TunnelRequest) {
-    const framed = encodeTunnelRequest(full);
+    const framed = encode_tunnel_request(full);
     if (new TextEncoder().encode(framed).length <= SINGLE_FRAME_BYTES) return [framed];
     const raw = new TextEncoder().encode(framed);
-    return chunkBytes(full.id, raw).map((c) => JSON.stringify(c));
+    return chunk_bytes(full.id, raw).map((c) => JSON.stringify(c));
   }
 
-  private onAppBytes(app: Uint8Array): void {
+  private on_app_bytes(app: Uint8Array): void {
     const text = new TextDecoder().decode(app);
     const message: AppMessage = Either.getOrElse(
       Either.map(Schema.decodeUnknownEither(Schema.parseJson())(text), decode_app_message),
       (): AppMessage => ({ _tag: "BadFrame" }),
     );
     return Match.value(message).pipe(
-      Match.tag("Chunk", ({ chunk }) => this.feedChunk(chunk)),
+      Match.tag("Chunk", ({ chunk }) => this.feed_chunk(chunk)),
       Match.tag("BadChunk", ({ transfer, reason }) => {
         this.reassembly.delete(transfer);
-        this.opts.onEvent?.({ type: "error", code: "bad_chunks", message: reason });
+        this.opts.on_event?.({ type: "error", code: "bad_chunks", message: reason });
       }),
-      Match.tag("Response", ({ response }) => this.deliverResponse(response)),
+      Match.tag("Response", ({ response }) => this.deliver_response(response)),
       Match.tag("BadFrame", () => {
-        this.opts.onEvent?.({ type: "error", code: "bad_frame", message: "Forge answered with an unreadable frame." });
+        this.opts.on_event?.({ type: "error", code: "bad_frame", message: "Forge answered with an unreadable frame." });
       }),
       Match.exhaustive,
     );
   }
 
-  private feedChunk(chunk: TunnelChunk): void {
+  private feed_chunk(chunk: TunnelChunk): void {
     let asm = this.reassembly.get(chunk.transfer);
     if (!asm) {
       asm = new ChunkReassembly();
@@ -288,36 +288,36 @@ export class ForgeSession {
       {
         onLeft: (e) => {
           this.reassembly.delete(chunk.transfer);
-          this.opts.onEvent?.({ type: "error", code: "bad_chunks", message: e.message });
+          this.opts.on_event?.({ type: "error", code: "bad_chunks", message: e.message });
         },
         onRight: (res) => {
           if (!res.done) return;
           this.reassembly.delete(chunk.transfer);
-          this.onResponseBytes(res.bytes);
+          this.on_response_bytes(res.bytes);
         },
       },
     );
   }
 
-  private onResponseBytes(raw: Uint8Array): void {
+  private on_response_bytes(raw: Uint8Array): void {
     const text = new TextDecoder().decode(raw);
     const message: AppMessage = Either.getOrElse(
       Either.map(Schema.decodeUnknownEither(Schema.parseJson())(text), decode_app_message),
       (): AppMessage => ({ _tag: "BadFrame" }),
     );
     return Match.value(message).pipe(
-      Match.tag("Response", ({ response }) => this.deliverResponse(response)),
+      Match.tag("Response", ({ response }) => this.deliver_response(response)),
       Match.orElse(() => {
-        this.opts.onEvent?.({ type: "error", code: "bad_frame", message: "Reassembled an unreadable response." });
+        this.opts.on_event?.({ type: "error", code: "bad_frame", message: "Reassembled an unreadable response." });
       }),
     );
   }
 
-  private deliverResponse(response: TunnelResponse): void {
+  private deliver_response(response: TunnelResponse): void {
     settle_pending(this.pending, response, "Forge call failed.");
   }
 
-  private failPending(e: Error): void {
+  private fail_pending(e: Error): void {
     for (const p of this.pending.values()) Deferred.unsafeDone(p.gate, Effect.fail(e));
     this.pending.clear();
     this.reassembly.clear();
@@ -325,11 +325,11 @@ export class ForgeSession {
 
   close(): void {
     this.closed = true;
-    this.failPending(new Error("Session closed."));
+    this.fail_pending(new Error("Session closed."));
     // Best-effort channel farewell: a gone socket must not fail close.
     Either.getOrNull(
       Either.try({
-        try: () => this.link?.closeChannel(this.channel, "bye"),
+        try: () => this.link?.close_channel(this.channel, "bye"),
         catch: () => null,
       }),
     );

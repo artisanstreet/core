@@ -22,13 +22,13 @@ export const StreamEvent = Schema.Struct({
 });
 export type StreamEvent = typeof StreamEvent.Type;
 
-export function asStreamStart(input: unknown): StreamStart | null {
+export function as_stream_start(input: unknown): StreamStart | null {
   if (typeof input !== "object" || input === null) return null;
   if (!("$stream" in input)) return null;
   return Either.getOrNull(Schema.decodeUnknownEither(StreamStart)(input));
 }
 
-export function asStreamEvent(input: unknown): StreamEvent | null {
+export function as_stream_event(input: unknown): StreamEvent | null {
   if (typeof input !== "object" || input === null) return null;
   if (!("$event" in input)) return null;
   return Either.getOrNull(Schema.decodeUnknownEither(StreamEvent)(input));
@@ -41,7 +41,7 @@ export interface LiveEnvelope {
   event: Record<string, unknown>;
 }
 
-export function asLiveEnvelope(input: unknown): LiveEnvelope | null {
+export function as_live_envelope(input: unknown): LiveEnvelope | null {
   if (typeof input !== "object" || input === null) return null;
   const o = input as Record<string, unknown>;
   const type = typeof o.type === "string" ? o.type : null;

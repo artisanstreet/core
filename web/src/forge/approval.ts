@@ -2,7 +2,7 @@
 // A tool/plan approval still waiting on the user (`decision: null`);
 // a question item with no answers yet.
 
-import { firstText, textOf } from "./dto.ts";
+import { first_text, text_of } from "./dto.ts";
 
 export interface PendingApproval {
   request: unknown;
@@ -11,7 +11,7 @@ export interface PendingApproval {
 }
 
 /** A tool/plan approval still waiting on the user (`decision: null`). */
-export function pendingApproval(kind: unknown): PendingApproval | null {
+export function pending_approval(kind: unknown): PendingApproval | null {
   if (typeof kind !== "object" || kind === null) return null;
   const k = kind as Record<string, unknown>;
   if (k.type !== "tool" && k.type !== "plan") return null;
@@ -19,16 +19,16 @@ export function pendingApproval(kind: unknown): PendingApproval | null {
   if (typeof approval !== "object" || approval === null) return null;
   if (approval.decision !== null && approval.decision !== undefined) return null;
   const options = Array.isArray(approval.options) ? (approval.options as unknown[]).filter((o): o is string => typeof o === "string") : [];
-  return { request: approval.request ?? null, reason: textOf(approval.reason), options };
+  return { request: approval.request ?? null, reason: text_of(approval.reason), options };
 }
 
 export interface PendingQuestion {
   blocking: boolean;
-  questions: Array<{ id: string; header: string | null; text: string | null; multiSelect: boolean; options: Array<{ id: string; label: string; description: string | null }> }>;
+  questions: Array<{ id: string; header: string | null; text: string | null; multi_select: boolean; options: Array<{ id: string; label: string; description: string | null }> }>;
 }
 
 /** A question item with no answers yet. */
-export function pendingQuestions(kind: unknown): PendingQuestion | null {
+export function pending_questions(kind: unknown): PendingQuestion | null {
   if (typeof kind !== "object" || kind === null) return null;
   const k = kind as Record<string, unknown>;
   if (k.type !== "question") return null;
@@ -42,14 +42,14 @@ export function pendingQuestions(kind: unknown): PendingQuestion | null {
       .map((q) => ({
         id: q.id as string,
         header: typeof q.header === "string" ? q.header : null,
-        text: textOf(q.text),
-        multiSelect: q.multi_select === true,
+        text: text_of(q.text),
+        multi_select: q.multi_select === true,
         options: inline_collection(q.options)
           ?.filter((o): o is Record<string, unknown> => typeof o === "object" && o !== null)
           .map((o) => ({
             id: typeof o.id === "string" ? o.id : "",
             label: typeof o.label === "string" ? o.label : "",
-            description: textOf(o.description),
+            description: text_of(o.description),
           })) ?? [],
       })),
   };
@@ -62,11 +62,11 @@ function inline_collection(value: unknown): unknown[] | null {
 }
 
 /** `Answer` bodies for POST /items/{id}/answer (request.rs). */
-export function approvalAnswer(decision: string): { type: string; decision: string } {
+export function approval_answer(decision: string): { type: string; decision: string } {
   return { type: "approval", decision };
 }
 
-export function questionAnswer(answers: Array<Array<string> | { text: string } | null>): { type: string; answers: unknown[] } {
+export function question_answer(answers: Array<Array<string> | { text: string } | null>): { type: string; answers: unknown[] } {
   return {
     type: "question",
     answers: answers.map((a) => (a === null ? null : Array.isArray(a) ? { kind: "choices", ids: a } : { kind: "text", text: a.text })),
@@ -74,8 +74,8 @@ export function questionAnswer(answers: Array<Array<string> | { text: string } |
 }
 
 /** `SendMessage` body for POST /threads/{id}/messages (request.rs). */
-export function sendMessageBody(id: string, text: string): { id: string; text: string; images: string[] } {
+export function send_message_body(id: string, text: string): { id: string; text: string; images: string[] } {
   return { id, text, images: [] };
 }
 
-export { firstText, textOf };
+export { first_text, text_of };

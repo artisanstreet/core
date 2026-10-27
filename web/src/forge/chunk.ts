@@ -4,7 +4,7 @@
 // error, never silent truncation.
 
 import { Schema } from "effect";
-import { base64urlDecode, base64urlEncode } from "./codec.ts";
+import { base64urlnopad as base64url_nopad } from "@scure/base";
 
 const B64U_RE = /^[A-Za-z0-9_-]*$/;
 
@@ -25,7 +25,7 @@ export const TRANSFER_MAX_BYTES = 32 * 1024 * 1024;
 export const CHUNK_SEND_RAW_BYTES = 40 * 1024;
 
 /** True when an app-plaintext frame is a transfer chunk, not a response. */
-export function isChunkFrame(input: unknown): input is TunnelChunk {
+export function is_chunk_frame(input: unknown): input is TunnelChunk {
   if (typeof input !== "object" || input === null) return false;
   const o = input as Record<string, unknown>;
   return (
@@ -37,7 +37,7 @@ export function isChunkFrame(input: unknown): input is TunnelChunk {
 }
 
 /** Split bytes into chunk frames for one transfer (receiver-agnostic). */
-export function chunkBytes(transfer: string, bytes: Uint8Array): TunnelChunk[] {
+export function chunk_bytes(transfer: string, bytes: Uint8Array): TunnelChunk[] {
   if (bytes.length > TRANSFER_MAX_BYTES) {
     throw new Error(`Transfer of ${bytes.length} bytes exceeds the 32 MiB ceiling; refusing instead of truncating.`);
   }
@@ -48,7 +48,7 @@ export function chunkBytes(transfer: string, bytes: Uint8Array): TunnelChunk[] {
   const out: TunnelChunk[] = [];
   for (let i = 0; i < total; i++) {
     const part = bytes.subarray(i * CHUNK_SEND_RAW_BYTES, (i + 1) * CHUNK_SEND_RAW_BYTES);
-    out.push({ transfer, index: i, total, total_bytes: bytes.length, bytes_b64u: base64urlEncode(part) });
+    out.push({ transfer, index: i, total, total_bytes: bytes.length, bytes_b64u: base64url_nopad.encode(part) });
   }
   return out;
 }
@@ -79,7 +79,7 @@ export class ChunkReassembly {
       }
     }
     if (frame.index !== this.index) throw new Error(`Chunk ${frame.index} arrived out of order (want ${this.index}); discarding transfer.`);
-    const raw = base64urlDecode(frame.bytes_b64u);
+    const raw = base64url_nopad.decode(frame.bytes_b64u);
     this.received += raw.length;
     if (this.received > TRANSFER_MAX_BYTES) throw new Error("Transfer exceeds the 32 MiB ceiling; discarding.");
     // Copy: the Noise layer may alias and later zero handshake-adjacent

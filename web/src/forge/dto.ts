@@ -27,7 +27,7 @@ export interface ForgeItemsPage {
   more: boolean;
 }
 
-export function asThreadsPage(body: unknown): ForgeThreadsPage {
+export function as_threads_page(body: unknown): ForgeThreadsPage {
   const b = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
   const threads = Array.isArray(b.threads)
     ? (b.threads as Array<Record<string, unknown>>)
@@ -43,7 +43,7 @@ export function asThreadsPage(body: unknown): ForgeThreadsPage {
   return { threads, next: null, newer: false };
 }
 
-export function asItemsPage(body: unknown): ForgeItemsPage {
+export function as_items_page(body: unknown): ForgeItemsPage {
   const b = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
   const items = Array.isArray(b.items)
     ? (b.items as Array<Record<string, unknown>>)
@@ -62,13 +62,13 @@ export interface ForgeState {
 }
 
 /** One-line summary of an item's kind for the transcript list. */
-export function itemSummary(item: ForgeItem): { kind: string; text: string } {
+export function item_summary(item: ForgeItem): { kind: string; text: string } {
   const kind = item.kind;
   if (typeof kind === "string") return { kind, text: "" };
   if (typeof kind === "object" && kind !== null) {
     const k = kind as Record<string, unknown>;
     const tag = tag_of(k);
-    const text = firstText(k);
+    const text = first_text(k);
     return { kind: tag, text };
   }
   return { kind: "item", text: "" };
@@ -87,12 +87,12 @@ function tag_of(k: Record<string, unknown>): string {
  * `cap` bounds a single item (default 500 for summaries). Transcript
  * bodies pass a large cap: long threads must render whole, never silently
  * cut. When the cap hits, the caller must say so explicitly. */
-export function firstText(value: unknown, depth = 0, cap = 500): string {
+export function first_text(value: unknown, depth = 0, cap = 500): string {
   if (depth > 4) return "";
   if (typeof value === "string") return value.length > cap ? `${value.slice(0, cap)}…` : value;
   if (Array.isArray(value)) {
     for (const v of value.slice(0, 8)) {
-      const t = firstText(v, depth + 1, cap);
+      const t = first_text(v, depth + 1, cap);
       if (t) return t;
     }
     return "";
@@ -100,11 +100,11 @@ export function firstText(value: unknown, depth = 0, cap = 500): string {
   if (typeof value === "object" && value !== null) {
     const o = value as Record<string, unknown>;
     for (const key of ["text", "body", "content", "message", "summary", "label"]) {
-      const t = firstText(o[key], depth + 1, cap);
+      const t = first_text(o[key], depth + 1, cap);
       if (typeof o[key] === "string" && t) return t;
     }
     for (const v of Object.values(o).slice(0, 12)) {
-      const t = firstText(v, depth + 1, cap);
+      const t = first_text(v, depth + 1, cap);
       if (t) return t;
     }
   }
@@ -118,7 +118,7 @@ export function firstText(value: unknown, depth = 0, cap = 500): string {
  * shape. It deliberately does NOT dig into arbitrary objects: item kinds
  * carry their own `type` tag, which must never render as body text.
  */
-export function textOf(tc: unknown): string | null {
+export function text_of(tc: unknown): string | null {
   if (typeof tc === "string") return tc;
   if (typeof tc === "object" && tc !== null) {
     const o = tc as Record<string, unknown>;

@@ -3,9 +3,9 @@
 // TextContent inline-or-Stored, Collections inline-or-Stored) and preserves
 // ALL text parts — no 8-item cap, no depth cap, no first-result shortcut.
 // Unknown future variants fall back to the generic digger so additive Rust
-// fields still show something. Summaries for lists keep using firstText.
+// fields still show something. Summaries for lists keep using first_text.
 
-import { firstText } from "./dto.ts";
+import { first_text } from "./dto.ts";
 
 /** Cap for rendered transcript bodies: whole threads, no silent cut. */
 export const TRANSCRIPT_BODY_CAP = 2_000_000;
@@ -36,7 +36,7 @@ function tc_into(tc: unknown, label: string, out: TranscriptText): void {
       out.stored.push({ id: o.id, bytes: o.bytes, label });
       return;
     }
-    const fallback = firstText(tc);
+    const fallback = first_text(tc);
     if (fallback) out.text += fallback;
   }
 }
@@ -62,8 +62,8 @@ function coll_into<T>(value: unknown, label: string, out: TranscriptText, each: 
 function approval_into(approval: unknown, out: TranscriptText): void {
   if (typeof approval !== "object" || approval === null) return;
   const a = approval as Record<string, unknown>;
-  if (typeof a.decision === "string") out.text += `\nDecision: ${a.decision}`;
-  if (Array.isArray(a.options)) out.text += `\nOffered: ${(a.options as unknown[]).map(String).join(", ")}`;
+  if (typeof a.decision === "string") out.text += `\n_decision: ${a.decision}`;
+  if (Array.isArray(a.options)) out.text += `\n_offered: ${(a.options as unknown[]).map(String).join(", ")}`;
 }
 
 function tool_into(tool: unknown, out: TranscriptText): void {
@@ -73,12 +73,12 @@ function tool_into(tool: unknown, out: TranscriptText): void {
   switch (kind) {
     case "agent_message": {
       tc_into(t.text as Record<string, unknown> | undefined, "message", out);
-      if (typeof t.recipient === "string") out.text += `\nTo: ${t.recipient}`;
+      if (typeof t.recipient === "string") out.text += `\n_to: ${t.recipient}`;
       break;
     }
     case "shell": {
       tc_into(t.command, "command", out);
-      if (typeof t.cwd === "string" && t.cwd) out.text += `\nIn ${t.cwd}`;
+      if (typeof t.cwd === "string" && t.cwd) out.text += `\n_in ${t.cwd}`;
       break;
     }
     case "read": {
@@ -130,7 +130,7 @@ function tool_into(tool: unknown, out: TranscriptText): void {
  * Every message part is preserved; nothing is capped here (rendering
  * caps with explicit Show-rest/download expansion instead).
  */
-export function transcriptText(kind: unknown): TranscriptText {
+export function transcript_text(kind: unknown): TranscriptText {
   const out: TranscriptText = { text: "", stored: [], notices: [] };
   if (typeof kind !== "object" || kind === null) return out;
   const k = kind as Record<string, unknown>;
@@ -171,7 +171,7 @@ export function transcriptText(kind: unknown): TranscriptText {
       tc_into(k.description, "task", out);
       tc_into(k.prompt, "prompt", out);
       tc_into(k.result, "result", out);
-      if (typeof k.model === "string" && k.model) push(`\nModel: ${k.model}`);
+      if (typeof k.model === "string" && k.model) push(`\n_model: ${k.model}`);
       break;
     }
     case "question": {
@@ -189,8 +189,8 @@ export function transcriptText(kind: unknown): TranscriptText {
         answers.forEach((a: unknown, i: number) => {
           if (a === null || a === undefined) return;
           const r = a as Record<string, unknown>;
-          if (r.kind === "text" && typeof r.text === "string") out.text += `\nAnswer ${i + 1}: ${r.text}`;
-          else if (r.kind === "choices" && Array.isArray(r.ids)) out.text += `\nAnswer ${i + 1}: ${(r.ids as unknown[]).map(String).join(", ")}`;
+          if (r.kind === "text" && typeof r.text === "string") out.text += `\n_answer ${i + 1}: ${r.text}`;
+          else if (r.kind === "choices" && Array.isArray(r.ids)) out.text += `\n_answer ${i + 1}: ${(r.ids as unknown[]).map(String).join(", ")}`;
         });
       }
       tc_into(k.answer_text, "answers", out);
@@ -217,7 +217,7 @@ export function transcriptText(kind: unknown): TranscriptText {
         const from = sw.from as Record<string, unknown> | undefined;
         const to = sw.to as Record<string, unknown> | undefined;
         const name = (m: Record<string, unknown> | undefined) => (typeof m?.name === "string" ? m.name : "?");
-        out.text += `\nModel switch: ${name(from)} → ${name(to)}`;
+        out.text += `\n_model switch: ${name(from)} → ${name(to)}`;
       }
       break;
     }
@@ -230,7 +230,7 @@ export function transcriptText(kind: unknown): TranscriptText {
       break;
     }
     default: {
-      const fallback = firstText(k);
+      const fallback = first_text(k);
       if (fallback) out.text += fallback;
       break;
     }

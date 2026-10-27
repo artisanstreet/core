@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 import { Schema } from "effect";
 import { jwtVerify } from "jose";
 import * as C from "../../src/contracts/v1.ts";
-import { b64uDecode } from "../vendor/relay/b64u.ts";
+import { b64u_decode } from "../vendor/relay/b64u.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 const fixture = JSON.parse(readFileSync(join(root, "core-issued.json"), "utf8")) as {
@@ -31,16 +31,16 @@ const fixture = JSON.parse(readFileSync(join(root, "core-issued.json"), "utf8"))
   revocations: { revokedMachineIds: unknown[]; revokedKeyIds: unknown[]; asOf: string };
 };
 
-const nowSec = () => Math.floor(Date.parse(fixture.issuedAt) / 1000);
+const now_sec = () => Math.floor(Date.parse(fixture.issuedAt) / 1000);
 
-describe("core-issued grant fixture (real issueGrant output)", () => {
+describe("core-issued grant fixture (real issue_grant output)", () => {
   it("is test-only synthetic material", () => {
     expect(fixture.note).toMatch(/TEST-ONLY/i);
   });
 
   it("strict-decodes against the authoritative Core GrantClaims (catches field drift)", () => {
-    const [, payloadB64] = fixture.grant.split(".");
-    const payload = JSON.parse(new TextDecoder().decode(b64uDecode(payloadB64 ?? "")));
+    const [, payload_b64] = fixture.grant.split(".");
+    const payload = JSON.parse(new TextDecoder().decode(b64u_decode(payload_b64 ?? "")));
     const claims = Schema.decodeUnknownSync(C.GrantClaims, { onExcessProperty: "error" })(payload);
     expect(claims.v).toBe(1);
     expect(claims.iss).toBe(fixture.issuer);
@@ -52,10 +52,10 @@ describe("core-issued grant fixture (real issueGrant output)", () => {
     expect(claims.exp - claims.iat).toBeGreaterThan(0);
   });
 
-  it("verifies by signature (EdDSA, fixture JWKS kid) at fixture nowSec", async () => {
+  it("verifies by signature (EdDSA, fixture JWKS kid) at fixture now_sec", async () => {
     // Verify through jose with an explicit key (no network): the header
     // kid must resolve to the fixture JWKS key.
-    const header = JSON.parse(new TextDecoder().decode(b64uDecode(fixture.grant.split(".")[0] ?? ""))) as {
+    const header = JSON.parse(new TextDecoder().decode(b64u_decode(fixture.grant.split(".")[0] ?? ""))) as {
       alg?: unknown;
       kid?: unknown;
     };
@@ -63,11 +63,11 @@ describe("core-issued grant fixture (real issueGrant output)", () => {
     const key = fixture.jwks.keys.find((k) => (k as { kid?: unknown }).kid === header.kid);
     expect(key).toBeDefined();
     const { importJWK } = await import("jose");
-    const pubKey = await importJWK(key as Parameters<typeof importJWK>[0], "EdDSA");
-    const { payload } = await jwtVerify(fixture.grant, pubKey, {
+    const pub_key = await importJWK(key as Parameters<typeof importJWK>[0], "EdDSA");
+    const { payload } = await jwtVerify(fixture.grant, pub_key, {
       issuer: fixture.issuer,
       audience: fixture.audience,
-      currentDate: new Date(nowSec() * 1000),
+      currentDate: new Date(now_sec() * 1000),
     });
     expect(payload.sub).toBe(fixture.accountId);
     expect(payload.mid).toBe(fixture.machineId);
@@ -83,7 +83,7 @@ describe("core-issued grant fixture (real issueGrant output)", () => {
     ctx: { account: string; machine: string },
     now_sec: number,
   ): Promise<Uint8Array> {
-    const header = JSON.parse(new TextDecoder().decode(b64uDecode(jwt.split(".")[0] ?? ""))) as {
+    const header = JSON.parse(new TextDecoder().decode(b64u_decode(jwt.split(".")[0] ?? ""))) as {
       alg?: unknown;
       kid?: unknown;
     };
@@ -91,8 +91,8 @@ describe("core-issued grant fixture (real issueGrant output)", () => {
     const key = fixture.jwks.keys.find((k) => (k as { kid?: unknown }).kid === header.kid);
     if (!key) throw new Error("unknown kid");
     const { importJWK } = await import("jose");
-    const pubKey = await importJWK(key as Parameters<typeof importJWK>[0], "EdDSA");
-    const { payload } = await jwtVerify(jwt, pubKey, {
+    const pub_key = await importJWK(key as Parameters<typeof importJWK>[0], "EdDSA");
+    const { payload } = await jwtVerify(jwt, pub_key, {
       issuer: fixture.issuer,
       audience: fixture.audience,
       currentDate: new Date(now_sec * 1000),
@@ -106,7 +106,7 @@ describe("core-issued grant fixture (real issueGrant output)", () => {
     if (!claims.scope.includes("forge:execute")) throw new Error("grant lacks forge:execute");
     const ttl = claims.exp - claims.iat;
     if (ttl <= 0 || ttl > 300) throw new Error("grant ttl out of bounds");
-    return b64uDecode(claims.cnf.jwk.x);
+    return b64u_decode(claims.cnf.jwk.x);
   }
 
   it("channel rule rejects the forge-role fixture as an initiator grant (role rule)", async () => {
@@ -115,7 +115,7 @@ describe("core-issued grant fixture (real issueGrant output)", () => {
     // is the rule working, not drift. Positive channel paths run
     // with client grants in tests/relay-transport.test.ts + noise-session.
     await expect(
-      verify_channel_grant(fixture.grant, { account: fixture.accountId, machine: fixture.machineId }, nowSec()),
+      verify_channel_grant(fixture.grant, { account: fixture.accountId, machine: fixture.machineId }, now_sec()),
     ).rejects.toThrow(/role client/);
   });
 
@@ -127,13 +127,13 @@ describe("core-issued grant fixture (real issueGrant output)", () => {
       verify_channel_grant(
         fixture.grant,
         { account: fixture.accountId, machine: "mch_01M5X881AAAAAAAAAAAAAAAAAAAAA" },
-        nowSec(),
+        now_sec(),
       ),
     ).rejects.toThrow(/role client/);
     // The binding data the rule consumes: the grant is bound to the
     // fixture machine only, so a foreign mid would fail binding next.
-    const [, payloadB64] = fixture.grant.split(".");
-    const payload = JSON.parse(new TextDecoder().decode(b64uDecode(payloadB64 ?? "")));
+    const [, payload_b64] = fixture.grant.split(".");
+    const payload = JSON.parse(new TextDecoder().decode(b64u_decode(payload_b64 ?? "")));
     const claims = Schema.decodeUnknownSync(C.GrantClaims, { onExcessProperty: "error" })(payload);
     expect(claims.mid).toBe(fixture.machineId);
     expect(claims.mid).not.toBe("mch_01M5X881AAAAAAAAAAAAAAAAAAAAA");

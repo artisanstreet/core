@@ -1,13 +1,13 @@
 import { Effect } from "effect";
 import { clear, el } from "../../ui.ts";
 import { run_promise } from "../../core/run-promise.ts";
-import { asThreadsPage } from "../../forge.ts";
+import { as_threads_page } from "../../forge.ts";
 import type { LiveFeed } from "../../live.ts";
 import type { ConnCtl } from "./shared.ts";
-import { threadTitle, tunnelGet, tunnelHint } from "./shared.ts";
-import { openThread } from "./thread-detail.ts";
+import { thread_title, tunnel_get, tunnel_hint } from "./shared.ts";
+import { open_thread } from "./thread-detail.ts";
 
-export const openThreads = (ctl: ConnCtl, view: HTMLElement): Effect.Effect<LiveFeed | null, never> =>
+export const open_threads = (ctl: ConnCtl, view: HTMLElement): Effect.Effect<LiveFeed | null, never> =>
   Effect.gen(function* () {
     const box = el("div", { class: "card" });
     box.append(el("h2", {}, "Threads"));
@@ -27,14 +27,14 @@ export const openThreads = (ctl: ConnCtl, view: HTMLElement): Effect.Effect<Live
       return null;
     }
     const state = (yield* Effect.tryPromise({
-      try: () => tunnelGet(session, "/state"),
+      try: () => tunnel_get(session, "/state"),
       catch: (e) => e,
     })) as {
       threads?: unknown;
       forge_version?: unknown;
     };
     const threads = yield* Effect.try({
-      try: () => asThreadsPage({ threads: state.threads ?? [] }).threads,
+      try: () => as_threads_page({ threads: state.threads ?? [] }).threads,
       catch: (e) => e,
     });
     yield* Effect.sync(() => {
@@ -50,10 +50,10 @@ export const openThreads = (ctl: ConnCtl, view: HTMLElement): Effect.Effect<Live
       }
       const list = el("div", {});
       for (const t of threads) {
-        const btn = el("button", { class: "secondary", type: "button" }, threadTitle(t));
+        const btn = el("button", { class: "secondary", type: "button" }, thread_title(t));
         btn.addEventListener("click", () => {
           detail.replaceChildren();
-          void run_promise(openThread(ctl, detail, t));
+          void run_promise(open_thread(ctl, detail, t));
         });
         list.append(el("div", {}, btn));
       }
@@ -66,13 +66,13 @@ export const openThreads = (ctl: ConnCtl, view: HTMLElement): Effect.Effect<Live
         const card = view.querySelector(".card");
         const existing = card?.querySelector(".status");
         if (existing) {
-          existing.textContent = tunnelHint(err);
+          existing.textContent = tunnel_hint(err);
           existing.className = "status err";
         } else if (card) {
-          card.append(el("p", { class: "status err" }, tunnelHint(err)));
+          card.append(el("p", { class: "status err" }, tunnel_hint(err)));
         } else {
           clear(view);
-          view.append(el("div", { class: "card" }, el("p", { class: "status err" }, tunnelHint(err))));
+          view.append(el("div", { class: "card" }, el("p", { class: "status err" }, tunnel_hint(err))));
         }
         return null as LiveFeed | null;
       }),

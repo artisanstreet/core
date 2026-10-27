@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium, type Browser, type BrowserContext, type Locator } from "playwright-core";
-import { startMock, type MockHandles } from "./mock.ts";
+import { start_mock, type MockHandles } from "./mock.ts";
 
 /** expect.poll-based visibility (vitest's expect has no Playwright matchers). */
 async function shown(locator: Locator, timeout = 30_000): Promise<void> {
@@ -24,7 +24,7 @@ const CHROME = "/home/sander/.cache/ms-playwright/chromium-1243/chrome-linux64/c
 let mock: MockHandles;
 let browser: Browser;
 
-async function outboxToken(): Promise<string> {
+async function outbox_token(): Promise<string> {
   const res = await fetch(`${mock.url}/mock/outbox`);
   const body = (await res.json()) as { tokens: string[] };
   const last = body.tokens[body.tokens.length - 1];
@@ -32,7 +32,7 @@ async function outboxToken(): Promise<string> {
   return last;
 }
 
-async function newContext(): Promise<BrowserContext> {
+async function new_context(): Promise<BrowserContext> {
   const ctx = await browser.newContext();
   await ctx.addInitScript((base: string) => {
     localStorage.setItem("ast-core:relay-ws", base.replace(/^http/, "ws"));
@@ -52,13 +52,13 @@ interface MailedLink {
  * the actual /v1/auth/magic/confirm URL and hands off to the portal.
  * Approval happens in tab2; finishing happens in tab1.
  */
-async function signInViaMailedLink(ctx: BrowserContext, email: string): Promise<MailedLink> {
+async function sign_in_via_mailed_link(ctx: BrowserContext, email: string): Promise<MailedLink> {
   const tab1 = await ctx.newPage();
   await tab1.goto(`${mock.url}/#/signin`);
   await tab1.fill("#signin-email", email);
   await tab1.click("form button[type=submit]");
   await tab1.waitForSelector("#signin-progress:not([hidden])");
-  const token = await outboxToken();
+  const token = await outbox_token();
   const tab2 = await ctx.newPage();
   await tab2.goto(`${mock.url}/v1/auth/magic/confirm?token=${encodeURIComponent(token)}`);
   await shown(tab2.locator("text=Approve this sign-in?"));
@@ -66,7 +66,7 @@ async function signInViaMailedLink(ctx: BrowserContext, email: string): Promise<
 }
 
 /** Click the handoff from the mailed confirm page into the portal. */
-async function continueToPortal(tab2: import("playwright-core").Page): Promise<void> {
+async function continue_to_portal(tab2: import("playwright-core").Page): Promise<void> {
   await tab2.click("#continue");
   await tab2.waitForURL(/#\/approve\?token=/);
 }
@@ -76,7 +76,7 @@ beforeAll(async () => {
     throw new Error("web/dist is missing: run `npm run build` in core/web first (Core author wires dist into the worker; see docs/browser.md).");
   }
   mkdirSync(shots, { recursive: true });
-  mock = await startMock(join(root, "dist"));
+  mock = await start_mock(join(root, "dist"));
   browser = await chromium.launch({ executablePath: CHROME });
 }, 60_000);
 
@@ -88,11 +88,11 @@ afterAll(async () => {
 
 describe("rendered browser flows (mock backend, labeled)", () => {
   it("signs in, shows the account portal shell", async () => {
-    const ctx = await newContext();
-    const { tab1, tab2 } = await signInViaMailedLink(ctx, "cafe@example.com");
+    const ctx = await new_context();
+    const { tab1, tab2 } = await sign_in_via_mailed_link(ctx, "cafe@example.com");
     await tab1.screenshot({ path: join(shots, "00-signin.png") });
     await tab2.screenshot({ path: join(shots, "00-confirm.png") });
-    await continueToPortal(tab2);
+    await continue_to_portal(tab2);
     await tab2.click("text=Approve this request");
     // The new tab holds no request secret: it approves, tab1 finishes.
     await shown(tab2.locator("text=finish in the tab that requested the link"));
@@ -107,9 +107,9 @@ describe("rendered browser flows (mock backend, labeled)", () => {
   }, 120_000);
 
   it("TOTP path: finishing without the code is a readable error, not a sign-in", async () => {
-    const ctx = await newContext();
-    const { tab1, tab2 } = await signInViaMailedLink(ctx, "totp@example.com");
-    await continueToPortal(tab2);
+    const ctx = await new_context();
+    const { tab1, tab2 } = await sign_in_via_mailed_link(ctx, "totp@example.com");
+    await continue_to_portal(tab2);
     await tab2.click("text=Approve this request");
     await shown(tab1.getByRole("button", { name: "Finish sign-in" }));
     await tab1.screenshot({ path: join(shots, "03-totp-required.png") });
@@ -123,9 +123,9 @@ describe("rendered browser flows (mock backend, labeled)", () => {
   }, 120_000);
 
   it("machines: list, presence, enrollment claim", async () => {
-    const ctx = await newContext();
-    const { tab1, tab2 } = await signInViaMailedLink(ctx, "cafe@example.com");
-    await continueToPortal(tab2);
+    const ctx = await new_context();
+    const { tab1, tab2 } = await sign_in_via_mailed_link(ctx, "cafe@example.com");
+    await continue_to_portal(tab2);
     await tab2.click("text=Approve this request");
     await shown(tab1.getByRole("button", { name: "Finish sign-in" }));
     await tab1.getByRole("button", { name: "Finish sign-in" }).click();
@@ -142,9 +142,9 @@ describe("rendered browser flows (mock backend, labeled)", () => {
   }, 120_000);
 
   it("config: publish a manifest and read it back", async () => {
-    const ctx = await newContext();
-    const { tab1, tab2 } = await signInViaMailedLink(ctx, "cafe@example.com");
-    await continueToPortal(tab2);
+    const ctx = await new_context();
+    const { tab1, tab2 } = await sign_in_via_mailed_link(ctx, "cafe@example.com");
+    await continue_to_portal(tab2);
     await tab2.click("text=Approve this request");
     await shown(tab1.getByRole("button", { name: "Finish sign-in" }));
     await tab1.getByRole("button", { name: "Finish sign-in" }).click();
@@ -159,9 +159,9 @@ describe("rendered browser flows (mock backend, labeled)", () => {
   }, 120_000);
 
   it("forge: encrypted channel, thread list, long transcript, send, cancel, approval", async () => {
-    const ctx = await newContext();
-    const { tab1, tab2 } = await signInViaMailedLink(ctx, "cafe@example.com");
-    await continueToPortal(tab2);
+    const ctx = await new_context();
+    const { tab1, tab2 } = await sign_in_via_mailed_link(ctx, "cafe@example.com");
+    await continue_to_portal(tab2);
     await tab2.click("text=Approve this request");
     await shown(tab1.getByRole("button", { name: "Finish sign-in" }));
     await tab1.getByRole("button", { name: "Finish sign-in" }).click();
@@ -198,20 +198,20 @@ describe("rendered browser flows (mock backend, labeled)", () => {
   }, 180_000);
 
   it("accessibility: axe + rendered contrast (Color.js), mobile, keyboard", async () => {
-    const ctx = await newContext();
-    const { tab1, tab2 } = await signInViaMailedLink(ctx, "cafe@example.com");
-    await continueToPortal(tab2);
+    const ctx = await new_context();
+    const { tab1, tab2 } = await sign_in_via_mailed_link(ctx, "cafe@example.com");
+    await continue_to_portal(tab2);
     await tab2.click("text=Approve this request");
     await shown(tab1.getByRole("button", { name: "Finish sign-in" }));
     await tab1.getByRole("button", { name: "Finish sign-in" }).click();
     await tab1.waitForURL(/#\/account/);
-    const axePath = import.meta.resolve("axe-core");
-    const axeFile = axePath.startsWith("file://") ? new URL(axePath).pathname : axePath;
-    const src = readFileSync(axeFile.includes("/axe.js") ? axeFile : join(axeFile, "..", "axe.min.js"), "utf8");
+    const axe_path = import.meta.resolve("axe-core");
+    const axe_file = axe_path.startsWith("file://") ? new URL(axe_path).pathname : axe_path;
+    const src = readFileSync(axe_file.includes("/axe.js") ? axe_file : join(axe_file, "..", "axe.min.js"), "utf8");
     await tab1.addScriptTag({ content: src });
     const violations = await tab1.evaluate(async () => {
       const axe = (window as unknown as { axe: { run: (el: unknown, opts: unknown) => Promise<{ violations: Array<{ id: string; impact?: string; nodes: unknown[] }> }> } }).axe;
-      const res = await axe.run(document, { runOnly: ["color-contrast", "label", "link-name", "button-name", "aria-required-attr"] });
+      const res = await axe.run(document, { run_only: ["color-contrast", "label", "link-name", "button-name", "aria-required-attr"] });
       return res.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length }));
     });
     const serious = violations.filter((v) => v.impact === "critical" || v.impact === "serious");
@@ -226,33 +226,33 @@ describe("rendered browser flows (mock backend, labeled)", () => {
       const card = document.querySelector(".card");
       const btn = document.querySelector("button");
       return {
-        linkFg: css(link, "color"),
-        bodyBg: css(document.body, "background-color"),
-        mutedFg: css(muted, "color"),
-        cardBg: css(card, "background-color"),
-        btnBg: btn ? css(btn, "background-color") : "",
-        btnFg: btn ? css(btn, "color") : "",
-        hasButton: !!btn,
+        link_fg: css(link, "color"),
+        body_bg: css(document.body, "background-color"),
+        muted_fg: css(muted, "color"),
+        card_bg: css(card, "background-color"),
+        btn_bg: btn ? css(btn, "background-color") : "",
+        btn_fg: btn ? css(btn, "color") : "",
+        has_button: !!btn,
       };
     });
     const ratio = (a: string, b: string) => new Color(a).contrast(new Color(b), "WCAG21") as number;
-    expect(ratio(samples.linkFg, samples.bodyBg)).toBeGreaterThanOrEqual(4.5);
-    expect(ratio(samples.mutedFg, samples.cardBg)).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(samples.link_fg, samples.body_bg)).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(samples.muted_fg, samples.card_bg)).toBeGreaterThanOrEqual(4.5);
     // Buttons live on the sign-in form; sample the rendered primary button.
     await tab1.goto(`${mock.url}/#/signin`);
-    const btnSample = await tab1.evaluate(() => {
+    const btn_sample = await tab1.evaluate(() => {
       const css = (el: Element | null, prop: string) => (el ? getComputedStyle(el).getPropertyValue(prop) : "");
       const btn = document.querySelector("form button[type=submit]");
       return { bg: css(btn, "background-color"), fg: css(btn, "color") };
     });
-    expect(btnSample.bg.length).toBeGreaterThan(0);
-    expect(ratio(btnSample.fg, btnSample.bg)).toBeGreaterThanOrEqual(4.5);
+    expect(btn_sample.bg.length).toBeGreaterThan(0);
+    expect(ratio(btn_sample.fg, btn_sample.bg)).toBeGreaterThanOrEqual(4.5);
     // Keyboard: tab from the top reaches nav and controls with a visible
     // focus indicator; the order follows the visual order.
     await tab1.goto(`${mock.url}/#/account`);
     await shown(tab1.locator("text=Account details"));
     await tab1.locator("body").click();
-    const focusTrail: string[] = [];
+    const focus_trail: string[] = [];
     for (let i = 0; i < 12; i++) {
       await tab1.keyboard.press("Tab");
       const desc = await tab1.evaluate(() => {
@@ -262,12 +262,12 @@ describe("rendered browser flows (mock backend, labeled)", () => {
         const outlined = style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0;
         return `${el.tagName.toLowerCase()}:${(el.textContent ?? "").trim().slice(0, 24)}${outlined ? ":outlined" : ":NO-OUTLINE"}`;
       });
-      focusTrail.push(desc);
+      focus_trail.push(desc);
       if (desc === "body") break;
     }
-    expect(focusTrail[0]).toMatch(/^(a|summary):/);
-    expect(focusTrail.some((f) => f.includes(":NO-OUTLINE"))).toBe(false);
-    expect(focusTrail.filter((f) => f.startsWith("a:")).length).toBeGreaterThan(3);
+    expect(focus_trail[0]).toMatch(/^(a|summary):/);
+    expect(focus_trail.some((f) => f.includes(":NO-OUTLINE"))).toBe(false);
+    expect(focus_trail.filter((f) => f.startsWith("a:")).length).toBeGreaterThan(3);
     await ctx.close();
   }, 120_000);
 

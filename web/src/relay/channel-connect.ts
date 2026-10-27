@@ -7,14 +7,14 @@
 import { Deferred, Effect, Either } from "effect";
 import { EditorLink, SecureChannel } from "../../vendor/relay/client.ts";
 import type { GrantMaterial } from "../../vendor/relay/client.ts";
-import { staticKeypairFromSecret } from "../../vendor/relay/channel.ts";
-import { b64uDecode } from "../../vendor/relay/b64u.ts";
-import { randomBytes } from "@noble/hashes/utils.js";
+import { static_keypair_from_secret } from "../../vendor/relay/channel.ts";
+import { base64urlnopad as base64url_nopad } from "@scure/base";
+import { randomBytes as random_bytes } from "@noble/hashes/utils.js";
 import { issue_grant_effect, type FetchLike } from "../core/api-effect.ts";
 import type { ApiFailure, DecodeFailure, TransportFailure } from "../core/api-error.ts";
-import { grant_jti, newEphemeralCnf, GrantJwtError } from "./cnf.ts";
+import { grant_jti, new_ephemeral_cnf, GrantJwtError } from "./cnf.ts";
 import type { ChannelEvents, PendingGate, RelayLinkLike } from "./transport.ts";
-import { throwIfTunnelError, type TunnelResponse } from "../forge/codec.ts";
+import { throw_if_tunnel_error, type TunnelResponse } from "../forge/codec.ts";
 
 /** Mint a fresh one-use grant + ephemeral cnf for one channel. */
 export const mint_channel_grant_effect = (
@@ -25,7 +25,7 @@ export const mint_channel_grant_effect = (
   ApiFailure | TransportFailure | DecodeFailure | GrantJwtError
 > =>
   Effect.gen(function* () {
-    const cnf = newEphemeralCnf();
+    const cnf = new_ephemeral_cnf();
     const issued = yield* issue_grant_effect(http.fetch_impl, http.base, {
       audience: "ast-relay",
       scope: ["relay:connect", "forge:execute"],
@@ -39,7 +39,7 @@ export const mint_channel_grant_effect = (
       onLeft: (e) => Effect.fail(e),
       onRight: (value) => Effect.succeed(value),
     });
-    return { grant: { jwt: issued.token, jti, cnfSk: cnf.sk }, grant_expires_at_ms, cnf_sk: cnf.sk };
+    return { grant: { jwt: issued.token, jti, cnf_sk: cnf.sk }, grant_expires_at_ms, cnf_sk: cnf.sk };
   });
 
 /** Initiate the Noise XX session bound to the enrolled Forge key. */
@@ -51,7 +51,7 @@ export const initiate_secure = (
 ): Effect.Effect<SecureChannel, GrantJwtError> =>
   Effect.gen(function* () {
     const forge_cnf = yield* Effect.try({
-      try: () => b64uDecode(forge_cnf_x),
+      try: () => base64url_nopad.decode(forge_cnf_x),
       catch: () => new GrantJwtError({ reason: "Forge record has no usable identity key." }),
     });
     if (forge_cnf.length !== 32) {
@@ -59,10 +59,10 @@ export const initiate_secure = (
     }
     return yield* Effect.try({
       try: () =>
-        SecureChannel.initiate(staticKeypairFromSecret(randomBytes(32)), {
-          cnfSignKey: cnf_sk,
-          expectedForgeCnf: forge_cnf,
-          ownGrantJwt: grant_jwt,
+        SecureChannel.initiate(static_keypair_from_secret(random_bytes(32)), {
+          cnf_sign_key: cnf_sk,
+          expected_forge_cnf: forge_cnf,
+          own_grant_jwt: grant_jwt,
           ctx,
         }),
       catch: () => new GrantJwtError({ reason: "channel setup failed" }),
@@ -93,7 +93,7 @@ export const settle_pending = (
   pending.delete(res.id);
   Either.match(
     Either.try({
-      try: () => throwIfTunnelError(res),
+      try: () => throw_if_tunnel_error(res),
       catch: (e) => (e instanceof Error ? e : new Error(failure_message)),
     }),
     {
@@ -105,7 +105,7 @@ export const settle_pending = (
 
 /** Pump all queued outbound handshake bytes through one sender. */
 export function flush_outbound(secure: SecureChannel, send: (body: Uint8Array) => void): void {
-  for (const body of secure.pumpOutbound()) send(body);
+  for (const body of secure.pump_outbound()) send(body);
 }
 
 /** Wait for the encrypted channel to open (Effect sleep loop + timeout). */

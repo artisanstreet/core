@@ -1,16 +1,16 @@
 {
-  "commit": "356165c9334ee8f9cce2d34a27e890e466789509",
+  "commit": "7e4963acd95cd22661d13e629b3ee2e55658b6dd",
   "files": {
-    "schema.ts": "4eabf26790e4d269c8e0aff589c43868dcdc36f77c531926213a894bf9575378",
-    "b64u.ts": "07cdb19f26e59e1cb634bd60e13a524fbca3d4360e92b8c5cb40fdf5bf41b80a",
-    "e2e.ts": "80588bc5823c899f585b892c86532f558cc76b611e0b62294571dcd7630eea0f",
-    "channel.ts": "793cbf2f68217d7a2f23ffc786b8c28266d2224ac52eedd29b293928d21e6a48",
-    "channel/context.ts": "743993e5d29f96df405c4fe943aa1d61115692e9c9013b8c922db4bac45701dc",
-    "channel/framing.ts": "bbd3e40a28d3b2ede2e3687125dbf6cd32f91cd0d8336f8e4030c6e2b1b3f860",
-    "channel/session.ts": "7b3a7bff6441b266aa984bf00269551e57a9f8b8a68d463235863eef1bada328",
-    "client.ts": "38eaa3b1ace77f249c9a707258f5af96bae9e6326596e7e2ce96f8d3afcf9d33",
-    "client/relay-socket.ts": "4eaf76d3fed6ebc98703b6af2d536b17568e72733c5021f84a72166e30e600cb",
-    "client/secure-channel.ts": "96bb56bc76d5d9024415a2dd5d18cc5b567f5c13b123b2d2ddfab936a01ee211",
+    "schema.ts": "34481d7906f9c219177147aba009610f22da912a198dd802e57c55eaf114238e",
+    "b64u.ts": "d445935a9fa796ab601031cf88236e53e9746906c9e7faa8fd524b136f5bf066",
+    "e2e.ts": "0651bc1eb2dfdcc727a80eee94d390fe556f438fa334abc2f88b032854160e1a",
+    "channel.ts": "f24ca6db34ca25a3695492bf34c7129f0388e1b4293feaa4730a22d5b012b579",
+    "channel/context.ts": "18190470db4846e9f768bac3e8a47c62d3aea4dc14c63961fb041a3dffb6db55",
+    "channel/framing.ts": "9eb2f3749de219bbf6f45144970247a87db0a7d55b26a2f6227a8658add89001",
+    "channel/session.ts": "cf02ddc2fd2a3a80364b8d51518773f8cdd962c1b97039876ff3321cd19664fc",
+    "client.ts": "294fef239f84a0b403598657ece4d7f6b44a2baec9ef2ef8f663d8e963fa1a9b",
+    "client/relay-socket.ts": "3771d489eff860a75f1e0c91e7cfdd2bd941e074ae765965d6191141b177339d",
+    "client/secure-channel.ts": "f2acdc079de07092b8788df1cdde691e0e2fbf3e57d7bd9a90f923a4c359811e",
     "noise-handshake.d.ts": "0336b9674c69b49a64b904a37236c27870941e749ce92bb8d2b2412301cd7258"
   }
 }

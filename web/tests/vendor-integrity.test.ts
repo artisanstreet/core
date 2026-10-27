@@ -44,6 +44,6 @@ describe("vendored relay client integrity", () => {
 
   it("vendor commit is the announced Relay handoff", () => {
     const version = readFileSync(join(vendor, "VERSION"), "utf8").trim();
-    expect(version).toBe("356165c9334ee8f9cce2d34a27e890e466789509");
+    expect(version).toBe("7e4963acd95cd22661d13e629b3ee2e55658b6dd");
   });
 });

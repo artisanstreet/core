@@ -6,30 +6,30 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CoreApi } from "../src/api.ts";
-import { storeRequestSecret, clearRequestSecret } from "../src/auth.ts";
-import { renderSignin, renderApprove } from "../src/pages/signin.ts";
-import { renderMachines } from "../src/pages/machines.ts";
+import { store_request_secret, clear_request_secret } from "../src/auth.ts";
+import { render_signin, render_approve } from "../src/pages/signin.ts";
+import { render_machines } from "../src/pages/machines.ts";
 import type { PageContext } from "../src/main.ts";
 
 const REQUEST_ID = `logreq_01K${"A".repeat(23)}`;
 const ACCOUNT_ID = `acct_01K${"A".repeat(23)}`;
 const MACHINE_ID = `mch_01K${"A".repeat(23)}`;
 
-function ctxWith(api: CoreApi): PageContext {
+function ctx_with(api: CoreApi): PageContext {
   const root = document.createElement("div");
   document.body.append(root);
   return { api, root, signal: new AbortController().signal };
 }
 
-function stubApi(handler: (url: string, init: RequestInit) => unknown) {
+function stub_api(handler: (url: string, init: RequestInit) => unknown) {
   const calls: Array<{ url: string; body: unknown }> = [];
-  const fetchImpl = (async (url: string, init: RequestInit) => {
+  const fetch_impl = (async (url: string, init: RequestInit) => {
     const raw = init.body;
     const body = raw ? JSON.parse(typeof raw === "string" ? raw : new TextDecoder().decode(raw as Uint8Array)) : {};
     calls.push({ url: String(url), body });
     return new Response(JSON.stringify(handler(String(url), init)), { status: 200, headers: { "content-type": "application/json" } });
   }) as typeof fetch;
-  return { api: new CoreApi("", { fetchImpl }), calls };
+  return { api: new CoreApi("", { fetch_impl }), calls };
 }
 
 const tick = (ms = 20) => new Promise((r) => setTimeout(r, ms));
@@ -44,7 +44,7 @@ beforeEach(() => {
 describe("sign-in form", () => {
   it("requests a link, polls to approved, and finishes with secret + TOTP code", async () => {
     let polls = 0;
-    const { api, calls } = stubApi((url) => {
+    const { api, calls } = stub_api((url) => {
       if (url.includes("/magic/request")) return { requestId: REQUEST_ID, requestSecret: "shh", expiresAt: "2026-10-26T20:00:00.000Z" };
       if (url.includes("/magic/status")) {
         polls++;
@@ -57,8 +57,8 @@ describe("sign-in form", () => {
       }
       throw new Error(`unexpected ${url}`);
     });
-    const ctx = ctxWith(api);
-    renderSignin(ctx);
+    const ctx = ctx_with(api);
+    render_signin(ctx);
 
     (document.getElementById("signin-email") as HTMLInputElement).value = "a@example.com";
     (document.querySelector("form") as HTMLFormElement).dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
@@ -88,12 +88,12 @@ describe("sign-in form", () => {
 
   it("rejects a malformed email client-side with a field-level message", async () => {
     let sent = 0;
-    const fetchImpl = (async () => {
+    const fetch_impl = (async () => {
       sent++;
       return new Response("{}", { status: 200 });
     }) as typeof fetch;
-    const ctx = ctxWith(new CoreApi("", { fetchImpl }));
-    renderSignin(ctx);
+    const ctx = ctx_with(new CoreApi("", { fetch_impl }));
+    render_signin(ctx);
     (document.getElementById("signin-email") as HTMLInputElement).value = "not-an-email";
     (document.querySelector("form") as HTMLFormElement).dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await tick();
@@ -104,9 +104,9 @@ describe("sign-in form", () => {
   });
 
   it("stays on the form with a readable error when the server rejects the email", async () => {
-    const fetchImpl = (async () => new Response(JSON.stringify({ error: { code: "bad_request", message: "that address cannot receive mail", requestId: "r" } }), { status: 400 })) as typeof fetch;
-    const ctx = ctxWith(new CoreApi("", { fetchImpl }));
-    renderSignin(ctx);
+    const fetch_impl = (async () => new Response(JSON.stringify({ error: { code: "bad_request", message: "that address cannot receive mail", requestId: "r" } }), { status: 400 })) as typeof fetch;
+    const ctx = ctx_with(new CoreApi("", { fetch_impl }));
+    render_signin(ctx);
     (document.getElementById("signin-email") as HTMLInputElement).value = "a@example.com";
     (document.querySelector("form") as HTMLFormElement).dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await tick();
@@ -115,7 +115,7 @@ describe("sign-in form", () => {
   });
 
   it("shows who-started help and skips finalize when the secret is gone after approval", async () => {
-    const { api, calls } = stubApi((url) => {
+    const { api, calls } = stub_api((url) => {
       if (url.includes("/magic/request")) return { requestId: REQUEST_ID, requestSecret: "shh", expiresAt: "2026-10-26T20:00:00.000Z" };
       if (url.includes("/magic/status")) return { requestId: REQUEST_ID, status: "email_approved", totpRequired: false, email: "a@example.com", expiresAt: "2026-10-26T20:00:00.000Z" };
       if (url.includes("/magic/finalize")) {
@@ -123,12 +123,12 @@ describe("sign-in form", () => {
       }
       throw new Error(`unexpected ${url}`);
     });
-    renderSignin(ctxWith(api));
+    render_signin(ctx_with(api));
     (document.getElementById("signin-email") as HTMLInputElement).value = "a@example.com";
     (document.querySelector("form") as HTMLFormElement).dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await tick();
     await tick();
-    clearRequestSecret(REQUEST_ID);
+    clear_request_secret(REQUEST_ID);
     sessionStorage.clear();
     const finish = [...document.querySelectorAll("button")].find((b) => b.textContent?.includes("Finish sign-in"));
     expect(finish).toBeDefined();
@@ -142,7 +142,7 @@ describe("sign-in form", () => {
   });
 
   it("shows authenticator help and skips finalize when TOTP is required but empty", async () => {
-    const { api, calls } = stubApi((url) => {
+    const { api, calls } = stub_api((url) => {
       if (url.includes("/magic/request")) return { requestId: REQUEST_ID, requestSecret: "shh", expiresAt: "2026-10-26T20:00:00.000Z" };
       if (url.includes("/magic/status")) return { requestId: REQUEST_ID, status: "email_approved", totpRequired: true, email: "a@example.com", expiresAt: "2026-10-26T20:00:00.000Z" };
       if (url.includes("/magic/finalize")) {
@@ -150,7 +150,7 @@ describe("sign-in form", () => {
       }
       throw new Error(`unexpected ${url}`);
     });
-    renderSignin(ctxWith(api));
+    render_signin(ctx_with(api));
     (document.getElementById("signin-email") as HTMLInputElement).value = "a@example.com";
     (document.querySelector("form") as HTMLFormElement).dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await tick();
@@ -169,8 +169,8 @@ describe("sign-in form", () => {
 
 describe("approve form (email link target)", () => {
   it("approves via POST and finishes when this browser holds the secret", async () => {
-    storeRequestSecret(REQUEST_ID, "shh");
-    const { api, calls } = stubApi((url) => {
+    store_request_secret(REQUEST_ID, "shh");
+    const { api, calls } = stub_api((url) => {
       if (url.includes("/magic/consume")) return { requestId: REQUEST_ID, status: "email_approved", totpRequired: false };
       if (url.includes("/magic/finalize")) {
         return { sessionId: `sess_01K${"A".repeat(23)}`, accountId: ACCOUNT_ID, expiresAt: "2026-10-26T20:00:00.000Z", totpVerified: false };
@@ -178,31 +178,31 @@ describe("approve form (email link target)", () => {
       throw new Error(`unexpected ${url}`);
     });
     location.hash = "#/approve?token=emailtok";
-    const ctx = ctxWith(api);
-    renderApprove(ctx);
-    const approveBtn = [...document.querySelectorAll("button")].find((b) => b.textContent?.includes("Approve"));
-    (approveBtn as HTMLButtonElement).click();
+    const ctx = ctx_with(api);
+    render_approve(ctx);
+    const approve_btn = [...document.querySelectorAll("button")].find((b) => b.textContent?.includes("Approve"));
+    (approve_btn as HTMLButtonElement).click();
     await tick();
     const cons = calls.find((c) => c.url.includes("/magic/consume"));
     expect(cons?.body).toEqual({ token: "emailtok" });
-    const finishBtn = [...document.querySelectorAll("button")].find((b) => b.textContent?.includes("Finish sign-in"));
-    expect(finishBtn).toBeDefined();
-    (finishBtn as HTMLButtonElement).click();
+    const finish_btn = [...document.querySelectorAll("button")].find((b) => b.textContent?.includes("Finish sign-in"));
+    expect(finish_btn).toBeDefined();
+    (finish_btn as HTMLButtonElement).click();
     await tick();
     expect(calls.find((c) => c.url.includes("/magic/finalize"))?.body).toEqual({ requestId: REQUEST_ID, requestSecret: "shh" });
   });
 
   it("tells a different browser to finish on the originator instead", async () => {
-    clearRequestSecret(REQUEST_ID);
-    const { api } = stubApi((url) => {
+    clear_request_secret(REQUEST_ID);
+    const { api } = stub_api((url) => {
       if (url.includes("/magic/consume")) return { requestId: REQUEST_ID, status: "email_approved", totpRequired: false };
       throw new Error(`unexpected ${url}`);
     });
     location.hash = "#/approve?token=emailtok";
-    const ctx = ctxWith(api);
-    renderApprove(ctx);
-    const approveBtn = [...document.querySelectorAll("button")].find((b) => b.textContent?.includes("Approve"));
-    (approveBtn as HTMLButtonElement).click();
+    const ctx = ctx_with(api);
+    render_approve(ctx);
+    const approve_btn = [...document.querySelectorAll("button")].find((b) => b.textContent?.includes("Approve"));
+    (approve_btn as HTMLButtonElement).click();
     await tick();
     expect(document.body.textContent).toContain("finish in the tab that requested the link");
     // No finish control appears: this browser must not complete sign-in.
@@ -210,12 +210,12 @@ describe("approve form (email link target)", () => {
   });
 
   it("missing token shows the invalid-link flow, never a raw token paste box", async () => {
-    const { api } = stubApi(() => {
+    const { api } = stub_api(() => {
       throw new Error("no network call should happen");
     });
     location.hash = "#/approve";
-    const ctx = ctxWith(api);
-    renderApprove(ctx);
+    const ctx = ctx_with(api);
+    render_approve(ctx);
     expect(document.querySelector("#approve-token")).toBeNull();
     expect(document.body.textContent).toContain("missing its token");
     const fresh = document.querySelector('a[href="#/signin"]');
@@ -223,7 +223,7 @@ describe("approve form (email link target)", () => {
   });
 
   it("signin offers a recovery-code alternate that reaches finalize", async () => {
-    const { api, calls } = stubApi((url) => {
+    const { api, calls } = stub_api((url) => {
       if (url.includes("/magic/request")) return { requestId: REQUEST_ID, requestSecret: "shh", expiresAt: "2026-10-26T20:00:00.000Z" };
       if (url.includes("/magic/status")) return { requestId: REQUEST_ID, status: "email_approved", totpRequired: true, email: "a@example.com", expiresAt: "2026-10-26T20:00:00.000Z" };
       if (url.includes("/magic/finalize")) {
@@ -231,8 +231,8 @@ describe("approve form (email link target)", () => {
       }
       throw new Error(`unexpected ${url}`);
     });
-    const ctx = ctxWith(api);
-    renderSignin(ctx);
+    const ctx = ctx_with(api);
+    render_signin(ctx);
     (document.getElementById("signin-email") as HTMLInputElement).value = "a@example.com";
     (document.querySelector("form") as HTMLFormElement).dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await tick();
@@ -254,16 +254,16 @@ describe("approve form (email link target)", () => {
 
 describe("machines form", () => {
   it("claims an enrollment code and explains the Forge-side confirm", async () => {
-    const enrollmentId = `enr_01K${"A".repeat(23)}`;
-    const { api, calls } = stubApi((url) => {
+    const enrollment_id = `enr_01K${"A".repeat(23)}`;
+    const { api, calls } = stub_api((url) => {
       if (url.includes("/machines") && !url.includes("claim")) return { machines: [] };
-      if (url.includes("/enrollments/claim")) return { enrollmentId, status: "claimed" };
+      if (url.includes("/enrollments/claim")) return { enrollmentId: enrollment_id, status: "claimed" };
       if (url.includes("/me")) return { accountId: ACCOUNT_ID, email: "a@example.com", displayName: "", totpEnrolled: false, machines: [], providerConnections: [], latestConfigVersion: null };
       if (url.includes("/grants/issue")) return { token: "t", expiresAt: "2026-10-26T20:00:00.000Z" };
       throw new Error(`unexpected ${url}`);
     });
-    const ctx = ctxWith(api);
-    renderMachines(ctx);
+    const ctx = ctx_with(api);
+    render_machines(ctx);
     await tick();
     (document.getElementById("claim-code") as HTMLInputElement).value = "abcdefgh";
     (document.querySelectorAll("form")[0] as HTMLFormElement).dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
@@ -275,12 +275,12 @@ describe("machines form", () => {
 
 describe("accessibility of rendered forms", () => {
   it("every input has a label, buttons are named", async () => {
-    const { api } = stubApi((url) => {
+    const { api } = stub_api((url) => {
       if (url.includes("/magic/request")) return { requestId: REQUEST_ID, requestSecret: "shh", expiresAt: "2026-10-26T20:00:00.000Z" };
       if (url.includes("/magic/status")) return { requestId: REQUEST_ID, status: "pending", totpRequired: false, email: "a@example.com", expiresAt: "2026-10-26T20:00:00.000Z" };
       throw new Error(`unexpected ${url}`);
     });
-    renderSignin(ctxWith(api));
+    render_signin(ctx_with(api));
     (document.getElementById("signin-email") as HTMLInputElement).value = "a@example.com";
     (document.querySelector("form") as HTMLFormElement).dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await tick();

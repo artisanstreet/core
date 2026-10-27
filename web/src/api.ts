@@ -29,21 +29,19 @@ export { ApiError };
 export type { FetchLike, HttpSeam } from "./core/api-effect.ts";
 export type { ApiErrorShape } from "./core/api-error.ts";
 
-export const strictOptions = strict_options;
-
 /** Encode a request body strictly; throws on unknown fields. */
-export function encodeStrict<A, I>(schema: Schema.Schema<A, I>, value: A): I {
+export function encode_strict<A, I>(schema: Schema.Schema<A, I>, value: A): I {
   return encode_strict_eff(schema, value);
 }
 
 /** Decode a response forward-compatibly (unknown fields ignored). */
-export function decodeLenient<A, I>(schema: Schema.Schema<A, I>, input: unknown): A {
+export function decode_lenient<A, I>(schema: Schema.Schema<A, I>, input: unknown): A {
   return decode_lenient_eff(schema, input);
 }
 
 /** Decode a request-shaped value strictly (used in tests + validation). */
-export function decodeStrict<A, I>(schema: Schema.Schema<A, I>, input: unknown): A {
-  return Schema.decodeUnknownSync(schema, strictOptions)(input);
+export function decode_strict<A, I>(schema: Schema.Schema<A, I>, input: unknown): A {
+  return Schema.decodeUnknownSync(schema, strict_options)(input);
 }
 
 /** Field labels for the forms that submit contract requests. */
@@ -69,7 +67,7 @@ const FIELD_LABELS: Record<string, string> = {
  * first bad field (e.g. "Enter a valid email address."). Falls back to a
  * generic prompt when the tree carries nothing mappable.
  */
-export function humanizeValidationError(error: unknown): string {
+export function humanize_validation_error(error: unknown): string {
   if (!isParseError(error)) return "Some fields need attention before sending.";
   const issues = Either.getOrNull(
     Either.try({
@@ -94,13 +92,13 @@ function article(word: string): string {
 }
 
 function shorten(message: string): string {
-  const oneLine = message.replace(/\s+/g, " ").trim();
-  if (oneLine.length <= 140) return oneLine.endsWith(".") ? oneLine : `${oneLine}.`;
+  const one_line = message.replace(/\s+/g, " ").trim();
+  if (one_line.length <= 140) return one_line.endsWith(".") ? one_line : `${one_line}.`;
   return "That value is not valid here.";
 }
 
 export interface ApiOptions {
-  fetchImpl?: typeof fetch;
+  fetch_impl?: typeof fetch;
 }
 
 /**
@@ -116,32 +114,32 @@ export class CoreApi implements HttpSeam {
 
   constructor(base = "", opts: ApiOptions = {}) {
     this.base = base;
-    this.fetch_impl = opts.fetchImpl ?? fetch.bind(globalThis);
+    this.fetch_impl = opts.fetch_impl ?? fetch.bind(globalThis);
   }
 
-  async get<A, I>(path: string, responseSchema: Schema.Schema<A, I>): Promise<A> {
-    return run_promise(api_get(this.fetch_impl, this.base, path, responseSchema));
+  async get<A, I>(path: string, response_schema: Schema.Schema<A, I>): Promise<A> {
+    return run_promise(api_get(this.fetch_impl, this.base, path, response_schema));
   }
 
   async post<A, I, RA, RI>(
     path: string,
-    requestSchema: Schema.Schema<RA, RI> | null,
-    requestBody: RA | null,
-    responseSchema: Schema.Schema<A, I>,
+    request_schema: Schema.Schema<RA, RI> | null,
+    request_body: RA | null,
+    response_schema: Schema.Schema<A, I>,
   ): Promise<A> {
     return run_promise(
       api_post(
         this.fetch_impl,
         this.base,
         path,
-        requestSchema,
-        requestBody,
-        responseSchema,
+        request_schema,
+        request_body,
+        response_schema,
         (encode_err) =>
           new ApiFailure({
             status: 400,
             code: "bad_request",
-            message: humanizeValidationError(encode_err),
+            message: humanize_validation_error(encode_err),
             request_id: "",
           }),
       ),
@@ -150,17 +148,17 @@ export class CoreApi implements HttpSeam {
 
   // -- auth ---------------------------------------------------------------
 
-  requestMagicLink(email: string, displayName?: string, deviceName?: string) {
-    return this.post("/v1/auth/magic/request", C.MagicRequest, { email, displayName, deviceName }, C.MagicRequestResp);
+  request_magic_link(email: string, display_name?: string, device_name?: string) {
+    return this.post("/v1/auth/magic/request", C.MagicRequest, { email, displayName: display_name, deviceName: device_name }, C.MagicRequestResp);
   }
 
-  loginStatus(requestId: string, requestSecret: string) {
-    return run_promise(login_status_effect(this.fetch_impl, this.base, requestId, requestSecret));
+  login_status(request_id: string, request_secret: string) {
+    return run_promise(login_status_effect(this.fetch_impl, this.base, request_id, request_secret));
   }
 
   /** Approve an emailed link. Always POST: link GETs never consume. */
-  consumeMagicLink(token: string, requestSecret?: string) {
-    return this.post("/v1/auth/magic/consume", C.MagicConsumeReq, { token, requestSecret }, C.MagicConsumeResp);
+  consume_magic_link(token: string, request_secret?: string) {
+    return this.post("/v1/auth/magic/consume", C.MagicConsumeReq, { token, requestSecret: request_secret }, C.MagicConsumeResp);
   }
 
   /**
@@ -168,25 +166,31 @@ export class CoreApi implements HttpSeam {
    * browser: the emailed token alone can never mint a session. Callers must
    * refuse to call without a secret (enforced here, not just in the UI).
    */
-  finalizeMagicLink(requestId: string, requestSecret: string | null, secondFactor?: { totpCode?: string; recoveryCode?: string }) {
-    if (!requestSecret) throw new Error("finalize requires the originating browser's request secret");
+  finalize_magic_link(request_id: string, request_secret: string | null, second_factor?: { totp_code?: string; recovery_code?: string }) {
+    if (!request_secret) throw new Error("finalize requires the originating browser's request secret");
+    const { totp_code, recovery_code } = second_factor ?? {};
     return this.post(
       "/v1/auth/magic/finalize",
       C.MagicFinalizeReq,
-      { requestId, requestSecret, ...secondFactor },
+      {
+        requestId: request_id,
+        requestSecret: request_secret,
+        ...(totp_code !== undefined ? { totpCode: totp_code } : {}),
+        ...(recovery_code !== undefined ? { recoveryCode: recovery_code } : {}),
+      },
       C.MagicFinalizeResp,
     );
   }
 
-  enrollTotp() {
+  enroll_totp() {
     return this.post("/v1/auth/totp/enroll", null, null, C.TotpEnrollResp);
   }
 
-  verifyTotp(code: string) {
+  verify_totp(code: string) {
     return this.post("/v1/auth/totp/verify", C.TotpVerifyReq, { code }, C.TotpVerifyResp);
   }
 
-  disableTotp(code: string) {
+  disable_totp(code: string) {
     return this.post("/v1/auth/totp/disable", C.TotpDisableReq, { code }, C.TotpDisableResp);
   }
 
@@ -198,17 +202,17 @@ export class CoreApi implements HttpSeam {
     return this.get("/v1/sessions", C.SessionListResp);
   }
 
-  revokeCurrentSession() {
+  revoke_current_session() {
     return this.post("/v1/sessions/current/revoke", null, null, Schema.Struct({ revoked: Schema.Boolean }));
   }
 
-  revokeAllSessions() {
+  revoke_all_sessions() {
     return this.post("/v1/sessions/revoke-all", null, null, Schema.Struct({ revoked: Schema.Boolean }));
   }
 
   // -- machines ------------------------------------------------------------
 
-  claimEnrollment(code: string) {
+  claim_enrollment(code: string) {
     return this.post("/v1/machines/enrollments/claim", C.EnrollmentClaimReq, { code }, C.EnrollmentClaimResp);
   }
 
@@ -216,36 +220,36 @@ export class CoreApi implements HttpSeam {
     return this.get("/v1/machines", C.MachineListResp);
   }
 
-  revokeMachine(id: string) {
+  revoke_machine(id: string) {
     return this.post(`/v1/machines/${encodeURIComponent(id)}/revoke`, null, null, Schema.Struct({ revoked: Schema.Boolean }));
   }
 
   // -- grants ----------------------------------------------------------------
 
-  issueGrant(body: typeof C.GrantIssueReq.Type) {
+  issue_grant(body: typeof C.GrantIssueReq.Type) {
     return run_promise(issue_grant_effect(this.fetch_impl, this.base, body));
   }
 
   // -- vault ------------------------------------------------------------------
 
-  providerConnections() {
+  provider_connections() {
     return this.get("/v1/vault/connections", C.ProviderListResp);
   }
 
-  createProviderConnection(provider: typeof C.ProviderKind.Type, label: string, apiKey: string) {
-    return this.post("/v1/vault/connections", C.ProviderCreateReq, { provider, label, apiKey }, C.ProviderInfo);
+  create_provider_connection(provider: typeof C.ProviderKind.Type, label: string, api_key: string) {
+    return this.post("/v1/vault/connections", C.ProviderCreateReq, { provider, label, apiKey: api_key }, C.ProviderInfo);
   }
 
-  revokeProviderConnection(id: string) {
+  revoke_provider_connection(id: string) {
     return this.post(`/v1/vault/connections/${encodeURIComponent(id)}/revoke`, null, null, Schema.Struct({ revoked: Schema.Boolean }));
   }
 
-  assignConnection(connectionId: string, machineId: string) {
-    return this.post("/v1/vault/assignments", C.AssignReq, { connectionId, machineId }, C.AssignResp);
+  assign_connection(connection_id: string, machine_id: string) {
+    return this.post("/v1/vault/assignments", C.AssignReq, { connectionId: connection_id, machineId: machine_id }, C.AssignResp);
   }
 
-  unassignConnection(connectionId: string, machineId: string) {
-    return this.post("/v1/vault/assignments/remove", C.AssignReq, { connectionId, machineId }, Schema.Struct({ unassigned: Schema.Boolean }));
+  unassign_connection(connection_id: string, machine_id: string) {
+    return this.post("/v1/vault/assignments/remove", C.AssignReq, { connectionId: connection_id, machineId: machine_id }, Schema.Struct({ unassigned: Schema.Boolean }));
   }
 
   // -- engine artifacts ----------------------------------------------------------
@@ -254,40 +258,40 @@ export class CoreApi implements HttpSeam {
     return this.get("/v1/engine-artifacts", C.ArtifactListResp);
   }
 
-  revokeArtifact(id: string) {
+  revoke_artifact(id: string) {
     return this.post(`/v1/engine-artifacts/${encodeURIComponent(id)}/revoke`, null, null, Schema.Struct({ revoked: Schema.Boolean }));
   }
 
-  assignArtifact(artifactId: string, machineId: string) {
+  assign_artifact(artifact_id: string, machine_id: string) {
     return this.post(
       "/v1/engine-artifacts/assignments",
       C.ArtifactAssignReq,
-      { artifactId, machineId },
+      { artifactId: artifact_id, machineId: machine_id },
       Schema.Struct({ artifactId: C.ArtifactId, machineId: C.MachineId }),
     );
   }
 
-  unassignArtifact(artifactId: string, machineId: string) {
+  unassign_artifact(artifact_id: string, machine_id: string) {
     return this.post(
       "/v1/engine-artifacts/assignments/remove",
       C.ArtifactAssignReq,
-      { artifactId, machineId },
+      { artifactId: artifact_id, machineId: machine_id },
       Schema.Struct({ unassigned: Schema.Boolean }),
     );
   }
 
   // -- editor config ----------------------------------------------------------------
 
-  publishBundle(manifest: typeof C.EditorManifest.Type) {
+  publish_bundle(manifest: typeof C.EditorManifest.Type) {
     return this.post("/v1/config/bundles", C.BundlePublishReq, { manifest }, C.BundleInfo);
   }
 
-  latestBundle() {
+  latest_bundle() {
     return this.get("/v1/config/bundles/latest", C.BundleLatestResp);
   }
 
-  configState(machineId: string) {
-    return this.get(`/v1/config/state?machineId=${encodeURIComponent(machineId)}`, C.ConfigStateResp);
+  config_state(machine_id: string) {
+    return this.get(`/v1/config/state?machineId=${encodeURIComponent(machine_id)}`, C.ConfigStateResp);
   }
 
   // -- activity + deletion --------------------------------------------------------------
@@ -296,15 +300,15 @@ export class CoreApi implements HttpSeam {
     return this.get(`/v1/activity?limit=${encodeURIComponent(String(limit))}`, C.ActivityResp);
   }
 
-  requestDeletion(totpCode?: string) {
-    return this.post("/v1/account/deletion/request", C.DeletionRequestReq, { totpCode }, C.DeletionStatusResp);
+  request_deletion(totp_code?: string) {
+    return this.post("/v1/account/deletion/request", C.DeletionRequestReq, { totpCode: totp_code }, C.DeletionStatusResp);
   }
 
-  deletionStatus() {
+  deletion_status() {
     return this.get("/v1/account/deletion", C.DeletionStatusResp);
   }
 
-  cancelDeletion() {
+  cancel_deletion() {
     return this.post("/v1/account/deletion/cancel", null, null, C.DeletionStatusResp);
   }
 

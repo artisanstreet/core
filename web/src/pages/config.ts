@@ -1,8 +1,8 @@
 import { Effect, Match } from "effect";
 import type { CoreApi } from "../api.ts";
-import { decodeStrict } from "../api.ts";
+import { decode_strict } from "../api.ts";
 import * as C from "../../../src/contracts/v1.ts";
-import { buildSkillBundle } from "../skills-bundle.ts";
+import { build_skill_bundle } from "../skills-bundle.ts";
 import { run_promise } from "../core/run-promise.ts";
 import { clear, el, when } from "../ui.ts";
 import type { PageContext } from "../main.ts";
@@ -15,7 +15,7 @@ const EXAMPLE = `{
   "globalPrompt": "Follow the repository's AGENTS.md."
 }`;
 
-export function renderConfig(ctx: PageContext): void {
+export function render_config(ctx: PageContext): void {
   const { root, api } = ctx;
   clear(root);
 
@@ -43,10 +43,10 @@ export function renderConfig(ctx: PageContext): void {
         catch: () => new Error("Not valid JSON."),
       });
       const manifest = yield* Effect.try({
-        try: () => decodeStrict(C.EditorManifest, parsed),
+        try: () => decode_strict(C.EditorManifest, parsed),
         catch: (e) => e,
       });
-      const info = yield* Effect.tryPromise({ try: () => api.publishBundle(manifest), catch: (e) => e });
+      const info = yield* Effect.tryPromise({ try: () => api.publish_bundle(manifest), catch: (e) => e });
       yield* Effect.sync(() => {
         msg.textContent = `Published version ${info.version}.`;
         msg.className = "status ok";
@@ -68,11 +68,11 @@ export function renderConfig(ctx: PageContext): void {
   pub.append(label, area, btn, msg);
   root.append(pub);
 
-  root.append(skillFolderBox(area));
+  root.append(skill_folder_box(area));
 
   const state = el("div", { class: "card" });
   state.append(el("h2", {}, "Machine state"));
-  state.append(machineStateForm(api));
+  state.append(machine_state_form(api));
   root.append(state);
 
   void run_promise(load_latest_effect(api, latest));
@@ -80,7 +80,7 @@ export function renderConfig(ctx: PageContext): void {
 
 const load_latest_effect = (api: CoreApi, box: HTMLElement): Effect.Effect<void, never> =>
   Effect.gen(function* () {
-    const res = yield* Effect.tryPromise({ try: () => api.latestBundle(), catch: (e) => e });
+    const res = yield* Effect.tryPromise({ try: () => api.latest_bundle(), catch: (e) => e });
     yield* Effect.sync(() => {
       clear(box);
       box.append(el("h2", {}, "Latest bundle"));
@@ -104,21 +104,21 @@ const load_latest_effect = (api: CoreApi, box: HTMLElement): Effect.Effect<void,
     ),
   );
 
-const machineStateForm = (api: CoreApi): HTMLElement => {
+const machine_state_form = (api: CoreApi): HTMLElement => {
   const wrap = el("div", {});
   const label = el("label", { for: "cfg-machine" }, "Forge id");
   const input = el("input", { id: "cfg-machine", type: "text", placeholder: "mch_…" }) as HTMLInputElement;
   const btn = el("button", { class: "secondary", type: "button" }, "Read state");
   const out = el("div", {});
   btn.addEventListener("click", () => {
-    const machineId = input.value.trim();
+    const machine_id = input.value.trim();
     const read: Effect.Effect<void, unknown> = Effect.gen(function* () {
       yield* Effect.sync(() => {
         clear(out);
         const loading = el("p", { class: "status muted", role: "status" }, "Loading…");
         out.append(loading);
       });
-      const s = yield* Effect.tryPromise({ try: () => api.configState(machineId), catch: (e) => e });
+      const s = yield* Effect.tryPromise({ try: () => api.config_state(machine_id), catch: (e) => e });
       yield* Effect.sync(() => {
         clear(out);
         out.append(el("p", {}, `Bundle ${s.bundleId}: ${s.status}`, el("br", {}),
@@ -144,15 +144,15 @@ const machineStateForm = (api: CoreApi): HTMLElement => {
   return wrap;
 };
 
-const skillFolderBox = (area: HTMLTextAreaElement): HTMLElement => {
+const skill_folder_box = (area: HTMLTextAreaElement): HTMLElement => {
   const box = el("div", { class: "card" });
   box.append(el("h2", {}, "Bundle a skill folder"));
   box.append(el("p", { class: "muted small" },
     "Adds a skill with its files embedded (SKILL.md required; content-hashed with the manifest). " +
     "Source defaults to “bundle” for embedded-only skills; change it if the Forge should also resolve an installed copy."));
-  const nameLabel = el("label", { for: "skill-name" }, "Skill name (defaults to the folder name)");
-  const nameInput = el("input", { id: "skill-name", type: "text", autocomplete: "off" }) as HTMLInputElement;
-  const pickLabel = el("label", { for: "skill-folder" }, "Skill folder");
+  const name_label = el("label", { for: "skill-name" }, "Skill name (defaults to the folder name)");
+  const name_input = el("input", { id: "skill-name", type: "text", autocomplete: "off" }) as HTMLInputElement;
+  const pick_label = el("label", { for: "skill-folder" }, "Skill folder");
   const pick = el("input", { id: "skill-folder", type: "file" }) as HTMLInputElement;
   pick.setAttribute("webkitdirectory", "");
   const add = el("button", { class: "secondary", type: "button" }, "Add bundled skill to the manifest");
@@ -160,7 +160,7 @@ const skillFolderBox = (area: HTMLTextAreaElement): HTMLElement => {
   add.addEventListener("click", () => {
     const files = [...(pick.files ?? [])];
     const top = (files[0] as File & { webkitRelativePath?: string }).webkitRelativePath?.split("/")[0] ?? "skill";
-    const bundle_name = nameInput.value;
+    const bundle_name = name_input.value;
     const program: Effect.Effect<void, unknown> = Effect.gen(function* () {
       yield* Effect.sync(() => {
         add.disabled = true;
@@ -169,7 +169,7 @@ const skillFolderBox = (area: HTMLTextAreaElement): HTMLElement => {
         yield* Effect.fail(new Error("Choose a skill folder first."));
       }
       const built = yield* Effect.tryPromise({
-        try: () => buildSkillBundle({ folderName: top, files }, { name: bundle_name }),
+        try: () => build_skill_bundle({ folder_name: top, files }, { name: bundle_name }),
         catch: (e) => e,
       });
       const manifest = yield* Effect.try({
@@ -209,6 +209,6 @@ const skillFolderBox = (area: HTMLTextAreaElement): HTMLElement => {
     );
     void run_promise(program);
   });
-  box.append(nameLabel, nameInput, pickLabel, pick, add, msg);
+  box.append(name_label, name_input, pick_label, pick, add, msg);
   return box;
 };

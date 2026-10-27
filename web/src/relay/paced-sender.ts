@@ -1,7 +1,7 @@
 // Ordered, ack-paced outbound funnel (single place that touches
-// `sendAcked`). Semantics mirror SecureChannel.sendApp (exact pre-seal
-// sizing via sealedFrameSize, throws-before-consume on a full window,
-// seal + sendAcked one frame at a time):
+// `send_acked`). Semantics mirror SecureChannel.send_app (exact pre-seal
+// sizing via sealed_frame_size, throws-before-consume on a full window,
+// seal + send_acked one frame at a time):
 // - WouldBlock pauses for the next recipient ack (nothing sealed, safe to
 //   retry) instead of dropping ciphertext;
 // - any post-seal failure (timeout/close/loss) breaks the Noise stream, so
@@ -17,7 +17,7 @@
 import { Deferred, Duration, Effect, STM, TSemaphore } from "effect";
 import { run_effect } from "../core/run-promise.ts";
 import { SendTimeoutError, SendWouldBlockError } from "../../vendor/relay/client.ts";
-import { sealedFrameSize } from "../../vendor/relay/channel.ts";
+import { sealed_frame_size } from "../../vendor/relay/channel.ts";
 import type { RelayLinkLike } from "./transport.ts";
 
 export class PacedSender {
@@ -32,7 +32,7 @@ export class PacedSender {
     this.semaphore = Effect.runSync(STM.commit(TSemaphore.make(1)));
   }
 
-  onAck(): void {
+  on_ack(): void {
     for (const w of this.waiters.splice(0, this.waiters.length)) w();
   }
 
@@ -54,7 +54,7 @@ export class PacedSender {
           if (self.closed()) return yield* Effect.fail(new Error("Session closed."));
           const pt = new TextEncoder().encode(text);
           const fits = yield* Effect.try({
-            try: () => link.willFit(self.channel, sealedFrameSize(self.channel, pt.length)),
+            try: () => link.will_fit(self.channel, sealed_frame_size(self.channel, pt.length)),
             catch: (e) => (e instanceof Error ? e : new Error("Window check failed.")),
           });
           if (!fits) {
@@ -67,7 +67,7 @@ export class PacedSender {
             catch: (e) => (e instanceof Error ? e : new Error("Seal failed.")),
           });
           yield* Effect.tryPromise({
-            try: () => link.sendAcked(self.channel, sealed.ct, { timeoutMs: 30_000 }),
+            try: () => link.send_acked(self.channel, sealed.ct, { timeout_ms: 30_000 }),
             catch: (e) => (e instanceof Error ? e : new Error("Send failed.")),
           });
           return;

@@ -13,9 +13,9 @@ export type LoginPollStatus = "pending" | "email_approved" | "completed" | "expi
 
 export interface LoginPollResult {
   status: LoginPollStatus;
-  totpRequired: boolean;
+  totp_required: boolean;
   email: string;
-  expiresAt: string;
+  expires_at: string;
 }
 
 export interface LoginPollCallbacks {
@@ -55,13 +55,19 @@ export function start_login_poll(
       const settled = yield* Effect.either(login_status_effect(http.fetch_impl, http.base, request_id, secret));
       if (settled._tag === "Right") {
         const s = settled.right;
+        const mapped: LoginPollResult = {
+          status: s.status,
+          totp_required: s.totpRequired,
+          email: s.email,
+          expires_at: s.expiresAt,
+        };
         attempt = 0;
         if (s.status === "email_approved") {
-          yield* Effect.sync(() => callbacks.on_approved(s));
+          yield* Effect.sync(() => callbacks.on_approved(mapped));
           return;
         }
         if (s.status === "completed") {
-          yield* Effect.sync(() => callbacks.on_completed(s));
+          yield* Effect.sync(() => callbacks.on_completed(mapped));
           return;
         }
         if (s.status === "expired") {

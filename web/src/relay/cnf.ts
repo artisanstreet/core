@@ -4,8 +4,8 @@
 
 import { Data, Either, pipe, Schema } from "effect";
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { randomBytes } from "@noble/hashes/utils.js";
-import { b64uDecode, b64uEncode } from "../../vendor/relay/b64u.ts";
+import { randomBytes as random_bytes } from "@noble/hashes/utils.js";
+import { base64urlnopad as base64url_nopad } from "@scure/base";
 
 export interface CnfKeypair {
   sk: Uint8Array;
@@ -14,15 +14,15 @@ export interface CnfKeypair {
 }
 
 /** Fresh ephemeral Ed25519 `cnf` key for one grant (never stored). */
-export function newEphemeralCnf(): CnfKeypair {
+export function new_ephemeral_cnf(): CnfKeypair {
   const sk = ed25519.utils.randomSecretKey();
   const pk = ed25519.getPublicKey(sk);
-  return { sk, pk, jwk: { kty: "OKP", crv: "Ed25519", x: b64uEncode(pk) } };
+  return { sk, pk, jwk: { kty: "OKP", crv: "Ed25519", x: base64url_nopad.encode(pk) } };
 }
 
 /** Random channel id inside the Relay charset. */
-export function newChannelId(): string {
-  return `app-${b64uEncode(randomBytes(9))}`;
+export function new_channel_id(): string {
+  return `app-${base64url_nopad.encode(random_bytes(9))}`;
 }
 
 export class GrantJwtError extends Data.TaggedError("GrantJwtError")<{
@@ -44,7 +44,7 @@ export const grant_jti = (jwt: string): Either.Either<string, GrantJwtError> => 
     return Either.left(new GrantJwtError({ reason: "unreadable grant" }));
   }
   return pipe(
-    Schema.decodeUnknownEither(Schema.parseJson(GrantJtiPayload))(new TextDecoder().decode(b64uDecode(segment))),
+    Schema.decodeUnknownEither(Schema.parseJson(GrantJtiPayload))(new TextDecoder().decode(base64url_nopad.decode(segment))),
     Either.map((payload) => payload.jti),
     Either.mapLeft(() => new GrantJwtError({ reason: "unreadable grant" })),
   );

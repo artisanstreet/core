@@ -1,7 +1,7 @@
 import { Effect, Either, Match } from "effect";
 import type { CoreApi } from "../api.ts";
 import { run_promise } from "../core/run-promise.ts";
-import { clear, el, idSpan, when } from "../ui.ts";
+import { clear, el, id_span, when } from "../ui.ts";
 import type { PageContext } from "../main.ts";
 import { friendly } from "./signin.ts";
 import QRCode from "qrcode";
@@ -44,7 +44,7 @@ const render_qr_node = (state: QrState): HTMLElement =>
     Match.exhaustive,
   );
 
-export function parseOtpauth(url: string): { account: string; secret: string } {
+export function parse_otpauth(url: string): { account: string; secret: string } {
   const parsed = Either.getOrNull(
     Either.try({ try: () => new URL(url), catch: () => null }),
   );
@@ -62,7 +62,7 @@ const card = (title: string): { box: HTMLElement; status: HTMLElement } => {
   return { box, status };
 };
 
-export function renderAccount(ctx: PageContext): void {
+export function render_account(ctx: PageContext): void {
   const { root, api } = ctx;
   clear(root);
   const { box, status } = card("Account");
@@ -82,7 +82,7 @@ export function renderAccount(ctx: PageContext): void {
       );
       box.append(dl);
       const details = el("details", { class: "small muted" });
-      details.append(el("summary", {}, "Account details"), el("p", {}, idSpan(me.accountId)));
+      details.append(el("summary", {}, "Account details"), el("p", {}, id_span(me.accountId)));
       box.append(details);
       box.append(el("p", { class: "small" },
         el("a", { href: "#/machines" }, "Machines"), " · ",
@@ -103,7 +103,7 @@ export function renderAccount(ctx: PageContext): void {
   void run_promise(program);
 }
 
-export function renderSessions(ctx: PageContext): void {
+export function render_sessions(ctx: PageContext): void {
   const { root, api } = ctx;
   clear(root);
   const { box, status } = card("Sessions");
@@ -124,7 +124,7 @@ export function renderSessions(ctx: PageContext): void {
       table.append(el("tr", {}, el("th", {}, "Device"), el("th", {}, "Signed in"), el("th", {}, "Expires"), el("th", {}, "State")));
       for (const s of list.sessions) {
         table.append(el("tr", {},
-          el("td", {}, s.deviceName || "unnamed browser", el("br", {}), idSpan(s.id)),
+          el("td", {}, s.deviceName || "unnamed browser", el("br", {}), id_span(s.id)),
           el("td", {}, when(s.createdAt)),
           el("td", {}, when(s.expiresAt)),
           el("td", {}, s.revokedAt ? `revoked ${when(s.revokedAt)}` : "active"),
@@ -132,11 +132,11 @@ export function renderSessions(ctx: PageContext): void {
       }
       box.append(table);
       const row = el("div", { class: "row" });
-      const revokeAll = el("button", { class: "secondary", type: "button" }, "Sign out everywhere else");
+      const revoke_all = el("button", { class: "secondary", type: "button" }, "Sign out everywhere else");
       const out = el("p", { class: "status", role: "status" });
-      revokeAll.addEventListener("click", () => {
+      revoke_all.addEventListener("click", () => {
         const revoke: Effect.Effect<void, unknown> = Effect.gen(function* () {
-          yield* Effect.tryPromise({ try: () => api.revokeAllSessions(), catch: (e) => e });
+          yield* Effect.tryPromise({ try: () => api.revoke_all_sessions(), catch: (e) => e });
           yield* Effect.sync(() => {
             out.textContent = "All sessions revoked. This browser is signed out too.";
             setTimeout(() => { location.hash = "#/signin"; }, 800);
@@ -150,7 +150,7 @@ export function renderSessions(ctx: PageContext): void {
         );
         void run_promise(revoke);
       });
-      row.append(revokeAll);
+      row.append(revoke_all);
       box.append(row, out);
     });
   }).pipe(
@@ -164,7 +164,7 @@ export function renderSessions(ctx: PageContext): void {
   void run_promise(program);
 }
 
-export function renderSecurity(ctx: PageContext): void {
+export function render_security(ctx: PageContext): void {
   const { root, api } = ctx;
   clear(root);
   const { box, status } = card("Security");
@@ -177,9 +177,9 @@ export function renderSecurity(ctx: PageContext): void {
       clear(box);
       box.append(el("h2", {}, "Security"));
       if (!me.totpEnrolled) {
-        box.append(enrollBox(api));
+        box.append(enroll_box(api));
       } else {
-        box.append(disableBox(api));
+        box.append(disable_box(api));
       }
     });
   }).pipe(
@@ -193,16 +193,16 @@ export function renderSecurity(ctx: PageContext): void {
   void run_promise(program);
 }
 
-const enrollBox = (api: CoreApi): HTMLElement => {
+const enroll_box = (api: CoreApi): HTMLElement => {
   const wrap = el("div", {});
   wrap.append(el("p", {}, "Not enrolled."));
   const start = el("button", { type: "button" }, "Start enrollment");
   const out = el("div", {});
   start.addEventListener("click", () => {
     const enroll: Effect.Effect<void, unknown> = Effect.gen(function* () {
-      const res = yield* Effect.tryPromise({ try: () => api.enrollTotp(), catch: (e) => e });
+      const res = yield* Effect.tryPromise({ try: () => api.enroll_totp(), catch: (e) => e });
       const qr = yield* qr_effect(res.otpauthUrl);
-      const { account, secret } = parseOtpauth(res.otpauthUrl);
+      const { account, secret } = parse_otpauth(res.otpauthUrl);
       yield* Effect.sync(() => {
         clear(out);
         out.append(
@@ -221,7 +221,7 @@ const enrollBox = (api: CoreApi): HTMLElement => {
         confirm.addEventListener("click", () => {
           const code = input.value.trim();
           const verify: Effect.Effect<void, unknown> = Effect.gen(function* () {
-            const r = yield* Effect.tryPromise({ try: () => api.verifyTotp(code), catch: (e) => e });
+            const r = yield* Effect.tryPromise({ try: () => api.verify_totp(code), catch: (e) => e });
             yield* Effect.sync(() => {
               msg.textContent = r.enrolled ? "Two-step sign-in is on." : "Not confirmed yet.";
             });
@@ -250,7 +250,7 @@ const enrollBox = (api: CoreApi): HTMLElement => {
   return wrap;
 };
 
-const disableBox = (api: CoreApi): HTMLElement => {
+const disable_box = (api: CoreApi): HTMLElement => {
   const wrap = el("div", {});
   wrap.append(el("p", {}, "Enrolled. Disabling needs a current code."));
   const label = el("label", { for: "totp-disable" }, "Authenticator code");
@@ -260,7 +260,7 @@ const disableBox = (api: CoreApi): HTMLElement => {
   btn.addEventListener("click", () => {
     const code = input.value.trim();
     const disable: Effect.Effect<void, unknown> = Effect.gen(function* () {
-      const r = yield* Effect.tryPromise({ try: () => api.disableTotp(code), catch: (e) => e });
+      const r = yield* Effect.tryPromise({ try: () => api.disable_totp(code), catch: (e) => e });
       yield* Effect.sync(() => {
         msg.textContent = r.disabled ? "Two-step sign-in is off." : "Not disabled.";
       });
@@ -277,7 +277,7 @@ const disableBox = (api: CoreApi): HTMLElement => {
   return wrap;
 };
 
-export function renderActivity(ctx: PageContext): void {
+export function render_activity(ctx: PageContext): void {
   const { root, api } = ctx;
   clear(root);
   const { box, status } = card("Recent activity");
@@ -314,18 +314,18 @@ export function renderActivity(ctx: PageContext): void {
 };
 
 type DeletionView =
-  | { readonly _tag: "Pending"; readonly requestedAt: string | null; readonly purgeAfter: string | null }
+  | { readonly _tag: "Pending"; readonly requested_at: string | null; readonly purge_after: string | null }
   | { readonly _tag: "None" };
 
-export function renderDanger(ctx: PageContext): void {
+export function render_danger(ctx: PageContext): void {
   const { root, api } = ctx;
   clear(root);
   const { box, status } = card("Delete account");
   root.append(box);
   const program: Effect.Effect<void, unknown> = Effect.gen(function* () {
-    const s = yield* Effect.tryPromise({ try: () => api.deletionStatus(), catch: (e) => e });
+    const s = yield* Effect.tryPromise({ try: () => api.deletion_status(), catch: (e) => e });
     const view: DeletionView = s.status === "pending"
-      ? { _tag: "Pending", requestedAt: s.requestedAt, purgeAfter: s.purgeAfter }
+      ? { _tag: "Pending", requested_at: s.requestedAt, purge_after: s.purgeAfter }
       : { _tag: "None" };
     const me = view._tag === "None" ? yield* Effect.tryPromise({ try: () => api.me(), catch: (e) => e }) : null;
     yield* Effect.sync(() => {
@@ -334,12 +334,12 @@ export function renderDanger(ctx: PageContext): void {
       box.append(el("p", {}, `Status: ${s.status}`));
       Match.value(view).pipe(
         Match.tag("Pending", (pending) => {
-          box.append(el("p", { class: "warn" }, `Requested ${when(pending.requestedAt)}. Purge after ${when(pending.purgeAfter)}.`));
+          box.append(el("p", { class: "warn" }, `Requested ${when(pending.requested_at)}. Purge after ${when(pending.purge_after)}.`));
           const cancel = el("button", { type: "button" }, "Cancel deletion");
           const msg = el("p", { class: "status", role: "status" });
           cancel.addEventListener("click", () => {
             const cancel_one: Effect.Effect<void, unknown> = Effect.gen(function* () {
-              yield* Effect.tryPromise({ try: () => api.cancelDeletion(), catch: (e) => e });
+              yield* Effect.tryPromise({ try: () => api.cancel_deletion(), catch: (e) => e });
               yield* Effect.sync(() => {
                 msg.textContent = "Deletion cancelled.";
               });
@@ -364,7 +364,7 @@ export function renderDanger(ctx: PageContext): void {
             req.addEventListener("click", () => {
               const code = input.value.trim() || undefined;
               const request: Effect.Effect<void, unknown> = Effect.gen(function* () {
-                yield* Effect.tryPromise({ try: () => api.requestDeletion(code), catch: (e) => e });
+                yield* Effect.tryPromise({ try: () => api.request_deletion(code), catch: (e) => e });
                 yield* Effect.sync(() => {
                   msg.textContent = "Deletion requested.";
                 });
@@ -383,7 +383,7 @@ export function renderDanger(ctx: PageContext): void {
             const msg = el("p", { class: "status", role: "status" });
             req.addEventListener("click", () => {
               const request: Effect.Effect<void, unknown> = Effect.gen(function* () {
-                yield* Effect.tryPromise({ try: () => api.requestDeletion(undefined), catch: (e) => e });
+                yield* Effect.tryPromise({ try: () => api.request_deletion(undefined), catch: (e) => e });
                 yield* Effect.sync(() => {
                   msg.textContent = "Deletion requested.";
                 });

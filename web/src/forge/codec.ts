@@ -5,6 +5,7 @@
 // forward-compatibly (unknown fields ignored). Relay sees opaque bodies.
 
 import { Either, Schema } from "effect";
+import { bytesToHex as bytes_to_hex, randomBytes as random_bytes } from "@noble/hashes/utils.js";
 
 export const TunnelMethod = Schema.Literal("GET", "POST", "PUT", "PATCH", "DELETE", "SUBSCRIBE", "UNSUBSCRIBE");
 export type TunnelMethod = typeof TunnelMethod.Type;
@@ -48,7 +49,7 @@ export type TunnelBytes = typeof TunnelBytes.Type;
 export const BYTES_ENVELOPE_KEY = "$bytes";
 
 /** A binary body inside request/response `body`: `{"$bytes": {...}}`. */
-export function asTunnelBytes(body: unknown): TunnelBytes | null {
+export function as_tunnel_bytes(body: unknown): TunnelBytes | null {
   if (typeof body !== "object" || body === null) return null;
   const fields = body as Record<string, unknown>;
   const keys = Object.keys(fields);
@@ -56,44 +57,27 @@ export function asTunnelBytes(body: unknown): TunnelBytes | null {
   return Either.getOrNull(Schema.decodeUnknownEither(TunnelBytes)(fields[BYTES_ENVELOPE_KEY]));
 }
 
-const B64U_RE = /^[A-Za-z0-9_-]*$/;
-
-export function base64urlEncode(bytes: Uint8Array): string {
-  let s = "";
-  for (let i = 0; i < bytes.length; i += 8192) s += String.fromCharCode(...bytes.subarray(i, i + 8192));
-  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-export function base64urlDecode(s: string): Uint8Array {
-  if (!B64U_RE.test(s) || s.length % 4 === 1) throw new Error("invalid base64url");
-  const padded = s + "=".repeat((4 - (s.length % 4)) % 4);
-  const bin = atob(padded.replace(/-/g, "+").replace(/_/g, "/"));
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-
 const strict_encode = { onExcessProperty: "error" } as const;
 
 /** Encode a tunnel request strictly; unknown fields are rejected. */
-export function encodeTunnelRequest(req: TunnelRequest): string {
+export function encode_tunnel_request(req: TunnelRequest): string {
   const encoded = Schema.encodeUnknownSync(TunnelRequest, strict_encode)(req);
   return JSON.stringify(encoded);
 }
 
 /** Decode a tunnel response forward-compatibly (unknown fields ignored). */
-export function decodeTunnelResponse(input: unknown): TunnelResponse {
+export function decode_tunnel_response(input: unknown): TunnelResponse {
   return Schema.decodeUnknownSync(TunnelResponse)(input);
 }
 
-export function throwIfTunnelError(res: TunnelResponse): TunnelResponse {
+export function throw_if_tunnel_error(res: TunnelResponse): TunnelResponse {
   if (res.status < 200 || res.status >= 300) {
     const msg =
       typeof res.body === "object" && res.body !== null && "error" in res.body
         ? String((res.body as { error: { message?: unknown } }).error?.message ?? `Forge answered ${res.status}`)
         : `Forge answered ${res.status}`;
     const err = new Error(msg);
-    (err as { tunnelStatus?: number }).tunnelStatus = res.status;
+    (err as { tunnel_status?: number }).tunnel_status = res.status;
     throw err;
   }
   return res;
@@ -103,8 +87,6 @@ export function throwIfTunnelError(res: TunnelResponse): TunnelResponse {
 export const SINGLE_FRAME_BYTES = 59_000;
 
 /** Random caller-made id for tunnel requests (not a secret). */
-export function newRequestId(): string {
-  const b = new Uint8Array(12);
-  crypto.getRandomValues(b);
-  return [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
+export function new_request_id(): string {
+  return bytes_to_hex(random_bytes(12));
 }

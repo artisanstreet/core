@@ -6,32 +6,32 @@ import type { Deferred } from "effect";
 import type { TunnelResponse } from "../forge/codec.ts";
 
 export interface RelayLinkLike {
-  connect(): Promise<{ role: string; forgeOnline: boolean }>;
+  connect(): Promise<{ role: string; forge_online: boolean }>;
   open(channel: string): void;
-  sendOpaque(channel: string, body: Uint8Array): SendStatus;
-  sendAcked(channel: string, body: Uint8Array, opts?: { timeoutMs?: number }): Promise<void>;
-  willFit(channel: string, encodedBytes: number): boolean;
-  closeChannel(channel: string, reason?: string): void;
+  send_opaque(channel: string, body: Uint8Array): SendStatus;
+  send_acked(channel: string, body: Uint8Array, opts?: { timeout_ms?: number }): Promise<void>;
+  will_fit(channel: string, encoded_bytes: number): boolean;
+  close_channel(channel: string, reason?: string): void;
   close(code?: number, reason?: string): void;
 }
 
 export type SendStatus = "sent" | "dropped-window-full";
 
 export type ChannelEvents = {
-  onChannelOpened?(channel: string, peer: "forge" | "client"): void;
-  onData?(channel: string, seq: number, body: Uint8Array): void;
-  onChannelClosed?(channel: string, reason: string): void;
-  onPresence?(forgeOnline: boolean, clients: number): void;
-  onError?(code: string, message: string): void;
-  onAck?(channel: string, seq: number): void;
-  onClose?(code: number, reason: string): void;
+  on_channel_opened?(channel: string, peer: "forge" | "client"): void;
+  on_data?(channel: string, seq: number, body: Uint8Array): void;
+  on_channel_closed?(channel: string, reason: string): void;
+  on_presence?(forge_online: boolean, clients: number): void;
+  on_error?(code: string, message: string): void;
+  on_ack?(channel: string, seq: number): void;
+  on_close?(code: number, reason: string): void;
 };
 
 export type ForgeSessionEvent =
-  | { type: "ready"; forgeOnline: boolean }
-  | { type: "presence"; forgeOnline: boolean; clients: number }
-  | { type: "channel-opened"; channel: string }
-  | { type: "channel-closed"; channel: string; reason: string }
+  | { type: "ready"; forge_online: boolean }
+  | { type: "presence"; forge_online: boolean; clients: number }
+  | { type: "channel_opened"; channel: string }
+  | { type: "channel_closed"; channel: string; reason: string }
   | { type: "error"; code: string; message: string };
 
 /** One in-flight unary call: the response resolver both sides share. */

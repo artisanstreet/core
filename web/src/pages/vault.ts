@@ -1,13 +1,13 @@
 import { Effect } from "effect";
 import type { CoreApi } from "../api.ts";
 import { run_promise } from "../core/run-promise.ts";
-import { clear, el, idSpan, when } from "../ui.ts";
+import { clear, el, id_span, when } from "../ui.ts";
 import type { PageContext } from "../main.ts";
 import { friendly } from "./signin.ts";
 
 const PROVIDERS = ["anthropic", "openai", "openrouter", "google"] as const;
 
-export function renderVault(ctx: PageContext): void {
+export function render_vault(ctx: PageContext): void {
   const { root, api } = ctx;
   clear(root);
 
@@ -21,7 +21,7 @@ export function renderVault(ctx: PageContext): void {
   create.append(el("h2", {}, "Add a provider API key"));
   create.append(el("p", { class: "muted small" },
     "Stored encrypted. Only Forges you assign below can use it, and the key itself never appears in this UI again."));
-  create.append(providerForm(api, () => void run_promise(refresh_effect(api, list))));
+  create.append(provider_form(api, () => void run_promise(refresh_effect(api, list))));
   root.append(create);
 
   const arts = el("div", { class: "card" });
@@ -36,7 +36,7 @@ export function renderVault(ctx: PageContext): void {
 
 const refresh_effect = (api: CoreApi, list: HTMLElement): Effect.Effect<void, unknown> =>
   Effect.gen(function* () {
-    const res = yield* Effect.tryPromise({ try: () => api.providerConnections(), catch: (e) => e });
+    const res = yield* Effect.tryPromise({ try: () => api.provider_connections(), catch: (e) => e });
     const machines = (yield* Effect.tryPromise({ try: () => api.machines(), catch: (e) => e })).machines;
     yield* Effect.sync(() => {
       render_connections(api, list, res.connections, machines);
@@ -73,7 +73,7 @@ const render_connections = (
   const table = el("table", {});
   table.append(el("tr", {}, el("th", {}, "Connection"), el("th", {}, "Assigned Forges"), el("th", {}, "")));
   for (const c of connections) {
-    const assignCell = el("td", {});
+    const assign_cell = el("td", {});
     if (!c.revokedAt) {
       const sel = el("select", { "aria-label": `Assign ${c.label || c.provider} to a Forge` }) as HTMLSelectElement;
       sel.append(el("option", { value: "" }, "choose a Forge…"));
@@ -84,7 +84,7 @@ const render_connections = (
         if (!sel.value) return;
         const target = sel.value;
         const assign: Effect.Effect<void, unknown> = Effect.gen(function* () {
-          yield* Effect.tryPromise({ try: () => api.assignConnection(c.id, target), catch: (e) => e });
+          yield* Effect.tryPromise({ try: () => api.assign_connection(c.id, target), catch: (e) => e });
           yield* Effect.sync(() => {
             msg.textContent = " Assigned.";
           });
@@ -98,13 +98,13 @@ const render_connections = (
         );
         void run_promise(assign);
       });
-      assignCell.append(sel, go, msg);
+      assign_cell.append(sel, go, msg);
       for (const mid of c.assignedMachineIds) {
-        const chip = el("div", { class: "small" }, idSpan(mid), " ");
+        const chip = el("div", { class: "small" }, id_span(mid), " ");
         const un = el("button", { class: "secondary", type: "button" }, "remove");
         un.addEventListener("click", () => {
           const unassign: Effect.Effect<void, unknown> = Effect.gen(function* () {
-            yield* Effect.tryPromise({ try: () => api.unassignConnection(c.id, mid), catch: (e) => e });
+            yield* Effect.tryPromise({ try: () => api.unassign_connection(c.id, mid), catch: (e) => e });
             yield* refresh_effect(api, list);
           }).pipe(
             Effect.catchAll((err: unknown) =>
@@ -116,10 +116,10 @@ const render_connections = (
           void run_promise(unassign);
         });
         chip.append(un);
-        assignCell.append(chip);
+        assign_cell.append(chip);
       }
     } else {
-      assignCell.textContent = "—";
+      assign_cell.textContent = "—";
     }
     const revoke = c.revokedAt
       ? el("span", { class: "muted small" }, `revoked ${when(c.revokedAt)}`)
@@ -127,7 +127,7 @@ const render_connections = (
           const b = el("button", { class: "danger", type: "button" }, "Revoke");
           b.addEventListener("click", () => {
             const revoke_one: Effect.Effect<void, unknown> = Effect.gen(function* () {
-              yield* Effect.tryPromise({ try: () => api.revokeProviderConnection(c.id), catch: (e) => e });
+              yield* Effect.tryPromise({ try: () => api.revoke_provider_connection(c.id), catch: (e) => e });
               yield* refresh_effect(api, list);
             }).pipe(
               Effect.catchAll((err: unknown) =>
@@ -141,26 +141,26 @@ const render_connections = (
           return b;
         })();
     table.append(el("tr", {},
-      el("td", {}, `${c.provider} — ${c.label || "unnamed"}`, el("br", {}), idSpan(c.id)),
-      assignCell,
+      el("td", {}, `${c.provider} — ${c.label || "unnamed"}`, el("br", {}), id_span(c.id)),
+      assign_cell,
       el("td", {}, revoke),
     ));
   }
   list.append(table);
 };
 
-const providerForm = (api: CoreApi, onDone: () => void): HTMLElement => {
+const provider_form = (api: CoreApi, on_done: () => void): HTMLElement => {
   const form = el("form", {});
-  const pLabel = el("label", { for: "vault-provider" }, "Provider");
+  const p_label = el("label", { for: "vault-provider" }, "Provider");
   const provider = el("select", { id: "vault-provider" }) as HTMLSelectElement;
   for (const p of PROVIDERS) provider.append(el("option", { value: p }, p));
-  const lLabel = el("label", { for: "vault-label" }, "Label");
+  const l_label = el("label", { for: "vault-label" }, "Label");
   const label = el("input", { id: "vault-label", type: "text", placeholder: "cafe account" }) as HTMLInputElement;
-  const kLabel = el("label", { for: "vault-key" }, "API key (sent once, never shown again)");
+  const k_label = el("label", { for: "vault-key" }, "API key (sent once, never shown again)");
   const key = el("input", { id: "vault-key", type: "text", required: "true", autocomplete: "off" }) as HTMLInputElement;
   const btn = el("button", { type: "submit" }, "Store connection");
   const msg = el("p", { class: "status", role: "status" });
-  form.append(pLabel, provider, lLabel, label, kLabel, key, btn, msg);
+  form.append(p_label, provider, l_label, label, k_label, key, btn, msg);
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     const kind = provider.value as (typeof PROVIDERS)[number];
@@ -170,12 +170,12 @@ const providerForm = (api: CoreApi, onDone: () => void): HTMLElement => {
       yield* Effect.sync(() => {
         btn.disabled = true;
       });
-      yield* Effect.tryPromise({ try: () => api.createProviderConnection(kind, name, secret), catch: (err) => err });
+      yield* Effect.tryPromise({ try: () => api.create_provider_connection(kind, name, secret), catch: (err) => err });
       yield* Effect.sync(() => {
         key.value = "";
         msg.textContent = "Stored.";
         msg.className = "status ok";
-        onDone();
+        on_done();
       });
     }).pipe(
       Effect.catchAll((err: unknown) =>
@@ -243,12 +243,12 @@ const render_artifacts = (
   for (const a of artifacts) {
     const cell = el("td", {});
     for (const mid of a.assignedMachineIds) {
-      const chip = el("div", { class: "small" }, idSpan(mid), " ");
+      const chip = el("div", { class: "small" }, id_span(mid), " ");
       const un = el("button", { class: "secondary", type: "button" }, "remove");
       un.addEventListener("click", () => {
-        const artifactId = a.id;
+        const artifact_id = a.id;
         const unassign: Effect.Effect<void, unknown> = Effect.gen(function* () {
-          yield* Effect.tryPromise({ try: () => api.unassignArtifact(artifactId, mid), catch: (e) => e });
+          yield* Effect.tryPromise({ try: () => api.unassign_artifact(artifact_id, mid), catch: (e) => e });
           yield* Effect.sync(() => {
             void run_promise(refresh_artifacts_effect(ctx, box, box.querySelector("p") ?? box));
           });
@@ -272,9 +272,9 @@ const render_artifacts = (
       go.addEventListener("click", () => {
         if (!sel.value) return;
         const target = sel.value;
-        const artifactId = a.id;
+        const artifact_id = a.id;
         const assign: Effect.Effect<void, unknown> = Effect.gen(function* () {
-          yield* Effect.tryPromise({ try: () => api.assignArtifact(artifactId, target), catch: (e) => e });
+          yield* Effect.tryPromise({ try: () => api.assign_artifact(artifact_id, target), catch: (e) => e });
           yield* Effect.sync(() => {
             void run_promise(refresh_artifacts_effect(ctx, box, box.querySelector("p") ?? box));
           });
@@ -294,9 +294,9 @@ const render_artifacts = (
       : (() => {
           const b = el("button", { class: "danger", type: "button" }, "Revoke");
           b.addEventListener("click", () => {
-            const artifactId = a.id;
+            const artifact_id = a.id;
             const revoke_one: Effect.Effect<void, unknown> = Effect.gen(function* () {
-              yield* Effect.tryPromise({ try: () => api.revokeArtifact(artifactId), catch: (e) => e });
+              yield* Effect.tryPromise({ try: () => api.revoke_artifact(artifact_id), catch: (e) => e });
               yield* Effect.sync(() => {
                 void run_promise(refresh_artifacts_effect(ctx, box, box.querySelector("p") ?? box));
               });
@@ -312,7 +312,7 @@ const render_artifacts = (
           return b;
         })();
     table.append(el("tr", {},
-      el("td", {}, `${a.engine} / ${a.kind} — ${a.label || "unnamed"}`, el("br", {}), idSpan(a.id), el("br", {}),
+      el("td", {}, `${a.engine} / ${a.kind} — ${a.label || "unnamed"}`, el("br", {}), id_span(a.id), el("br", {}),
         el("span", { class: "small muted" }, `exported ${when(a.exportedAt)}`)),
       cell,
       el("td", {}, revoke),

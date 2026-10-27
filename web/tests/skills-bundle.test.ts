@@ -5,8 +5,8 @@ import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import { Schema } from "effect";
 import * as C from "../../src/contracts/v1.ts";
-import { buildSkillBundle } from "../src/skills-bundle.ts";
-import { transcriptText } from "../src/forge.ts";
+import { build_skill_bundle } from "../src/skills-bundle.ts";
+import { transcript_text } from "../src/forge.ts";
 
 function file(path: string, content: string): File {
   const f = new File([content], path.split("/").pop() ?? path, { type: "text/plain" });
@@ -16,8 +16,8 @@ function file(path: string, content: string): File {
 
 describe("skill bundle building (Core SkillFile shape)", () => {
   it("bundles SKILL.md plus support files with base64url + sha256", async () => {
-    const built = await buildSkillBundle({
-      folderName: "my-skill",
+    const built = await build_skill_bundle({
+      folder_name: "my-skill",
       files: [file("SKILL.md", "# hi"), file("helpers/a.md", "help")],
     });
     expect(built.name).toBe("my-skill");
@@ -31,12 +31,12 @@ describe("skill bundle building (Core SkillFile shape)", () => {
   });
 
   it("requires SKILL.md at the root", async () => {
-    await expect(buildSkillBundle({ folderName: "x", files: [file("other.md", "nope")] })).rejects.toThrow(/SKILL\.md/);
+    await expect(build_skill_bundle({ folder_name: "x", files: [file("other.md", "nope")] })).rejects.toThrow(/SKILL\.md/);
   });
 
   it("refuses secret-looking and tool folders by name, keeps the rest", async () => {
-    const built = await buildSkillBundle({
-      folderName: "my-skill",
+    const built = await build_skill_bundle({
+      folder_name: "my-skill",
       files: [
         file("SKILL.md", "# hi"),
         file(".env", "KEY=1"),
@@ -51,7 +51,7 @@ describe("skill bundle building (Core SkillFile shape)", () => {
   });
 
   it("every produced file validates strictly against Core's SkillFile", async () => {
-    const built = await buildSkillBundle({ folderName: "s", files: [file("SKILL.md", "# hi")] });
+    const built = await build_skill_bundle({ folder_name: "s", files: [file("SKILL.md", "# hi")] });
     for (const f of built.bundle.files) {
       expect(() => Schema.decodeUnknownSync(C.SkillFile, { onExcessProperty: "error" })(f)).not.toThrow();
     }
@@ -83,7 +83,7 @@ describe("transcript extractor (contract shapes)", () => {
       text: parts.join("\n"),
       phase: "final",
     };
-    const t = transcriptText(kind);
+    const t = transcript_text(kind);
     for (const p of parts) expect(t.text).toContain(p);
     expect(t.stored).toEqual([]);
   });
@@ -97,12 +97,12 @@ describe("transcript extractor (contract shapes)", () => {
       exit_code: 0,
       approval: null,
     };
-    const t = transcriptText(kind);
+    const t = transcript_text(kind);
     expect(t.text).toContain("Run tests");
     expect(t.text).toContain("make test");
     expect(t.text).toContain("ok ok");
     expect(t.text.length).toBeGreaterThan(2900);
-    const q = transcriptText({
+    const q = transcript_text({
       type: "question",
       blocking: true,
       questions: [
@@ -118,15 +118,15 @@ describe("transcript extractor (contract shapes)", () => {
   });
 
   it("surfaces stored refs and omitted bytes explicitly", () => {
-    const t = transcriptText({ type: "assistant_message", text: { id: "abc123", bytes: 9000 } });
+    const t = transcript_text({ type: "assistant_message", text: { id: "abc123", bytes: 9000 } });
     expect(t.text).toBe("");
     expect(t.stored).toEqual([{ id: "abc123", bytes: 9000, label: "reply" }]);
-    const t2 = transcriptText({ type: "tool", tool: { kind: "shell", command: "x" }, output: { text: "part", omitted_bytes: 12 } });
+    const t2 = transcript_text({ type: "tool", tool: { kind: "shell", command: "x" }, output: { text: "part", omitted_bytes: 12 } });
     expect(t2.notices.join(" ")).toMatch(/12.*omitted/);
   });
 
   it("falls back to generic reads on unknown future variants", () => {
-    const t = transcriptText({ type: "hologram", text: "future-shape" });
+    const t = transcript_text({ type: "hologram", text: "future-shape" });
     expect(t.text).toContain("future-shape");
   });
 });

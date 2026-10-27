@@ -1,5 +1,5 @@
 // Tiny DOM helpers. All interpolated text uses textContent (never
-// innerHTML with untrusted data); the only HTML built as strings is static
+// inner_html with untrusted data); the only HTML built as strings is static
 // page chrome written by us.
 
 export function el<K extends keyof HTMLElementTagNameMap>(
@@ -29,6 +29,6 @@ export function when(iso: string | null): string {
 }
 
 /** Copyable one-line identifier. */
-export function idSpan(id: string): HTMLElement {
+export function id_span(id: string): HTMLElement {
   return el("span", { class: "mono" }, id);
 }

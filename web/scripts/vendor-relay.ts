@@ -21,13 +21,14 @@
 // library, initiator JWT inside the encrypted confirm, Ed25519 `cnf`
 // binding signatures over the transcript hash. No custom crypto.
 
-import { copyFile, mkdir, readFile, writeFile, rm } from "node:fs/promises";
-import { createHash } from "node:crypto";
+import { copyFile as copy_file, mkdir as make_dir, readFile as read_file, writeFile as write_file, rm as remove_file } from "node:fs/promises";
+import { createHash as create_hash } from "node:crypto";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { execFileSync } from "node:child_process";
+import { fileURLToPath as file_url_to_path } from "node:url";
+import { execFileSync as exec_file_sync } from "node:child_process";
+import { Either } from "effect";
 
-const web_root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const web_root = path.dirname(path.dirname(file_url_to_path(import.meta.url)));
 const relay_root = path.resolve(web_root, "..", "..", "relay");
 const vendor_dir = path.join(web_root, "vendor", "relay");
 
@@ -58,11 +59,13 @@ const RETIRED_FILES: ReadonlyArray<string> = [
 const expected_commit: string | null = process.argv[2] ?? null;
 
 function relay_commit(): string {
-  try {
-    return execFileSync("git", ["rev-parse", "HEAD"], { cwd: relay_root, encoding: "utf8" }).trim();
-  } catch {
-    return "unknown (sibling checkout has no git)";
-  }
+  return Either.getOrElse(
+    Either.try({
+      try: () => exec_file_sync("git", ["rev-parse", "HEAD"], { cwd: relay_root, encoding: "utf8" }).trim(),
+      catch: () => null,
+    }),
+    () => "unknown (sibling checkout has no git)",
+  );
 }
 
 const commit = relay_commit();
@@ -71,22 +74,22 @@ if (expected_commit && commit !== expected_commit) {
   process.exit(1);
 }
 
-await mkdir(vendor_dir, { recursive: true });
+await make_dir(vendor_dir, { recursive: true });
 const manifest: { commit: string; files: Record<string, string> } = { commit, files: {} };
 for (const [rel, dst] of RELAY_FILES) {
   const src = path.join(relay_root, rel);
   const out = path.join(vendor_dir, dst);
-  await mkdir(path.dirname(out), { recursive: true });
-  await copyFile(src, out);
-  const bytes = await readFile(out);
-  const sha256 = createHash("sha256").update(bytes).digest("hex");
+  await make_dir(path.dirname(out), { recursive: true });
+  await copy_file(src, out);
+  const bytes = await read_file(out);
+  const sha256 = create_hash("sha256").update(bytes).digest("hex");
   manifest.files[dst] = sha256;
   console.log(`vendored ${rel} sha256=${sha256.slice(0, 16)}…`);
 }
 for (const retired of RETIRED_FILES) {
-  await rm(path.join(vendor_dir, retired), { force: true });
+  await remove_file(path.join(vendor_dir, retired), { force: true });
   console.log(`retired ${retired} (Relay server graph, no longer browser-safe)`);
 }
-await writeFile(path.join(vendor_dir, "VERSION"), `${commit}\n`);
-await writeFile(path.join(vendor_dir, "INTEGRITY.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+await write_file(path.join(vendor_dir, "VERSION"), `${commit}\n`);
+await write_file(path.join(vendor_dir, "INTEGRITY.json"), `${JSON.stringify(manifest, null, 2)}\n`);
 console.log(`relay client vendored at commit ${commit}`);

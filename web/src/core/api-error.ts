@@ -41,9 +41,6 @@ export class ApiError extends Error {
     this.status = status;
     this.request_id = body.requestId;
   }
-  get requestId(): string {
-    return this.request_id;
-  }
 }
 
 /** Convert a typed Effect failure into the legacy `ApiError` at the Promise boundary. */

@@ -9,43 +9,41 @@ export {
   TunnelResponse,
   TunnelBytes,
   BYTES_ENVELOPE_KEY,
-  asTunnelBytes,
-  base64urlEncode,
-  base64urlDecode,
-  encodeTunnelRequest,
-  decodeTunnelResponse,
-  throwIfTunnelError,
+  as_tunnel_bytes,
+  encode_tunnel_request,
+  decode_tunnel_response,
+  throw_if_tunnel_error,
   SINGLE_FRAME_BYTES,
-  newRequestId,
+  new_request_id,
 } from "./forge/codec.ts";
 export type { TunnelMethod as TunnelMethodType, TunnelRequest as TunnelRequestType, TunnelResponse as TunnelResponseType } from "./forge/codec.ts";
 export {
   TunnelChunk,
   TRANSFER_MAX_BYTES,
   CHUNK_SEND_RAW_BYTES,
-  isChunkFrame,
-  chunkBytes,
+  is_chunk_frame,
+  chunk_bytes,
   ChunkReassembly,
 } from "./forge/chunk.ts";
 export {
-  asThreadsPage,
-  asItemsPage,
-  itemSummary,
-  firstText,
-  textOf,
+  as_threads_page,
+  as_items_page,
+  item_summary,
+  first_text,
+  text_of,
 } from "./forge/dto.ts";
 export type { ForgeThread, ForgeThreadsPage, ForgeItem, ForgeItemsPage, ForgeState } from "./forge/dto.ts";
 export {
-  pendingApproval,
-  pendingQuestions,
-  approvalAnswer,
-  questionAnswer,
-  sendMessageBody,
+  pending_approval,
+  pending_questions,
+  approval_answer,
+  question_answer,
+  send_message_body,
 } from "./forge/approval.ts";
 export type { PendingApproval, PendingQuestion } from "./forge/approval.ts";
-export { TRANSCRIPT_BODY_CAP, transcriptText } from "./forge/transcript.ts";
+export { TRANSCRIPT_BODY_CAP, transcript_text } from "./forge/transcript.ts";
 export type { StoredRef, TranscriptText } from "./forge/transcript.ts";
-export { StreamStart, StreamEvent, asStreamStart, asStreamEvent, asLiveEnvelope } from "./forge/stream-frames.ts";
+export { StreamStart, StreamEvent, as_stream_start, as_stream_event, as_live_envelope } from "./forge/stream-frames.ts";
 export type { LiveEnvelope } from "./forge/stream-frames.ts";
 export { decode_app_message } from "./forge/app-message.ts";
 export type { AppMessage } from "./forge/app-message.ts";

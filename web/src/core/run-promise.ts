@@ -1,4 +1,4 @@
-// Promise boundary: `runPromise` rejects with `FiberFailure`, so typed
+// Promise boundary: `run_promise` rejects with `FiberFailure`, so typed
 // failures go through `runPromiseExit` + `Cause.failureOption` here.
 
 import { Cause, Effect } from "effect";
