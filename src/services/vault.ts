@@ -10,22 +10,22 @@ import { EngineArtifactEnvelope } from "../contracts/v1.ts";
 // in the Editor product layer (products/editor/artifacts.ts); the generic
 // vault only stores, assigns, and releases validated envelopes.
 export type ValidatedEnvelope = typeof EngineArtifactEnvelope.Type;
-import insert_provider_connection from "../db/queries/vault/insertProviderConnection.sql"
-import list_provider_connections_by_account from "../db/queries/vault/listProviderConnectionsByAccount.sql"
-import revoke_provider_connection from "../db/queries/vault/revokeProviderConnection.sql"
-import assign_machine from "../db/queries/vault/assignMachine.sql"
-import unassign_machine from "../db/queries/vault/unassignMachine.sql"
-import get_credential_for_machine from "../db/queries/vault/getCredentialForMachine.sql"
-import list_assignments_by_account from "../db/queries/vault/listAssignmentsByAccount.sql"
-import list_assigned_connections_for_machine from "../db/queries/vault/listAssignedConnectionsForMachine.sql"
-import insert_engine_artifact from "../db/queries/artifacts/insertEngineArtifact.sql"
-import list_engine_artifacts_by_account from "../db/queries/artifacts/listEngineArtifactsByAccount.sql"
-import revoke_engine_artifact from "../db/queries/artifacts/revokeEngineArtifact.sql"
-import assign_artifact_machine from "../db/queries/artifacts/assignArtifactMachine.sql"
-import unassign_artifact_machine from "../db/queries/artifacts/unassignArtifactMachine.sql"
-import get_artifact_envelope_for_machine from "../db/queries/artifacts/getArtifactEnvelopeForMachine.sql"
-import list_artifact_assignments_by_account from "../db/queries/artifacts/listArtifactAssignmentsByAccount.sql"
-import list_assigned_artifacts_for_machine from "../db/queries/artifacts/listAssignedArtifactsForMachine.sql"
+import insert_provider_connection from "../db/queries/vault/insert-provider-connection.sql"
+import list_provider_connections_by_account from "../db/queries/vault/list-provider-connections-by-account.sql"
+import revoke_provider_connection from "../db/queries/vault/revoke-provider-connection.sql"
+import assign_machine from "../db/queries/vault/assign-machine.sql"
+import unassign_machine from "../db/queries/vault/unassign-machine.sql"
+import get_credential_for_machine from "../db/queries/vault/get-credential-for-machine.sql"
+import list_assignments_by_account from "../db/queries/vault/list-assignments-by-account.sql"
+import list_assigned_connections_for_machine from "../db/queries/vault/list-assigned-connections-for-machine.sql"
+import insert_engine_artifact from "../db/queries/artifacts/insert-engine-artifact.sql"
+import list_engine_artifacts_by_account from "../db/queries/artifacts/list-engine-artifacts-by-account.sql"
+import revoke_engine_artifact from "../db/queries/artifacts/revoke-engine-artifact.sql"
+import assign_artifact_machine from "../db/queries/artifacts/assign-artifact-machine.sql"
+import unassign_artifact_machine from "../db/queries/artifacts/unassign-artifact-machine.sql"
+import get_artifact_envelope_for_machine from "../db/queries/artifacts/get-artifact-envelope-for-machine.sql"
+import list_artifact_assignments_by_account from "../db/queries/artifacts/list-artifact-assignments-by-account.sql"
+import list_assigned_artifacts_for_machine from "../db/queries/artifacts/list-assigned-artifacts-for-machine.sql"
 
 const PROVIDER_PURPOSE = "provider-secret v1";
 const ARTIFACT_PURPOSE = "engine-artifact v1";
@@ -54,10 +54,10 @@ export const create_provider_connection = (opts: {
     const row = yield* db_run(() =>
       insert_provider_connection.run(db, {
         id: new_id("conn"),
-        accountId: opts.account_id,
+        account_id: opts.account_id,
         provider: opts.provider,
         label: opts.label.slice(0, 120),
-        secretEnc: enc }),
+        secret_enc: enc }),
     );
     yield* record(opts.account_id, "vault.connection_created", {});
     return { id: row.id, provider: row.provider, label: row.label, createdAt: row.created_at };
@@ -66,8 +66,8 @@ export const create_provider_connection = (opts: {
 export const list_provider_connections = (account_id: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const conns = yield* db_run(() => list_provider_connections_by_account.run(db, { accountId: account_id }));
-    const assigns = yield* db_run(() => list_assignments_by_account.run(db, { accountId: account_id }));
+    const conns = yield* db_run(() => list_provider_connections_by_account.run(db, { account_id: account_id }));
+    const assigns = yield* db_run(() => list_assignments_by_account.run(db, { account_id: account_id }));
     return {
       connections: conns.map((c) => ({
         id: c.id,
@@ -81,7 +81,7 @@ export const list_provider_connections = (account_id: string) =>
 export const revoke_provider_connection_by_id = (account_id: string, connection_id: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const done = yield* db_run(() => revoke_provider_connection.run(db, { id: connection_id, accountId: account_id }));
+    const done = yield* db_run(() => revoke_provider_connection.run(db, { id: connection_id, account_id: account_id }));
     if (!done) return yield* Effect.fail(forbidden("no such connection in this account"));
     yield* record(account_id, "vault.connection_revoked", {});
     return { revoked: true };
@@ -93,7 +93,7 @@ export const revoke_provider_connection_by_id = (account_id: string, connection_
 export const list_assigned_provider_connections = (account_id: string, machine_id: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const rows = yield* db_run(() => list_assigned_connections_for_machine.run(db, { accountId: account_id, machineId: machine_id }));
+    const rows = yield* db_run(() => list_assigned_connections_for_machine.run(db, { account_id: account_id, machine_id: machine_id }));
     return {
       connections: rows.map((c) => ({
         id: c.id,
@@ -109,7 +109,7 @@ export const assign_connection = (account_id: string, connection_id: string, mac
     const { db } = yield* DbTag;
     // Array cardinality is the account binding speaking: zero rows means
     // one of the ends is unknown, revoked, or in another account.
-    const rows = yield* db_run(() => assign_machine.run(db, { connectionId: connection_id, machineId: machine_id, accountId: account_id }));
+    const rows = yield* db_run(() => assign_machine.run(db, { connection_id: connection_id, machine_id: machine_id, account_id: account_id }));
     const done = rows[0] ?? null;
     if (!done) return yield* Effect.fail(forbidden("unknown connection or machine in this account"));
     yield* record(account_id, "vault.assigned", {});
@@ -119,7 +119,7 @@ export const assign_connection = (account_id: string, connection_id: string, mac
 export const unassign_connection = (account_id: string, connection_id: string, machine_id: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const done = yield* db_run(() => unassign_machine.run(db, { connectionId: connection_id, machineId: machine_id, accountId: account_id }));
+    const done = yield* db_run(() => unassign_machine.run(db, { connection_id: connection_id, machine_id: machine_id, account_id: account_id }));
     if (!done) return yield* Effect.fail(forbidden("no such assignment in this account"));
     yield* record(account_id, "vault.unassigned", {});
     return { unassigned: true };
@@ -129,7 +129,7 @@ export const release_credential = (account_id: string, machine_id: string, conne
   Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
-    const row = yield* db_run(() => get_credential_for_machine.run(db, { connectionId: connection_id, machineId: machine_id, accountId: account_id }));
+    const row = yield* db_run(() => get_credential_for_machine.run(db, { connection_id: connection_id, machine_id: machine_id, account_id: account_id }));
     if (!row) return yield* Effect.fail(forbidden("no credential available to this machine"));
     const secret = yield* Effect.try({
         try: () => decrypt_with_key(cfg.master_key.raw, new Uint8Array(row.secret_enc), PROVIDER_PURPOSE),
@@ -151,13 +151,13 @@ export const store_artifact = (opts: { account_id: string; label: string; envelo
     yield* db_run(() =>
       insert_engine_artifact.run(db, {
         id,
-        accountId: opts.account_id,
+        account_id: opts.account_id,
         engine: env.engine,
         kind: env.kind,
         label: opts.label.slice(0, 120),
-        formatVersion: env.format,
-        envelopeEnc: enc,
-        exportedAt: env.exportedAt }),
+        format_version: env.format,
+        envelope_enc: enc,
+        exported_at: env.exportedAt }),
     );
     yield* record(opts.account_id, "artifact.stored", {});
     return { id };
@@ -166,8 +166,8 @@ export const store_artifact = (opts: { account_id: string; label: string; envelo
 export const list_artifacts = (account_id: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const arts = yield* db_run(() => list_engine_artifacts_by_account.run(db, { accountId: account_id }));
-    const assigns = yield* db_run(() => list_artifact_assignments_by_account.run(db, { accountId: account_id }));
+    const arts = yield* db_run(() => list_engine_artifacts_by_account.run(db, { account_id: account_id }));
+    const assigns = yield* db_run(() => list_artifact_assignments_by_account.run(db, { account_id: account_id }));
     return {
       artifacts: arts.map((a) => ({
         id: a.id,
@@ -184,7 +184,7 @@ export const list_artifacts = (account_id: string) =>
 export const revoke_artifact = (account_id: string, artifact_id: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const done = yield* db_run(() => revoke_engine_artifact.run(db, { id: artifact_id, accountId: account_id }));
+    const done = yield* db_run(() => revoke_engine_artifact.run(db, { id: artifact_id, account_id: account_id }));
     if (!done) return yield* Effect.fail(forbidden("no such artifact in this account"));
     yield* record(account_id, "artifact.revoked", {});
     return { revoked: true };
@@ -195,7 +195,7 @@ export const revoke_artifact = (account_id: string, artifact_id: string) =>
 export const list_assigned_artifacts = (account_id: string, machine_id: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const rows = yield* db_run(() => list_assigned_artifacts_for_machine.run(db, { accountId: account_id, machineId: machine_id }));
+    const rows = yield* db_run(() => list_assigned_artifacts_for_machine.run(db, { account_id: account_id, machine_id: machine_id }));
     return {
       artifacts: rows.map((a) => ({
         id: a.id,
@@ -212,7 +212,7 @@ export const list_assigned_artifacts = (account_id: string, machine_id: string) 
 export const assign_artifact = (account_id: string, artifact_id: string, machine_id: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const rows = yield* db_run(() => assign_artifact_machine.run(db, { artifactId: artifact_id, machineId: machine_id, accountId: account_id }));
+    const rows = yield* db_run(() => assign_artifact_machine.run(db, { artifact_id: artifact_id, machine_id: machine_id, account_id: account_id }));
     const done = rows[0] ?? null;
     if (!done) return yield* Effect.fail(forbidden("unknown artifact or machine in this account"));
     yield* record(account_id, "artifact.assigned", {});
@@ -222,7 +222,7 @@ export const assign_artifact = (account_id: string, artifact_id: string, machine
 export const unassign_artifact = (account_id: string, artifact_id: string, machine_id: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const done = yield* db_run(() => unassign_artifact_machine.run(db, { artifactId: artifact_id, machineId: machine_id, accountId: account_id }));
+    const done = yield* db_run(() => unassign_artifact_machine.run(db, { artifact_id: artifact_id, machine_id: machine_id, account_id: account_id }));
     if (!done) return yield* Effect.fail(forbidden("no such assignment in this account"));
     yield* record(account_id, "artifact.unassigned", {});
     return { unassigned: true };
@@ -232,7 +232,7 @@ export const download_artifact = (account_id: string, machine_id: string, artifa
   Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
-    const row = yield* db_run(() => get_artifact_envelope_for_machine.run(db, { artifactId: artifact_id, machineId: machine_id, accountId: account_id }));
+    const row = yield* db_run(() => get_artifact_envelope_for_machine.run(db, { artifact_id: artifact_id, machine_id: machine_id, account_id: account_id }));
     if (!row) return yield* Effect.fail(forbidden("no artifact available to this machine"));
     const pt = yield* Effect.try({
         try: () => decrypt_with_key(cfg.master_key.raw, new Uint8Array(row.envelope_enc), ARTIFACT_PURPOSE),

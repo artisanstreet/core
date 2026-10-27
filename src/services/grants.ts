@@ -6,14 +6,14 @@ import { bad_request, forbidden, unauthorized, type CoreError } from "../errors.
 import { new_id } from "../ids.ts";
 import { AppConfigTag, DbTag, db_run } from "./deps.ts";
 import { record } from "./activity.ts";
-import insert_grant_key from "../db/queries/grants/insertGrantKey.sql"
-import get_grant_key_by_kid from "../db/queries/grants/getGrantKeyByKid.sql"
-import list_active_grant_keys from "../db/queries/grants/listActiveGrantKeys.sql"
-import retire_grant_key from "../db/queries/grants/retireGrantKey.sql"
-import list_recent_keys_for_jwks from "../db/queries/grants/listRecentKeysForJwks.sql"
-import list_retired_key_ids from "../db/queries/grants/listRetiredKeyIds.sql"
-import list_revoked_machine_ids from "../db/queries/grants/listRevokedMachineIds.sql"
-import get_machine_by_id from "../db/queries/machines/getMachineById.sql"
+import insert_grant_key from "../db/queries/grants/insert-grant-key.sql"
+import get_grant_key_by_kid from "../db/queries/grants/get-grant-key-by-kid.sql"
+import list_active_grant_keys from "../db/queries/grants/list-active-grant-keys.sql"
+import retire_grant_key from "../db/queries/grants/retire-grant-key.sql"
+import list_recent_keys_for_jwks from "../db/queries/grants/list-recent-keys-for-jwks.sql"
+import list_retired_key_ids from "../db/queries/grants/list-retired-key-ids.sql"
+import list_revoked_machine_ids from "../db/queries/grants/list-revoked-machine-ids.sql"
+import get_machine_by_id from "../db/queries/machines/get-machine-by-id.sql"
 
 const SEED_PURPOSE = "grant-key-seed v1";
 
@@ -68,7 +68,7 @@ export const ensure_active_key = Effect.gen(function* () {
     const seed_enc = yield* Effect.sync(() =>
       encrypt_with_key(cfg.master_key.raw, base64url_decode(priv.d as string), SEED_PURPOSE),
     );
-    yield* db_run(() => insert_grant_key.run(db, { kid, publicX: priv.x as string, privateSeedEnc: seed_enc }));
+    yield* db_run(() => insert_grant_key.run(db, { kid, public_x: priv.x as string, private_seed_enc: seed_enc }));
     const private_key = yield* import_seed(base64url_decode(priv.d as string), priv.x as string);
     if (cache) yield* cache.set(kid, private_key).pipe(Effect.orElseSucceed(() => undefined));
     return { kid, private_key };
@@ -189,7 +189,7 @@ export const rotate_keys = Effect.gen(function* () {
     const seed_enc = yield* Effect.sync(() =>
       encrypt_with_key(cfg.master_key.raw, base64url_decode(priv.d as string), SEED_PURPOSE),
     );
-    yield* db_run(() => insert_grant_key.run(db, { kid, publicX: priv.x as string, privateSeedEnc: seed_enc }));
+    yield* db_run(() => insert_grant_key.run(db, { kid, public_x: priv.x as string, private_seed_enc: seed_enc }));
     const actives = yield* db_run(() => list_active_grant_keys.run(db, { limit: 10 }));
     for (const a of actives) {
       if (a.kid === kid) continue;

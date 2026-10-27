@@ -6,18 +6,18 @@ import { new_id } from "../ids.ts";
 import { AppConfigTag, DbTag, db_run } from "./deps.ts";
 import { check_budget } from "./ratelimit.ts";
 import { record } from "./activity.ts";
-import get_account_by_id from "../db/queries/accounts/getAccountById.sql"
-import insert_enrollment from "../db/queries/enrollments/insertEnrollment.sql"
-import get_enrollment_by_id from "../db/queries/enrollments/getEnrollmentById.sql"
-import get_enrollment_by_code_hash from "../db/queries/enrollments/getEnrollmentByCodeHash.sql"
-import claim_enrollment from "../db/queries/enrollments/claimEnrollment.sql"
-import confirm_enrollment from "../db/queries/enrollments/confirmEnrollment.sql"
-import insert_machine from "../db/queries/machines/insertMachine.sql"
-import get_machine_by_id from "../db/queries/machines/getMachineById.sql"
-import list_machines_by_account from "../db/queries/machines/listMachinesByAccount.sql"
-import revoke_machine from "../db/queries/machines/revokeMachine.sql"
-import touch_machine_last_seen from "../db/queries/machines/touchMachineLastSeen.sql"
-import insert_nonce from "../db/queries/nonces/insertNonce.sql"
+import get_account_by_id from "../db/queries/accounts/get-account-by-id.sql"
+import insert_enrollment from "../db/queries/enrollments/insert-enrollment.sql"
+import get_enrollment_by_id from "../db/queries/enrollments/get-enrollment-by-id.sql"
+import get_enrollment_by_code_hash from "../db/queries/enrollments/get-enrollment-by-code-hash.sql"
+import claim_enrollment from "../db/queries/enrollments/claim-enrollment.sql"
+import confirm_enrollment from "../db/queries/enrollments/confirm-enrollment.sql"
+import insert_machine from "../db/queries/machines/insert-machine.sql"
+import get_machine_by_id from "../db/queries/machines/get-machine-by-id.sql"
+import list_machines_by_account from "../db/queries/machines/list-machines-by-account.sql"
+import revoke_machine from "../db/queries/machines/revoke-machine.sql"
+import touch_machine_last_seen from "../db/queries/machines/touch-machine-last-seen.sql"
+import insert_nonce from "../db/queries/nonces/insert-nonce.sql"
 
 export interface MachinePrincipal {
   readonly machine_id: string;
@@ -130,10 +130,10 @@ export const start_enrollment = (opts: {
     yield* db_run(() =>
       insert_enrollment.run(db, {
         id: enrollment_id,
-        publicKeyX: opts.public_key_x,
+        public_key_x: opts.public_key_x,
         label: opts.label.slice(0, 120),
-        codeHash: code_hash,
-        expiresAt: expires_at }),
+        code_hash: code_hash,
+        expires_at: expires_at }),
     );
     const fingerprint = yield* fingerprint_of_public_key_x(opts.public_key_x);
     return { enrollmentId: enrollment_id, code, expiresAt: expires_at, keyFingerprint: fingerprint };
@@ -152,12 +152,12 @@ export const claim_enrollment_with_code = (opts: {
     if (opts.ip) yield* check_budget(`claim:ip:${opts.ip}`, RATE_WINDOW_SECONDS, 30, cfg.now());
     yield* check_budget("claim:global", RATE_WINDOW_SECONDS, 200, cfg.now());
     const code_hash = yield* Effect.sync(() => sha256_hex(`ast-core enroll v1:${opts.code.trim().toUpperCase()}`));
-    const found = yield* db_run(() => get_enrollment_by_code_hash.run(db, { codeHash: code_hash }));
+    const found = yield* db_run(() => get_enrollment_by_code_hash.run(db, { code_hash: code_hash }));
     if (!found || found.status !== "pending" || Date.parse(found.expires_at) <= cfg.now()) {
       return yield* Effect.fail(unauthorized("invalid or expired code"));
     }
     const claimed = yield* db_run(() =>
-      claim_enrollment.run(db, { id: found.id, accountId: opts.account_id, email: opts.email }),
+      claim_enrollment.run(db, { id: found.id, account_id: opts.account_id, email: opts.email }),
     );
     if (!claimed) return yield* Effect.fail(unauthorized("invalid or expired code"));
     yield* record(opts.account_id, "machine.claimed", { ip: opts.ip ?? null });
@@ -248,11 +248,11 @@ export const confirm_enrollment_with_key = (opts: {
     if (!bound) return yield* Effect.fail(unauthorized("confirmation does not bind this account and key"));
     const machine_id = new_id("mch");
     const done = yield* db_run(() =>
-      confirm_enrollment.run(db, { id: row.id, accountId: opts.account_id, machineId: machine_id }),
+      confirm_enrollment.run(db, { id: row.id, account_id: opts.account_id, machine_id: machine_id }),
     );
     if (!done) return yield* Effect.fail(forbidden("enrollment is not claimed to this account"));
     yield* db_run(() =>
-      insert_machine.run(db, { id: machine_id, accountId: opts.account_id, publicKeyX: row.public_key_x, label: row.label }),
+      insert_machine.run(db, { id: machine_id, account_id: opts.account_id, public_key_x: row.public_key_x, label: row.label }),
     );
     yield* record(opts.account_id, "machine.enrolled", {});
     return { machineId: machine_id, accountId: opts.account_id };
@@ -275,7 +275,7 @@ export const require_machine = (machine_id: string) =>
 export const list_machines = (account_id: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const rows = yield* db_run(() => list_machines_by_account.run(db, { accountId: account_id }));
+    const rows = yield* db_run(() => list_machines_by_account.run(db, { account_id: account_id }));
     return {
       machines: rows.map((r) => ({
         id: r.id,
@@ -289,7 +289,7 @@ export const list_machines = (account_id: string) =>
 export const revoke_machine_by_id = (account_id: string, machine_id: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const done = yield* db_run(() => revoke_machine.run(db, { id: machine_id, accountId: account_id }));
+    const done = yield* db_run(() => revoke_machine.run(db, { id: machine_id, account_id: account_id }));
     if (!done) return yield* Effect.fail(forbidden("no such machine in this account"));
     yield* record(account_id, "machine.revoked", {});
     return { revoked: true };

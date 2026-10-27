@@ -8,28 +8,28 @@ import { AppConfigTag, DbTag, TxTag, db_run } from "./deps.ts";
 import { check_budget } from "./ratelimit.ts";
 import { record } from "./activity.ts";
 import { MailTag } from "./mail.ts";
-import insert_account from "../db/queries/accounts/insertAccount.sql"
-import get_account_by_id from "../db/queries/accounts/getAccountById.sql"
-import get_account_by_email from "../db/queries/accounts/getAccountByEmail.sql"
-import stage_totp_secret from "../db/queries/accounts/stageTotpSecret.sql"
-import promote_totp from "../db/queries/accounts/promoteTotp.sql"
-import clear_totp from "../db/queries/accounts/clearTotp.sql"
-import claim_totp_step from "../db/queries/totp/claimTotpStep.sql"
-import insert_activity from "../db/queries/activity/insertActivity.sql"
-import insert_login_request from "../db/queries/login/insertLoginRequest.sql"
-import get_login_request_by_email_token_hash from "../db/queries/login/getLoginRequestByEmailTokenHash.sql"
-import get_login_request_by_id from "../db/queries/login/getLoginRequestById.sql"
-import mark_email_approved from "../db/queries/login/markEmailApproved.sql"
-import mark_login_completed from "../db/queries/login/markLoginCompleted.sql"
-import insert_session from "../db/queries/sessions/insertSession.sql"
-import get_session_with_account_by_token_hash from "../db/queries/sessions/getSessionWithAccountByTokenHash.sql"
-import revoke_session from "../db/queries/sessions/revokeSession.sql"
-import revoke_sessions_by_account from "../db/queries/sessions/revokeSessionsByAccount.sql"
-import list_sessions_by_account from "../db/queries/sessions/listSessionsByAccount.sql"
-import insert_recovery_code from "../db/queries/recovery/insertRecoveryCode.sql"
-import count_active_recovery_codes from "../db/queries/recovery/countActiveRecoveryCodes.sql"
-import consume_recovery_code from "../db/queries/recovery/consumeRecoveryCode.sql"
-import purge_recovery_codes from "../db/queries/deletion/purgeRecoveryCodes.sql"
+import insert_account from "../db/queries/accounts/insert-account.sql"
+import get_account_by_id from "../db/queries/accounts/get-account-by-id.sql"
+import get_account_by_email from "../db/queries/accounts/get-account-by-email.sql"
+import stage_totp_secret from "../db/queries/accounts/stage-totp-secret.sql"
+import promote_totp from "../db/queries/accounts/promote-totp.sql"
+import clear_totp from "../db/queries/accounts/clear-totp.sql"
+import claim_totp_step from "../db/queries/totp/claim-totp-step.sql"
+import insert_activity from "../db/queries/activity/insert-activity.sql"
+import insert_login_request from "../db/queries/login/insert-login-request.sql"
+import get_login_request_by_email_token_hash from "../db/queries/login/get-login-request-by-email-token-hash.sql"
+import get_login_request_by_id from "../db/queries/login/get-login-request-by-id.sql"
+import mark_email_approved from "../db/queries/login/mark-email-approved.sql"
+import mark_login_completed from "../db/queries/login/mark-login-completed.sql"
+import insert_session from "../db/queries/sessions/insert-session.sql"
+import get_session_with_account_by_token_hash from "../db/queries/sessions/get-session-with-account-by-token-hash.sql"
+import revoke_session from "../db/queries/sessions/revoke-session.sql"
+import revoke_sessions_by_account from "../db/queries/sessions/revoke-sessions-by-account.sql"
+import list_sessions_by_account from "../db/queries/sessions/list-sessions-by-account.sql"
+import insert_recovery_code from "../db/queries/recovery/insert-recovery-code.sql"
+import count_active_recovery_codes from "../db/queries/recovery/count-active-recovery-codes.sql"
+import consume_recovery_code from "../db/queries/recovery/consume-recovery-code.sql"
+import purge_recovery_codes from "../db/queries/deletion/purge-recovery-codes.sql"
 
 export interface SessionPrincipal {
   readonly session_id: string;
@@ -83,7 +83,7 @@ export const request_magic_link = (opts: {
         insert_account.run(db, {
           id: new_id("acct"),
           email,
-          displayName: (opts.display_name ?? "").slice(0, 120) }),
+          display_name: (opts.display_name ?? "").slice(0, 120) }),
       );
       account = yield* db_run(() => get_account_by_email.run(db, { email }));
     }
@@ -100,11 +100,11 @@ export const request_magic_link = (opts: {
       insert_login_request.run(db, {
         id: request_id,
         email,
-        requestSecretHash: request_secret_hash,
-        emailTokenHash: email_token_hash,
-        totpRequired: account.totp_enrolled_at != null,
-        requesterIp: opts.ip ?? null,
-        expiresAt: expires_at }),
+        request_secret_hash: request_secret_hash,
+        email_token_hash: email_token_hash,
+        totp_required: account.totp_enrolled_at != null,
+        requester_ip: opts.ip ?? null,
+        expires_at: expires_at }),
     );
     const confirm_url = `${cfg.public_base_url}/v1/auth/magic/confirm?token=${email_token}`;
     yield* mailer.send({
@@ -134,7 +134,7 @@ export const consume_magic_link = (opts: { token: string; request_secret?: strin
     yield* check_budget("consume:global", RATE_WINDOW_SECONDS, 300, now_ms);
 
     const token_hash = yield* hash_secret(opts.token);
-    const row = yield* db_run(() => get_login_request_by_email_token_hash.run(db, { emailTokenHash: token_hash }));
+    const row = yield* db_run(() => get_login_request_by_email_token_hash.run(db, { email_token_hash: token_hash }));
     // Wrong/absent tokens reveal nothing and map to no request.
     if (!row) return yield* Effect.fail(unauthorized("invalid or expired link"));
     const status = request_status_of(row, now_ms);
@@ -211,20 +211,20 @@ export const finalize_magic_link = (opts: {
       const s = yield* db_run(() =>
         insert_session.run(tx_db, {
           id: new_id("sess"),
-          accountId: account!.id,
-          tokenHash: token_hash,
-          deviceName: (opts.device_name ?? "").slice(0, 120),
+          account_id: account!.id,
+          token_hash: token_hash,
+          device_name: (opts.device_name ?? "").slice(0, 120),
           ip: opts.ip ?? null,
-          userAgent: (opts.user_agent ?? "").slice(0, 300),
-          totpVerifiedAt: totp_verified ? new Date(now_ms).toISOString() : null,
-          expiresAt: expires_at }),
+          user_agent: (opts.user_agent ?? "").slice(0, 300),
+          totp_verified_at: totp_verified ? new Date(now_ms).toISOString() : null,
+          expires_at: expires_at }),
       );
       if (!s) return yield* Effect.fail(internal("database unavailable"));
       yield* db_run(() =>
         insert_activity.run(tx_db, {
           id: new_id("evt"),
-          accountId: account!.id,
-          machineId: null,
+          account_id: account!.id,
+          machine_id: null,
           kind: "login.completed",
           detail: "{}",
           ip: opts.ip ?? null }),
@@ -268,7 +268,7 @@ const consume_totp_attempt = (account_id: string, secret: Uint8Array, code: stri
     if (step === null) return false;
     // Null means this exact code was already consumed in its window
     // (replay), or a concurrent attempt won the race.
-    const claimed = yield* db_run(() => claim_totp_step.run(db, { accountId: account_id, step }));
+    const claimed = yield* db_run(() => claim_totp_step.run(db, { account_id: account_id, step }));
     return claimed !== null;
   });
 
@@ -295,7 +295,7 @@ const satisfy_totp_challenge = (
     if (recovery_code) {
       yield* check_budget(`totp:account:${account_id}`, RATE_WINDOW_SECONDS, 10, now_ms);
       const code_hash = yield* hash_secret(recovery_code.trim());
-      const used = yield* db_run(() => consume_recovery_code.run(db, { accountId: account_id, codeHash: code_hash }));
+      const used = yield* db_run(() => consume_recovery_code.run(db, { account_id: account_id, code_hash: code_hash }));
       if (used) {
         yield* record(account_id, "totp.recovery_used", {});
         return true;
@@ -313,7 +313,7 @@ export const require_session = (raw_token: string) =>
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
     const token_hash = yield* hash_secret(raw_token);
-    const row = yield* db_run(() => get_session_with_account_by_token_hash.run(db, { tokenHash: token_hash }));
+    const row = yield* db_run(() => get_session_with_account_by_token_hash.run(db, { token_hash: token_hash }));
     if (!row || row.revoked_at || Date.parse(row.expires_at) <= cfg.now() || row.deleted_at) {
       return yield* Effect.fail(unauthorized("invalid session"));
     }
@@ -332,20 +332,20 @@ export const revoke_current_session = (raw_token: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
     const token_hash = yield* hash_secret(raw_token);
-    yield* db_run(() => revoke_session.run(db, { tokenHash: token_hash }));
+    yield* db_run(() => revoke_session.run(db, { token_hash: token_hash }));
   });
 
 export const revoke_all_sessions = (account_id: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    yield* db_run(() => revoke_sessions_by_account.run(db, { accountId: account_id }));
+    yield* db_run(() => revoke_sessions_by_account.run(db, { account_id: account_id }));
     yield* record(account_id, "sessions.revoked_all", {});
   });
 
 export const list_sessions = (account_id: string, limit: number) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const rows = yield* db_run(() => list_sessions_by_account.run(db, { accountId: account_id, limit }));
+    const rows = yield* db_run(() => list_sessions_by_account.run(db, { account_id: account_id, limit }));
     return {
       sessions: rows.map((r) => ({
         id: r.id,
@@ -372,15 +372,15 @@ export const enroll_totp = (account_id: string) =>
       return yield* Effect.fail(conflict("totp already enrolled; disable it first"));
     }
     // Fresh code set each enrollment; stale codes from a prior factor die.
-    yield* db_run(() => purge_recovery_codes.run(db, { accountId: account_id }));
+    yield* db_run(() => purge_recovery_codes.run(db, { account_id: account_id }));
     const secret = random_bytes(20);
     const enc = yield* Effect.sync(() => encrypt_with_key(cfg.master_key.raw, secret, TOTP_PURPOSE));
-    const staged = yield* db_run(() => stage_totp_secret.run(db, { id: account_id, secretEnc: enc }));
+    const staged = yield* db_run(() => stage_totp_secret.run(db, { id: account_id, secret_enc: enc }));
     if (!staged) return yield* Effect.fail(conflict("totp already enrolled; disable it first"));
     const codes = Array.from({ length: 10 }, () => base64url_encode(random_bytes(9)));
     for (const code of codes) {
       const code_hash = yield* hash_secret(code);
-      yield* db_run(() => insert_recovery_code.run(db, { id: new_id("rc"), accountId: account_id, codeHash: code_hash }));
+      yield* db_run(() => insert_recovery_code.run(db, { id: new_id("rc"), account_id: account_id, code_hash: code_hash }));
     }
     const otpauth_url = create_totp_key_uri("Ast", account_id, secret, 30, 6);
     yield* record(account_id, "totp.enroll_started", {});
@@ -415,7 +415,7 @@ export const disable_totp = (account_id: string, code: string) =>
     const ok = yield* consume_totp_attempt(account_id, secret, code, cfg.now());
     if (!ok) return yield* Effect.fail(forbidden("invalid code"));
     yield* db_run(() => clear_totp.run(db, { id: account_id }));
-    yield* db_run(() => purge_recovery_codes.run(db, { accountId: account_id }));
+    yield* db_run(() => purge_recovery_codes.run(db, { account_id: account_id }));
     yield* record(account_id, "totp.disabled", {});
     return { disabled: true };
   });
@@ -423,7 +423,7 @@ export const disable_totp = (account_id: string, code: string) =>
 export const count_recovery_codes = (account_id: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const row = yield* db_run(() => count_active_recovery_codes.run(db, { accountId: account_id }));
+    const row = yield* db_run(() => count_active_recovery_codes.run(db, { account_id: account_id }));
     return row.n;
   });
 

@@ -11,12 +11,12 @@ import { AppConfigTag, DbTag, db_run } from "../../services/deps.ts";
 import { record } from "../../services/activity.ts";
 import { get_blob, put_blob } from "../../services/storage.ts";
 import { EditorManifest } from "../../contracts/v1.ts";
-import insert_bundle from "../../db/queries/config/insertBundle.sql"
-import get_latest_bundle_by_account from "../../db/queries/config/getLatestBundleByAccount.sql"
-import get_bundle_by_id from "../../db/queries/config/getBundleById.sql"
-import get_bundle_by_version from "../../db/queries/config/getBundleByVersion.sql"
-import upsert_machine_config_state from "../../db/queries/config/upsertMachineConfigState.sql"
-import get_machine_config_state from "../../db/queries/config/getMachineConfigState.sql"
+import insert_bundle from "../../db/queries/config/insert-bundle.sql"
+import get_latest_bundle_by_account from "../../db/queries/config/get-latest-bundle-by-account.sql"
+import get_bundle_by_id from "../../db/queries/config/get-bundle-by-id.sql"
+import get_bundle_by_version from "../../db/queries/config/get-bundle-by-version.sql"
+import upsert_machine_config_state from "../../db/queries/config/upsert-machine-config-state.sql"
+import get_machine_config_state from "../../db/queries/config/get-machine-config-state.sql"
 
 export type ValidatedManifest = typeof EditorManifest.Type;
 
@@ -68,7 +68,7 @@ export const publish_bundle = (account_id: string, manifest_input: unknown) =>
     // latest and either returns the identical-content revision (dedup) or
     // retries with a fresh id (bounded). No driver error-shape inspection.
     for (let attempt = 0; attempt < 4; attempt++) {
-      const latest = yield* db_run(() => get_latest_bundle_by_account.run(db, { accountId: account_id }));
+      const latest = yield* db_run(() => get_latest_bundle_by_account.run(db, { account_id: account_id }));
       if (latest && latest.content_hash === content_hash) {
         return { id: latest.id, version: latest.version, contentHash: content_hash, r2Key: latest.r2_key, createdAt: latest.created_at, deduplicated: true as const };
       }
@@ -76,7 +76,7 @@ export const publish_bundle = (account_id: string, manifest_input: unknown) =>
       // Content-addressed key: deterministic, no version to go stale in a race.
       const r2_key = `config/${account_id}/${content_hash}.json`;
       const rows = yield* db_run(() =>
-        insert_bundle.run(db, { id, accountId: account_id, contentHash: content_hash, r2Key: r2_key, manifest: canonical }),
+        insert_bundle.run(db, { id, account_id: account_id, content_hash: content_hash, r2_key: r2_key, manifest: canonical }),
       );
       const done = rows[0] ?? null;
       if (!done) continue;
@@ -100,7 +100,7 @@ function sort_keys(v: unknown): unknown {
 export const latest_bundle = (account_id: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const row = yield* db_run(() => get_latest_bundle_by_account.run(db, { accountId: account_id }));
+    const row = yield* db_run(() => get_latest_bundle_by_account.run(db, { account_id: account_id }));
     if (!row) return { bundle: null, manifest: null };
     const manifest = typeof row.manifest === "string"
       ? yield* Schema.decodeUnknown(Schema.parseJson(Schema.Unknown))(row.manifest).pipe(
@@ -115,7 +115,7 @@ export const latest_bundle = (account_id: string) =>
 export const bundle_manifest_bytes = (account_id: string, version: number) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const row = yield* db_run(() => get_bundle_by_version.run(db, { accountId: account_id, version }));
+    const row = yield* db_run(() => get_bundle_by_version.run(db, { account_id: account_id, version }));
     if (!row) return yield* Effect.fail(forbidden("no such bundle in this account"));
     // R2 holds the durable manifest object; the DB row carries the same
     // canonical bytes as fallback, so a missing object degrades instead of
@@ -135,11 +135,11 @@ export const report_machine_state = (machine_id: string, account_id: string, opt
     // recorded version. Follow-up reads tell those apart honestly.
     const rows = yield* db_run(() =>
       upsert_machine_config_state.run(db, {
-        machineId: machine_id,
-        bundleId: opts.bundle_id,
+        machine_id: machine_id,
+        bundle_id: opts.bundle_id,
         status: opts.status,
         detail: (opts.detail ?? "").slice(0, 500),
-        accountId: account_id }),
+        account_id: account_id }),
     );
     const done = rows[0] ?? null;
     if (done) {
@@ -147,8 +147,8 @@ export const report_machine_state = (machine_id: string, account_id: string, opt
       return { machineId: done.machine_id, bundleId: done.bundle_id, status: done.status, appliedAt: done.applied_at };
     }
     const [state, bundle] = yield* Effect.all([
-      db_run(() => get_machine_config_state.run(db, { machineId: machine_id, accountId: account_id })),
-      db_run(() => get_bundle_by_id.run(db, { id: opts.bundle_id, accountId: account_id })),
+      db_run(() => get_machine_config_state.run(db, { machine_id: machine_id, account_id: account_id })),
+      db_run(() => get_bundle_by_id.run(db, { id: opts.bundle_id, account_id: account_id })),
     ]);
     if (state && bundle && bundle.version < state.version) {
       return yield* Effect.fail(conflict("applied version regression"));
@@ -159,7 +159,7 @@ export const report_machine_state = (machine_id: string, account_id: string, opt
 export const read_machine_state = (account_id: string, machine_id: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const row = yield* db_run(() => get_machine_config_state.run(db, { machineId: machine_id, accountId: account_id }));
+    const row = yield* db_run(() => get_machine_config_state.run(db, { machine_id: machine_id, account_id: account_id }));
     if (!row) return yield* Effect.fail(forbidden("no such machine or state"));
     return {
       machineId: row.machine_id,

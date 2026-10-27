@@ -1,8 +1,8 @@
 import { Effect, Either } from "effect";
 import { new_id } from "../ids.ts";
 import { DbTag, db_run } from "./deps.ts";
-import insert_activity from "../db/queries/activity/insertActivity.sql"
-import list_activity_by_account from "../db/queries/activity/listActivityByAccount.sql"
+import insert_activity from "../db/queries/activity/insert-activity.sql"
+import list_activity_by_account from "../db/queries/activity/list-activity-by-account.sql"
 
 export const record = (
   account_id: string,
@@ -14,8 +14,8 @@ export const record = (
     yield* db_run(() =>
       insert_activity.run(db, {
         id: new_id("evt"),
-        accountId: account_id,
-        machineId: opts.machine_id ?? null,
+        account_id: account_id,
+        machine_id: opts.machine_id ?? null,
         kind,
         detail: JSON.stringify(opts.detail ?? {}),
         ip: opts.ip ?? null }),
@@ -25,7 +25,7 @@ export const record = (
 export const list_for_account = (account_id: string, limit: number) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const rows = yield* db_run(() => list_activity_by_account.run(db, { accountId: account_id, limit }));
+    const rows = yield* db_run(() => list_activity_by_account.run(db, { account_id: account_id, limit }));
     return {
       events: rows.map((r) => {
         const raw_detail: unknown = r.detail;

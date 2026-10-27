@@ -1,12 +1,12 @@
 import { Effect } from "effect";
 import { DbTag, db_run } from "./deps.ts";
 import { purge_due_accounts } from "./deletion.ts";
-import expire_overdue_logins from "../db/queries/login/expireOverdueLogins.sql";
-import expire_overdue_enrollments from "../db/queries/enrollments/expireOverdueEnrollments.sql";
-import prune_nonces from "../db/queries/nonces/pruneNonces.sql";
-import prune_sessions from "../db/queries/sessions/pruneSessions.sql";
-import prune_rate_counters from "../db/queries/rate/pruneRateCounters.sql";
-import prune_totp_steps from "../db/queries/totp/pruneTotpSteps.sql";
+import expire_overdue_logins from "../db/queries/login/expire-overdue-logins.sql";
+import expire_overdue_enrollments from "../db/queries/enrollments/expire-overdue-enrollments.sql";
+import prune_nonces from "../db/queries/nonces/prune-nonces.sql";
+import prune_sessions from "../db/queries/sessions/prune-sessions.sql";
+import prune_rate_counters from "../db/queries/rate/prune-rate-counters.sql";
+import prune_totp_steps from "../db/queries/totp/prune-totp-steps.sql";
 
 // Scheduled maintenance: expire stale requests, drop used nonces and old
 // counters, purge accounts past their deletion grace period.
