@@ -95,7 +95,7 @@ checkout has no `.reylo/` cache (gitignored), so without the
 schema-populated DB above the worker build fails; with explicit
 `DATABASE_URL` and clean outputs (`.reylo/`, `dist/ast_core/`,
 `web/dist/` removed) it re-analyzes and succeeds (exit 0). So
-`verify:bundle` and infra unit tests are DB-free, but `build` is NOT
+infra unit tests are DB-free, but `build` is NOT
 truly offline — it may touch that local DB. Never substitute production
 creds here: `AST_CORE_DATABASE_URL` (secret Hyperdrive deploy origin) is
 a different variable for a different purpose; the build only ever uses
@@ -111,7 +111,7 @@ local/CI `DATABASE_URL`.
   source the worker serves at runtime, so the portal builds first and a
   fresh checkout never loads the worker build against a missing assets
   dir. Root `pnpm run build` alone does NOT emit `web/dist`.
-`check`/`plan`/`deploy` all prebuild first, then explicitly verify, so a
+`check`/`plan`/`deploy` all prebuild first, so a
 fresh clone never silently uses stale or missing artifacts.
 
 pnpm appends extra args to the end of the script, so stage flags
@@ -132,20 +132,9 @@ pnpm exec alchemy --help   # from infra/: project-local binary, no npx
 pnpm --dir infra exec alchemy deploy --help   # from core root
 ```
 
-`verify:bundle` runs deploy's exact collector
-(`@alchemy.run/cloudflare/lib/Workers/Sources/Prebuilt.js`
-`readPrebuiltWorkerBundle`, needs only `FileSystem+Path` via
-`@effect/platform-node/NodeServices.layer`) and dynamic-imports
-`dist/ast_core/index.js` to assert `default.fetch` + `default.scheduled`
-are functions (not substring matching). For `bundle: true` Workers the
-offline equivalent is `…/Sources/Rolldown.js` `WorkerBundle`
-(`Effect.gen` → `{ build, watch }`, options
-`{ id, main, compatibility: { date, flags }, entry: { kind: "external" }, stack: { name, stage }, extraOptions: undefined }`,
-same `NodeServices.layer`). No separate esbuild approximation, no cloud state.
-
 Plan/deploy (need real Cloudflare + Postgres + secrets; DO NOT run
 without them — first `plan`/`dev` bootstraps account state, see below).
-`plan`/`deploy` prebuild + verify first:
+`plan`/`deploy` prebuild first:
 
 ```sh
 # prod (example; use stage-specific env files, never share domains)

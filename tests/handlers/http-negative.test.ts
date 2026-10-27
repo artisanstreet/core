@@ -40,6 +40,18 @@ describe("http boundary negatives", () => {
     });
     expect(cross.status).toBe(403);
 
+    // Malformed Origin is rejected as bad origin (URL parse failure, still 403).
+    const malformed = await api(rig.app, "POST", "/v1/auth/totp/enroll", {
+      headers: { cookie: acct.cookie, origin: ":::not-a-url:::" },
+    });
+    expect(malformed.status).toBe(403);
+
+    // Bearer bypasses the Origin check entirely.
+    const viaBearer = await api(rig.app, "POST", "/v1/auth/totp/enroll", {
+      headers: { authorization: `Bearer ${acct.token}` },
+    });
+    expect(viaBearer.status).toBe(200);
+
     // Same-origin works.
     const same = await api(rig.app, "POST", "/v1/auth/totp/enroll", {
       headers: { cookie: acct.cookie, origin: "http://localhost" },

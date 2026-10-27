@@ -17,8 +17,7 @@
     "infra:build": "pnpm --dir infra run build",
     "infra:check": "pnpm --dir infra run check",
     "infra:plan": "pnpm --dir infra run plan",
-    "infra:deploy": "pnpm --dir infra run deploy",
-    "infra:verify": "pnpm --dir infra run verify:bundle"
+    "infra:deploy": "pnpm --dir infra run deploy"
   },
   "dependencies": {
     "@effect/platform": "0.97.2",

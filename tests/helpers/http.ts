@@ -165,7 +165,8 @@ export async function signup(rig: TestRig, email: string): Promise<Account> {
   const j = q3.json as { accountId: string };
   const setCookie = q3.headers.get("set-cookie") ?? "";
   const sessionCookie = setCookie.split(";")[0]!;
-  return { accountId: j.accountId, token: (q3.json as { rawToken?: string }).rawToken ?? "", cookie: sessionCookie };
+  const cookie_token = decodeURIComponent(sessionCookie.split("=").slice(1).join("="));
+  return { accountId: j.accountId, token: cookie_token, cookie: sessionCookie };
 }
 
 export function totpCodeFor(otpauthUrl: string): string {

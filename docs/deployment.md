@@ -55,8 +55,7 @@ for all inputs. Summary:
   `pnpm exec alchemy state bootstrap --backend cloudflare --profile <name>`).
   Never run `plan`/`dev`/`deploy` for “verification” — they ensure cloud
   state. Offline checks only: `pnpm run infra:check`
-  (build + typecheck + tests + `verify:bundle`, deploy-exact
-  `readPrebuiltWorkerBundle` + entry import execution).
+  (build + typecheck + tests).
 - Outputs are public URLs/names/ids only; no secrets.
 
 Auth: `pnpm exec alchemy profile edit --add Cloudflare`

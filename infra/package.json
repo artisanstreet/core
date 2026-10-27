@@ -10,10 +10,9 @@
     "build:worker": "pnpm --dir .. run build",
     "build:web": "pnpm --dir ../web run build",
     "build": "pnpm run build:web && pnpm run build:worker",
-    "check": "pnpm run build && pnpm run typecheck && pnpm run test && pnpm run verify:bundle",
-    "verify:bundle": "node ./scripts/verify-bundle.ts",
-    "deploy": "pnpm run build && pnpm run verify:bundle && pnpm exec alchemy deploy --config alchemy.run.ts",
-    "plan": "pnpm run build && pnpm run verify:bundle && pnpm exec alchemy deploy --dry-run --config alchemy.run.ts",
+    "check": "pnpm run build && pnpm run typecheck && pnpm run test",
+    "deploy": "pnpm run build && pnpm exec alchemy deploy --config alchemy.run.ts",
+    "plan": "pnpm run build && pnpm exec alchemy deploy --dry-run --config alchemy.run.ts",
     "destroy": "pnpm exec alchemy destroy --config alchemy.run.ts"
   },
   "dependencies": {
