@@ -73,23 +73,34 @@ const ensure_vary_origin = (
   return res.pipe(HttpServerResponse.setHeader("Vary", `${found.value}, Origin`));
 };
 
-export const with_cors_headers = (
-  res: HttpServerResponse.HttpServerResponse,
-): Effect.Effect<HttpServerResponse.HttpServerResponse, never, AppConfigTag | HttpServerRequest.HttpServerRequest> =>
-  Effect.gen(function* () {
-    const req = yield* HttpServerRequest.HttpServerRequest;
-    const cfg = yield* AppConfigTag;
-    const with_vary = ensure_vary_origin(res);
-    const origin = get_origin_header(req);
-    if (!origin) return with_vary;
-    const parsed = Url.fromString(origin);
-    if (Either.isLeft(parsed)) return with_vary;
-    if (!cfg.allowed_browser_origins.includes(parsed.right.origin)) return with_vary;
-    return with_vary.pipe(
-      HttpServerResponse.setHeader("Access-Control-Allow-Origin", origin),
-      HttpServerResponse.setHeader("Access-Control-Allow-Credentials", "true"),
-    );
-  });
+const cors_headers = Effect.gen(function* () {
+  const req = yield* HttpServerRequest.HttpServerRequest;
+  const cfg = yield* AppConfigTag;
+  const origin = get_origin_header(req);
+  if (!origin) return { allowed_origin: null as string | null };
+  const parsed = Url.fromString(origin);
+  if (Either.isLeft(parsed)) return { allowed_origin: null as string | null };
+  if (!cfg.allowed_browser_origins.includes(parsed.right.origin)) {
+    return { allowed_origin: null as string | null };
+  }
+  return { allowed_origin: origin };
+});
+
+export const with_cors_headers = (res: HttpServerResponse.HttpServerResponse) =>
+  cors_headers.pipe(
+    Effect.map(({ allowed_origin }) => {
+      const with_vary = ensure_vary_origin(res);
+      if (!allowed_origin) return with_vary;
+      return with_vary.pipe(
+        HttpServerResponse.setHeader("Access-Control-Allow-Origin", allowed_origin),
+        HttpServerResponse.setHeader("Access-Control-Allow-Credentials", "true"),
+        HttpServerResponse.setHeader(
+          "Access-Control-Expose-Headers",
+          "ETag, X-Content-Sha256, X-Request-Id",
+        ),
+      );
+    }),
+  );
 
 export const preflight_response: Effect.Effect<
   HttpServerResponse.HttpServerResponse,
@@ -115,7 +126,7 @@ export const preflight_response: Effect.Effect<
     HttpServerResponse.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS"),
     HttpServerResponse.setHeader(
       "Access-Control-Allow-Headers",
-      "Content-Type, Authorization, X-AST-Machine, X-AST-Timestamp, X-AST-Nonce, X-Admin-Token",
+      "Content-Type, Authorization, X-AST-Machine, X-AST-Timestamp, X-AST-Nonce, X-Admin-Token, If-None-Match",
     ),
     HttpServerResponse.setHeader("Access-Control-Max-Age", "600"),
   );

@@ -48,11 +48,12 @@ describe("browser auth: AUTH_PUBLIC_BASE_URL approve + CORS + CSRF allowlist", (
       headers: {
         origin: "https://auth.example.invalid",
         "access-control-request-method": "GET",
-        "access-control-request-headers": "authorization, content-type" } });
+        "access-control-request-headers": "authorization, content-type, if-none-match" } });
     expect(pre.status).toBe(204);
     expect(pre.headers.get("access-control-allow-origin")).toBe("https://auth.example.invalid");
     expect(pre.headers.get("access-control-allow-credentials")).toBe("true");
     expect(pre.headers.get("access-control-allow-methods")).toContain("GET");
+    expect(pre.headers.get("access-control-allow-headers")).toMatch(/If-None-Match/i);
     expect(pre.headers.get("vary")).toMatch(/Origin/i);
 
     const ok = await api(rig.app, "GET", "/v1/version", {
@@ -60,6 +61,8 @@ describe("browser auth: AUTH_PUBLIC_BASE_URL approve + CORS + CSRF allowlist", (
     expect(ok.status).toBe(200);
     expect(ok.headers.get("access-control-allow-origin")).toBe("https://dashboard.example.invalid");
     expect(ok.headers.get("access-control-allow-credentials")).toBe("true");
+    expect(ok.headers.get("access-control-expose-headers")).toMatch(/ETag/i);
+    expect(ok.headers.get("access-control-expose-headers")).toMatch(/X-Request-Id/i);
     expect(ok.headers.get("vary")).toMatch(/Origin/i);
 
     const evil = await api(rig.app, "GET", "/v1/version", { headers: { origin: "https://evil.invalid" } });
@@ -105,8 +108,41 @@ describe("browser auth: AUTH_PUBLIC_BASE_URL approve + CORS + CSRF allowlist", (
     expect(via_dash.status).toBe(200);
   });
 
-  it("production defaults to known auth/dashboard only when API is prod", async () => {
-    const { config_from_env } = await import("../../src/services/deps.ts");
+  it("bundle ETag conditional reads work cross-origin with exposed validators", async () => {
+    const rig = await setup_rig({
+      vars: {
+        AUTH_PUBLIC_BASE_URL: "https://auth.example.invalid",
+        DASHBOARD_PUBLIC_BASE_URL: "https://dashboard.example.invalid" } });
+    const acct = await signup(rig, "etag-browser@example.com");
+    const browser_cookie = { cookie: acct.cookie, origin: "https://auth.example.invalid" };
+    const manifest = {
+      format: "ast-editor-config/1",
+      mcpServers: [{ name: "x", command: "x" }],
+      skills: [{ name: "s", source: "local" }] };
+    const pub = await api(rig.app, "POST", "/v1/config/bundles", {
+      headers: browser_cookie,
+      body: { manifest } });
+    expect(pub.status).toBe(201);
+
+    const latest = await api(rig.app, "GET", "/v1/config/bundles/latest", {
+      headers: { cookie: acct.cookie, origin: "https://auth.example.invalid" } });
+    expect(latest.status).toBe(200);
+    const etag = latest.headers.get("etag");
+    expect(etag).toMatch(/^"[0-9a-f]{64}"$/);
+    expect(latest.headers.get("access-control-allow-origin")).toBe("https://auth.example.invalid");
+    expect(latest.headers.get("access-control-expose-headers")).toMatch(/ETag/i);
+
+    const revalidate = await api(rig.app, "GET", "/v1/config/bundles/latest", {
+      headers: {
+        cookie: acct.cookie,
+        origin: "https://auth.example.invalid",
+        "if-none-match": etag! } });
+    expect(revalidate.status).toBe(304);
+    expect(revalidate.headers.get("etag")).toBe(etag);
+    expect(revalidate.headers.get("access-control-allow-origin")).toBe("https://auth.example.invalid");
+  });
+
+  it("production defaults to known auth/dashboard only when API is prod", async () => {    const { config_from_env } = await import("../../src/services/deps.ts");
     const master = "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI";
     const prod = config_from_env({
       CORE_ENV: "production",
