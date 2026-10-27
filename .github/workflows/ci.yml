@@ -32,6 +32,6 @@ jobs:
       - run: pnpm run db:setup
       - run: pnpm run typecheck
       - run: pnpm run test
-      - run: pnpm --dir web run build --
+      - run: pnpm --dir web run build
       - run: pnpm run build
-      - run: pnpm --dir infra run check --
+      - run: pnpm --dir infra run check

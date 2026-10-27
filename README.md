@@ -15,17 +15,17 @@ revisions), activity log, and account deletion lifecycle.
 ## Quick start (local, no Cloudflare account needed)
 
 ```sh
-npm install
+pnpm install --frozen-lockfile
 cp .env.example .env        # points at the local Docker Postgres below
 # docker: ast-core-dev-pg on 127.0.0.1:55432 (Postgres 18)
-npm run db:setup            # applies db/migrations/*.sql (transactional + locked)
-npm run typecheck           # tsc --noEmit --runExternalCode (Reylo content mappers, live PG types)
-npm run test                # vitest, real PGlite DB per test file, behavioral tests
-npm run contracts:check     # emitted OpenAPI + fixtures match the runtime schemas
-npm run contracts:emit      # regenerate contracts/v1.openapi.json + fixtures/v1/*
-npm run dev             # vite dev (worker) on :8787
-npm run build           # vite build -> dist/
-npx wrangler deploy --dry-run   # Workers config check (needs wrangler login only for real deploy)
+pnpm run db:setup            # applies db/migrations/*.sql (transactional + locked)
+pnpm run typecheck           # tsrs --noEmit --runExternalCode (Reylo content mappers, live PG types)
+pnpm run test                # vp test, real PGlite DB per test file, behavioral tests
+pnpm run contracts:check     # emitted OpenAPI + fixtures match the runtime schemas
+pnpm run contracts:emit      # regenerate contracts/v1.openapi.json + fixtures/v1/*
+pnpm run dev             # vp dev (worker) on :8787
+pnpm run build           # vp build -> dist/
+pnpm exec wrangler deploy --dry-run   # Workers config check (needs wrangler login only for real deploy)
 ```
 
 ## Layout

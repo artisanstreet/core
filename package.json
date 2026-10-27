@@ -10,15 +10,15 @@
     "test": "vp test",
     "dev": "vp dev . --port 8787",
     "build": "vp build .",
-    "build:web": "pnpm --dir web run build --",
+    "build:web": "pnpm --dir web run build",
     "contracts:emit": "EMIT_CONTRACTS=1 vp test run tests/contracts/emit.test.ts",
     "contracts:check": "vp test run tests/contracts/emit.test.ts",
     "preview": "vp preview . --port 8787",
-    "infra:build": "pnpm --dir infra run build --",
-    "infra:check": "pnpm --dir infra run check --",
-    "infra:plan": "pnpm --dir infra run plan --",
-    "infra:deploy": "pnpm --dir infra run deploy --",
-    "infra:verify": "pnpm --dir infra run verify:bundle --"
+    "infra:build": "pnpm --dir infra run build",
+    "infra:check": "pnpm --dir infra run check",
+    "infra:plan": "pnpm --dir infra run plan",
+    "infra:deploy": "pnpm --dir infra run deploy",
+    "infra:verify": "pnpm --dir infra run verify:bundle"
   },
   "dependencies": {
     "@effect/platform": "0.97.2",

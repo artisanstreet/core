@@ -1,7 +1,7 @@
 # ast-core infra (Alchemy IaC, isolated)
 
 Deploy tooling only. The service stays on Effect 3.22.4; this package uses
-Effect 4 per Alchemy peers with its own lockfile + tsconfig.
+Effect 4 per Alchemy peers with its own tsconfig (workspace pnpm-lock).
 
 Pinned (verified 2026-10-27, `npm view alchemy dist-tags`):
 - `alchemy@2.0.0-beta.84` (`latest`; `next` is `2.0.0-beta.72`)
@@ -26,12 +26,12 @@ API evidence: installed `beta84` types
   `buildCoreWorkerProps` in `src/worker.ts`, used by both the deployed
   `Cloudflare.Worker` and tests — no duplicate test-only descriptors):
   `main` = absolute `dist/ast_core/index.js` (prebuilt via root
-  `npm run build`; Reylo `.sql` transforms already compiled in),
+  `pnpm run build`; Reylo `.sql` transforms already compiled in),
   `bundle: false` (Wrangler `no_bundle` contract; sibling
   `dist/ast_core/assets/*.js` chunks upload as additional modules,
   `.map` excluded by `defaultModuleRules`), `compatibility`
   `{ date: "2026-10-01", flags: ["nodejs_compat"] }`,
-  `assets` = absolute `web/dist` (prebuilt via `npm run build --prefix web`)
+  `assets` = absolute `web/dist` (prebuilt via `pnpm run build:web` from the root)
   with `runWorkerFirst: true` (REQUIRED; worker-first auth/CSP; API/UI/metadata
   never fall through; SPA fallback in `src/http.ts` via `ASSETS`),
   `notFoundHandling: "none"`, `env` = canonical literals +
@@ -71,21 +71,20 @@ preview/dev stages; never demonstrate prod and preview with the same
 
 ## Reproducible flow (no global install)
 
-Bare `alchemy` is NOT installed by `npm ci`. Use the project-local binary
-via `npx --no-install` or the npm wrappers below.
+The project-local `alchemy` binary resolves via the workspace
+(`pnpm exec alchemy`) or the `infra:*` pnpm wrappers below.
 
-One ordered fresh-clone sequence (run from the repo root, portable
-relative paths — root, portal, and infra each install from their own
-lockfile, then the local build DB is prepared before `infra:check`):
+One ordered fresh-clone sequence (run from the repo root — a single
+`pnpm install --frozen-lockfile` covers the whole workspace from
+`pnpm-lock.yaml`, then the local build DB is prepared before
+`infra:check`):
 
 ```sh
-npm ci                      # root deps (service lockfile)
-npm ci --prefix web         # portal deps (web lockfile)
-npm ci --prefix infra       # infra deps (isolated lockfile)
+pnpm install --frozen-lockfile
 cp -n .env.example .env     # local DATABASE_URL -> 127.0.0.1:55432 (see README quickstart)
 # docker: ast-core-dev-pg on 127.0.0.1:55432 (Postgres 18), must be running
-npm run db:setup            # applies db/migrations/*.sql (transactional + locked)
-npm run infra:check --      # portal-first build + typecheck + tests + verify (see below)
+pnpm run db:setup            # applies db/migrations/*.sql (transactional + locked)
+pnpm run infra:check      # portal-first build + typecheck + tests + verify (see below)
 ```
 
 Why the build needs that local DB (distinct from deploy secrets): the
@@ -102,37 +101,35 @@ creds here: `AST_CORE_DATABASE_URL` (secret Hyperdrive deploy origin) is
 a different variable for a different purpose; the build only ever uses
 local/CI `DATABASE_URL`.
 
-`npm run build` = `build:web` + `build:worker` (portal first):
-- `build:web`: `npm --prefix ../web run build --` (portal `vite build`,
-  emits `web/dist/index.html` + `web/dist/assets/*`). Web has its own
-  lockfile (`web/package-lock.json`).
-- `build:worker`: `npm --prefix .. run build --` (root `vite build`,
-  emits `dist/ast_core/index.js` + `dist/ast_core/assets/*`).
+`pnpm run build` = `build:web` + `build:worker` (portal first):
+- `build:web`: `pnpm --dir ../web run build` (portal Vite+ build,
+  emits `web/dist/index.html` + `web/dist/assets/*`).
+- `build:worker`: `pnpm --dir .. run build` (root `vp build`, emits the
+  single-file worker bundle `dist/ast_core/index.js`; no `assets/`
+  chunks, no sourcemaps).
   `wrangler.jsonc` `assets.directory` (`./web/dist`) is the static-asset
   source the worker serves at runtime, so the portal builds first and a
   fresh checkout never loads the worker build against a missing assets
-  dir. Root `npm run build` alone does NOT emit `web/dist`.
+  dir. Root `pnpm run build` alone does NOT emit `web/dist`.
 `check`/`plan`/`deploy` all prebuild first, then explicitly verify, so a
 fresh clone never silently uses stale or missing artifacts.
 
-Root wrappers (trailing `--` keeps stage flags forwarding through nested
-npm — without it, `npm run infra:deploy -- --stage prod` would swallow
-`--stage` and deploy the wrong default stage):
+pnpm appends extra args to the end of the script, so stage flags
+forward through the wrappers as-is (no `--` separator needed):
 
 ```sh
 cd /home/sander/projects/artisanstreet/core
-npm run infra:build --    # -> npm --prefix infra run build --
-npm run infra:check --    # -> npm --prefix infra run check --
-npm run infra:plan -- --stage prod
-npm run infra:deploy -- --stage prod
+pnpm run infra:build    # -> pnpm --dir infra run build
+pnpm run infra:check    # -> pnpm --dir infra run check
+pnpm run infra:plan --stage prod
+pnpm run infra:deploy --stage prod
 ```
 
 Benign forwarding check (no state bootstrap, help only):
 
 ```sh
-npm run deploy -- --help
-npx --no-install alchemy --help
-npm --prefix infra run deploy -- --help   # from core root
+pnpm exec alchemy --help   # from infra/: project-local binary, no npx
+pnpm --dir infra exec alchemy deploy --help   # from core root
 ```
 
 `verify:bundle` runs deploy's exact collector
@@ -156,21 +153,21 @@ AST_CORE_ORIGIN=https://core.artisanstreet.dev \
 AST_RELAY_ORIGIN=https://relay.artisanstreet.dev \
 AST_CORE_DATABASE_URL='postgres://…' \
 CORE_MASTER_KEY='…' CORE_ADMIN_TOKEN='…' RESEND_API_KEY='…' MAIL_FROM='Ast <ops@example.com>' \
-npm run deploy -- --stage prod --profile default
+pnpm run deploy --stage prod --profile default
 
 # preview (different origins; same .env domains would move ownership)
 AST_CORE_ORIGIN=https://core-pr-42.example.dev \
 AST_RELAY_ORIGIN=https://relay-pr-42.example.dev \
-… npm run deploy -- --stage pr-42
+… pnpm run deploy --stage pr-42
 
 # preview what would change (same bootstrap caveat as deploy)
-npm run plan -- --stage prod
-# or: npx --no-install alchemy deploy --dry-run --config alchemy.run.ts --stage prod
+pnpm run plan --stage prod
+# or: pnpm exec alchemy deploy --dry-run --config alchemy.run.ts --stage prod
 ```
 
 ## Auth / bootstrap / migration (accurate)
 
-- Auth: `npx --no-install alchemy profile edit --add Cloudflare` (OAuth or
+- Auth: `pnpm exec alchemy profile edit --add Cloudflare` (OAuth or
   API token, saved to `~/.alchemy/profiles.json`, default profile).
   CI uses `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN` (or key+email).
   See `…/cloudflare/setup`.
@@ -179,7 +176,7 @@ npm run plan -- --stage prod
   store Worker once (`alchemy-state-store` + Secrets Store entries;
   reused across stacks/stages). In CI (`CI=true`) a missing store fails
   instead — pre-provision with
-  `npx --no-install alchemy state bootstrap --backend cloudflare --profile <name>`.
+  `pnpm exec alchemy state bootstrap --backend cloudflare --profile <name>`.
   See `https://alchemy.run/state-store`. NEVER run `plan`/`dev`/`deploy`
   here for “verification” — they mutate/ensure cloud state.
 - Migration from wrangler: wrangler template used `ast-core` /

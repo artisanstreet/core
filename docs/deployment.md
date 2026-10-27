@@ -13,18 +13,19 @@ Alchemy owns prod; Wrangler never deploys prod.
 See `infra/README.md` for the reproducible flow and `infra/.env.example`
 for all inputs. Summary:
 
-- Build both artifacts from their lockfiles (fresh-clone safe):
-  `npm run infra:build` (root worker `dist/ast_core/index.js` +
-  `dist/ast_core/assets/*` via Vite/Reylo, and portal `web/dist`).
-  Root `npm run build` alone only emits the worker bundle; the portal
-  needs `npm run build:web`. Alchemy reuses these with `bundle: false`
+- Build both artifacts from a single `pnpm install --frozen-lockfile`
+  (fresh-clone safe): `pnpm run infra:build` (root worker
+  `dist/ast_core/index.js` via Vite+/Reylo, and portal `web/dist`).
+  Root `pnpm run build` alone only emits the worker bundle; the portal
+  needs `pnpm run build:web`. Alchemy reuses these with `bundle: false`
   (Wrangler `no_bundle` contract); plain Alchemy rolldown of
   `src/index.ts` would miss Reylo `.sql` transforms.
 - Deploy with the project-local binary (never a global install):
-  `npm run infra:deploy -- --stage <stage>` (prebuilds + verifies, then
-  `npx --no-install alchemy deploy`). Preview with
-  `npm run infra:plan -- --stage <stage>`. Direct equivalent from `infra/`:
-  `npx --no-install alchemy deploy --config alchemy.run.ts --stage <stage>`.
+  `pnpm run infra:deploy --stage <stage>` (prebuilds + verifies, then
+  `pnpm exec alchemy deploy`; pnpm forwards flags directly, no `--`
+  separator). Preview with `pnpm run infra:plan --stage <stage>`.
+  Direct equivalent from `infra/`:
+  `pnpm exec alchemy deploy --config alchemy.run.ts --stage <stage>`.
   Worker `ast-core-<stage>` via REAL factory `buildCoreWorkerProps`
   (async `main` + `env`, `runWorkerFirst: true`,
   `notFoundHandling: "none"`), canonical literal origins
@@ -51,23 +52,23 @@ for all inputs. Summary:
 - State: `Cloudflare.state()` (account default `alchemy-state-store`).
   First `plan`/`dev`/`deploy` bootstraps the store Worker; `CI=true`
   missing-store fails (pre-provision via
-  `npx --no-install alchemy state bootstrap --backend cloudflare --profile <name>`).
+  `pnpm exec alchemy state bootstrap --backend cloudflare --profile <name>`).
   Never run `plan`/`dev`/`deploy` for “verification” — they ensure cloud
-  state. Offline checks only: `npm run infra:check`
+  state. Offline checks only: `pnpm run infra:check`
   (build + typecheck + tests + `verify:bundle`, deploy-exact
   `readPrebuiltWorkerBundle` + entry import execution).
 - Outputs are public URLs/names/ids only; no secrets.
 
-Auth: `npx --no-install alchemy profile edit --add Cloudflare`
+Auth: `pnpm exec alchemy profile edit --add Cloudflare`
 (OAuth/token → default profile); CI uses `CLOUDFLARE_ACCOUNT_ID` + token.
 
 ## Wrangler (local dev and dry-run checks only)
 
 Wrangler never deploys production. Local flows only:
 
-- `npm run dev` (vite dev, port 8787) with `.env` / `.dev.vars` local vars.
-- `npx wrangler dev` for the local Worker runtime.
-- `npm run build && npx wrangler deploy --dry-run` as a local template
+- `pnpm run dev` (vp dev, port 8787) with `.env` / `.dev.vars` local vars.
+- `pnpm exec wrangler dev` for the local Worker runtime.
+- `pnpm run build && pnpm exec wrangler deploy --dry-run` as a local template
   check (no cloud mutations).
 
 Production Hyperdrive/R2/domain/secrets are owned by Alchemy (see
@@ -80,7 +81,7 @@ path in this repo.
 
 ## Database migrations (explicit, unchanged)
 
-`DATABASE_URL=<direct postgres url> npm run db:setup` (migrations run
+`DATABASE_URL=<direct postgres url> pnpm run db:setup` (migrations run
 in transactions under an advisory lock; concurrent migrators serialize).
 Run against the direct Postgres origin before deploying the Worker that
 pools it via Hyperdrive.
@@ -106,13 +107,13 @@ pools it via Hyperdrive.
 
 ## Apply schema + verify
 
-1. `DATABASE_URL=<direct postgres url> npm run db:setup` (migrations run
+1. `DATABASE_URL=<direct postgres url> pnpm run db:setup` (migrations run
    in transactions under an advisory lock; concurrent migrators serialize).
-2. `npm run typecheck && npm test` (needs the dev DB reachable for Reylo
+2. `pnpm run typecheck && pnpm run test` (needs the dev DB reachable for Reylo
    inference: default `postgres://core:core@127.0.0.1:55432/core`).
-3. `npm run infra:build && npm run infra:check` (offline; builds both
-   artifacts from lockfiles, then typecheck/tests/verify), then
-   `npm run infra:plan -- --stage <stage>` / `npm run infra:deploy -- --stage <stage>`.
+3. `pnpm run infra:build && pnpm run infra:check` (offline; builds both
+   artifacts from the workspace lockfile, then typecheck/tests/verify), then
+   `pnpm run infra:plan --stage <stage>` / `pnpm run infra:deploy --stage <stage>`.
 4. Post-deploy smoke: `GET /v1/version`, `GET /.well-known/jwks.json`
    (after first grant issuance a key exists), `POST /v1/admin/janitor`
    with `x-admin-token`.

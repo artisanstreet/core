@@ -147,7 +147,7 @@ Core/Rust confirm the embedded-only source value.
 
 ## Verification (evidence paths)
 
-- `npx tsc --noEmit` → exit 0. `npm run build` → exit 0.
+- `tsrs --noEmit --runExternalCode` → exit 0. `pnpm run build` → exit 0.
 - Unit: 10 files, 77 tests pass (contracts, auth guards, tunnel codec +
   chunking, real Core fixture grant, vendor integrity, Noise loopback,
   forms incl. recovery/missing-token, skills-bundle, streams, transport).
