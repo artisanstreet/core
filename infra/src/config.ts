@@ -55,7 +55,41 @@ export const HYPERDRIVE_CACHING = { disabled: true } as const;
 // Fixed service env (persisted from wrangler.jsonc/docs).
 export const CORE_ENV_VALUE = "production" as const;
 export const CORE_SPA_APPROVE_PATH_VALUE = "/#/approve" as const;
-export const MAIL_PROVIDER_VALUE = "resend" as const;
+export const MAIL_PROVIDER_VALUE = "cloudflare" as const;
+
+// Native Cloudflare Email Service sender domain (no root MX changes).
+// SendingSubdomain provisions SPF/DKIM/return-path on the dedicated
+// sending subdomain; the sender address lives on that subdomain. Root
+// artisan.st MX records (existing mail) are never touched.
+export const MAIL_ZONE_NAME = "artisan.st" as const;
+export const MAIL_ZONE_ID = "6320d0c37a89c14abb9ae3d7b9d17339" as const;
+export const MAIL_SENDING_SUBDOMAIN = "mail.artisan.st" as const;
+export const MAIL_SENDER_EMAIL = "auth@mail.artisan.st" as const;
+export const MAIL_SENDER_NAME = "Artisan Street" as const;
+
+export function sender_email_from_mail_from(mail_from: string): string {
+  const trimmed = mail_from.trim();
+  const angled = trimmed.match(/^(.*)<([^<>\s]+@[^<>\s]+)>\s*$/);
+  if (!angled) return trimmed.toLowerCase();
+  return (angled[2] ?? "").trim().toLowerCase();
+}
+
+export function assert_valid_mail_from(mail_from: string): string {
+  if (!mail_from.trim()) {
+    throw new Error("MAIL_FROM is required (verified Cloudflare sender; no default)");
+  }
+  const sender_email = sender_email_from_mail_from(mail_from);
+  const at = sender_email.lastIndexOf("@");
+  if (at < 0) {
+    throw new Error("MAIL_FROM must be a verified Cloudflare sender address");
+  }
+  const domain = sender_email.slice(at + 1).toLowerCase();
+  const sending_host = MAIL_SENDING_SUBDOMAIN.toLowerCase();
+  if (domain !== sending_host && domain !== MAIL_ZONE_NAME.toLowerCase()) {
+    throw new Error("MAIL_FROM sender domain must be the onboarded sending domain");
+  }
+  return sender_email;
+}
 
 export function worker_name(stage: string): string {
   assert_valid_stage(stage);

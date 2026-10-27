@@ -4,12 +4,13 @@ import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as Path from "node:path";
 import { fileURLToPath as file_url_to_path } from "node:url";
-import { CORE_ENV_VALUE, CORE_SPA_APPROVE_PATH_VALUE, MAIL_PROVIDER_VALUE, WORKER_COMPATIBILITY_DATE, WORKER_COMPATIBILITY_FLAGS, WORKER_PREBUILT_ENTRY, WEB_DIST_DIR, assert_distinct_origins, assert_origin_for_stage, hostname_from_origin, normalize_origin, worker_name } from "./config.ts";
+import { CORE_ENV_VALUE, CORE_SPA_APPROVE_PATH_VALUE, MAIL_PROVIDER_VALUE, MAIL_SENDER_EMAIL, WORKER_COMPATIBILITY_DATE, WORKER_COMPATIBILITY_FLAGS, WORKER_PREBUILT_ENTRY, WEB_DIST_DIR, assert_distinct_origins, assert_origin_for_stage, assert_valid_mail_from, hostname_from_origin, normalize_origin, worker_name } from "./config.ts";
 import type { ConfigBucket } from "./storage.ts";
 import type { CoreHyperdrive } from "./hyperdrive.ts";
 
 type BucketHandle = Effect.Success<typeof ConfigBucket>;
 type HyperdriveHandle = Effect.Success<typeof CoreHyperdrive>;
+type EmailHandle = Effect.Success<ReturnType<typeof Cloudflare.Email.SendEmail>>;
 
 // Absolute artifact paths (cwd-independent). Canonical CLI cwd is the core
 // repo root (`--config infra/alchemy.run.ts`); absolute paths keep
@@ -25,6 +26,7 @@ export interface CoreWorkerPropsInput {
   readonly core_origin: string;
   readonly relay_origin: string;
   readonly mail_from: string;
+  readonly email: EmailHandle;
   readonly bucket: BucketHandle;
   readonly hyperdrive: HyperdriveHandle;
 }
@@ -35,9 +37,8 @@ export interface CoreWorkerPropsInput {
 // CORE_JWT_ISSUER from Relay's normalized issuer). Only secrets stay as
 // Config.Redacted (bind as secret_text).
 export function build_core_worker_props(input: CoreWorkerPropsInput) {
-  if (!input.mail_from.trim()) {
-    throw new Error("MAIL_FROM is required (verified Resend sender; no default)");
-  }
+  const sender_email = assert_valid_mail_from(input.mail_from);
+  void sender_email;
   const domain_host = hostname_from_origin(input.core_origin);
   return {
     name: worker_name(input.stage),
@@ -62,7 +63,7 @@ export function build_core_worker_props(input: CoreWorkerPropsInput) {
       MAIL_FROM: input.mail_from,
       CORE_MASTER_KEY: Config.Redacted("CORE_MASTER_KEY"),
       CORE_ADMIN_TOKEN: Config.Redacted("CORE_ADMIN_TOKEN"),
-      RESEND_API_KEY: Config.Redacted("RESEND_API_KEY"),
+      EMAIL: input.email,
       CONFIG_BUCKET: input.bucket,
       HYPERDRIVE: input.hyperdrive },
     // Exact HTTPS custom domain for EVERY deployed stage (stage-specific
@@ -76,18 +77,19 @@ export function build_core_worker_props(input: CoreWorkerPropsInput) {
 // Async/plain-module Worker (Alchemy v2 async Workers: main + env).
 // Handles are passed in from the composition root (single declaration);
 // this factory never re-yields ConfigBucket/CoreHyperdrive.
-export const make_core_worker = (deps: { bucket: BucketHandle; hyperdrive: HyperdriveHandle }) =>
-  Effect.gen(function* () {
+export const make_core_worker = (deps: { bucket: BucketHandle; hyperdrive: HyperdriveHandle }) => {
+  const program = Effect.gen(function* () {
     const { stage } = yield* Alchemy.Stack;
 
     const core_origin_raw = yield* Config.String("AST_CORE_ORIGIN");
     const relay_origin_raw = yield* Config.String("AST_RELAY_ORIGIN");
-    // MAIL_FROM is REQUIRED: it must be a verified Resend sender. No
-    // example.invalid fallback — silently deploying broken auth email is
-    // worse than failing fast here.
+    // MAIL_FROM is REQUIRED: it must be a verified Cloudflare sender on the
+    // onboarded sending subdomain. No example.invalid fallback — silently
+    // deploying broken auth email is worse than failing fast here.
     const mail_from_raw = yield* Config.String("MAIL_FROM");
-    if (!mail_from_raw.trim()) {
-      throw new Error("MAIL_FROM is required (verified Resend sender; no default)");
+    const sender_email = assert_valid_mail_from(mail_from_raw);
+    if (sender_email !== MAIL_SENDER_EMAIL.toLowerCase()) {
+      throw new Error("MAIL_FROM must be the verified Cloudflare sender");
     }
     const core_origin = normalize_origin(core_origin_raw, "AST_CORE_ORIGIN");
     const relay_origin = normalize_origin(relay_origin_raw, "AST_RELAY_ORIGIN");
@@ -95,12 +97,18 @@ export const make_core_worker = (deps: { bucket: BucketHandle; hyperdrive: Hyper
     assert_origin_for_stage(relay_origin, "AST_RELAY_ORIGIN", stage);
     assert_distinct_origins(core_origin, relay_origin);
 
+    const email = yield* Cloudflare.Email.SendEmail("EMAIL", {
+      allowedSenderAddresses: [MAIL_SENDER_EMAIL],
+    });
     const props = build_core_worker_props({
       stage,
       core_origin,
       relay_origin,
       mail_from: mail_from_raw,
+      email,
       bucket: deps.bucket,
       hyperdrive: deps.hyperdrive });
     return yield* Cloudflare.Worker("CoreWorker", props);
   });
+  return program;
+};

@@ -11,13 +11,20 @@ import { fileURLToPath as file_url_to_path } from "node:url";
 import { readPrebuiltWorkerBundle as read_prebuilt_worker_bundle } from "../node_modules/@alchemy.run/cloudflare/lib/Workers/Sources/Prebuilt.js";
 import {
   HYPERDRIVE_CACHING,
+  MAIL_PROVIDER_VALUE,
+  MAIL_SENDER_EMAIL,
+  MAIL_SENDING_SUBDOMAIN,
+  MAIL_ZONE_ID,
+  MAIL_ZONE_NAME,
   STACK_NAME,
   assert_distinct_origins,
   assert_origin_for_stage,
+  assert_valid_mail_from,
   bucket_name,
   hyperdrive_name,
   normalize_origin,
   parse_postgres_url,
+  sender_email_from_mail_from,
   worker_name,
 } from "../src/config.ts";
 import { build_core_worker_props } from "../src/worker.ts";
@@ -30,6 +37,7 @@ const SQL_ROOT = Path.join(CORE_ROOT, "src/db/queries");
 
 const dummy_bucket = { __dummy: "bucket" } as never;
 const dummy_hd = { __dummy: "hyperdrive" } as never;
+const dummy_email = { kind: "Cloudflare.Email.SendEmail", name: "EMAIL" } as never;
 
 describe("stack identity (stage isolation, no sibling imports)", () => {
   it("uses the Core stack name (Relay owns its own stack)", () => {
@@ -88,20 +96,24 @@ describe("Worker env binds canonical literals (not raw Config values)", () => {
       stage: "pr-42",
       core_origin,
       relay_origin,
-      mail_from: "Ast <ops@example.com>",
+      mail_from: "Artisan Street <auth@mail.artisan.st>",
+      email: dummy_email,
       bucket: dummy_bucket,
       hyperdrive: dummy_hd,
     });
     expect(props.env.CORE_PUBLIC_BASE_URL).toBe("https://core.artisanstreet.dev");
     expect(props.env.CORE_JWT_ISSUER).toBe("https://core.artisanstreet.dev");
     expect(props.env.CORE_RELAY_ORIGIN).toBe("https://relay.artisanstreet.dev");
+    expect(props.env.MAIL_PROVIDER).toBe("cloudflare");
+    expect(props.env.MAIL_FROM).toBe("Artisan Street <auth@mail.artisan.st>");
+    expect(props.env.EMAIL).toBe(dummy_email);
+    expect("RESEND_API_KEY" in props.env).toBe(false);
     // Handles pass through (single declaration in composition root).
     expect(props.env.CONFIG_BUCKET).toBe(dummy_bucket);
     expect(props.env.HYPERDRIVE).toBe(dummy_hd);
     // Secrets stay Config (never plain strings).
     expect(typeof props.env.CORE_MASTER_KEY).not.toBe("string");
     expect(typeof props.env.CORE_ADMIN_TOKEN).not.toBe("string");
-    expect(typeof props.env.RESEND_API_KEY).not.toBe("string");
   });
 
   it("rejects empty MAIL_FROM (verified sender required, no default)", () => {
@@ -113,10 +125,46 @@ describe("Worker env binds canonical literals (not raw Config values)", () => {
         core_origin,
         relay_origin,
         mail_from: "   ",
+        email: dummy_email,
         bucket: dummy_bucket,
         hyperdrive: dummy_hd,
       }),
     ).toThrow(/MAIL_FROM/);
+  });
+
+  it("rejects a sender outside the onboarded sending domain", () => {
+    const core_origin = normalize_origin("https://core.artisanstreet.dev", "AST_CORE_ORIGIN");
+    const relay_origin = normalize_origin("https://relay.artisanstreet.dev", "AST_RELAY_ORIGIN");
+    expect(() =>
+      build_core_worker_props({
+        stage: "pr-42",
+        core_origin,
+        relay_origin,
+        mail_from: "Ast <ops@example.com>",
+        email: dummy_email,
+        bucket: dummy_bucket,
+        hyperdrive: dummy_hd,
+      }),
+    ).toThrow();
+  });
+});
+
+describe("native email sending domain (no root MX changes)", () => {
+  it("uses the dedicated sending subdomain on the active zone", () => {
+    expect(MAIL_ZONE_NAME).toBe("artisan.st");
+    expect(MAIL_ZONE_ID).toBe("6320d0c37a89c14abb9ae3d7b9d17339");
+    expect(MAIL_SENDING_SUBDOMAIN).toBe("mail.artisan.st");
+    expect(MAIL_SENDER_EMAIL).toBe("auth@mail.artisan.st");
+    expect(MAIL_PROVIDER_VALUE).toBe("cloudflare");
+  });
+
+  it("parses the sender email from a display-name value", () => {
+    expect(sender_email_from_mail_from("Artisan Street <auth@mail.artisan.st>")).toBe(
+      "auth@mail.artisan.st",
+    );
+    expect(assert_valid_mail_from("Artisan Street <auth@mail.artisan.st>")).toBe(
+      "auth@mail.artisan.st",
+    );
   });
 });
 
@@ -131,7 +179,8 @@ describe("stage routes: exact custom domain on every stage, worker-first", () =>
         stage,
         core_origin,
         relay_origin: "https://relay.artisanstreet.dev",
-        mail_from: "Ast <ops@example.com>",
+        mail_from: "Artisan Street <auth@mail.artisan.st>",
+        email: dummy_email,
         bucket: dummy_bucket,
         hyperdrive: dummy_hd,
       });

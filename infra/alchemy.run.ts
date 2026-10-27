@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import { STACK_NAME } from "./src/config.ts";
 import { ConfigBucket } from "./src/storage.ts";
 import { CoreHyperdrive } from "./src/hyperdrive.ts";
+import { CoreMailSending } from "./src/email.ts";
 import { make_core_worker } from "./src/worker.ts";
 
 // Composition root — export default the Stack.
@@ -13,7 +14,10 @@ import { make_core_worker } from "./src/worker.ts";
 // so all stages share one account backend with stage-consistent,
 // stage-isolated state. No sibling source imports.
 // Single declaration: bucket/hyperdrive yielded once here and passed to the
-// Worker factory (no duplicate resource declarations).
+// Worker factory (no duplicate resource declarations). The sending subdomain
+// is yielded once here for prod only (stage-isolated state would otherwise
+// fight over the single zone-level mail.artisan.st name); preview stages
+// reuse the prod onboarding through the send_email binding.
 export default Alchemy.Stack(
   STACK_NAME,
   {
@@ -24,6 +28,9 @@ export default Alchemy.Stack(
     const stack = yield* Alchemy.Stack;
     const bucket = yield* ConfigBucket;
     const hd = yield* CoreHyperdrive;
+    if (stack.stage === "prod") {
+      yield* CoreMailSending;
+    }
     const worker = yield* make_core_worker({ bucket, hyperdrive: hd });
 
     // Useful public outputs only. No secret outputs.
