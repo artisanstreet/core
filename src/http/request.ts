@@ -1,4 +1,4 @@
-import { Effect, Either, Match, Option, Schema, Stream } from "effect";
+import { Chunk, Effect, Either, Match, Option, Schema, Stream } from "effect";
 import * as HttpServerRequest from "@effect/platform/HttpServerRequest";
 import * as Headers from "@effect/platform/Headers";
 import * as Url from "@effect/platform/Url";
@@ -21,24 +21,28 @@ export const client_ip = Effect.gen(function* () {
   return get_header(req, "x-forwarded-for")?.split(",")[0]?.trim() || cf;
 });
 
+export const assemble_bytes = (total: number, parts: Iterable<Uint8Array>): Uint8Array => {
+  const buf = new Uint8Array(total);
+  let off = 0;
+  for (const ch of parts) {
+    buf.set(ch, off);
+    off += ch.byteLength;
+  }
+  return buf;
+};
+
 export const read_raw_body = Effect.gen(function* () {
   const req = yield* HttpServerRequest.HttpServerRequest;
   const source = req.source as unknown as Request;
   if (!source.body) return "";
-  const acc = yield* Stream.runFoldEffect(req.stream, { total: 0, chunks: [] as Array<Uint8Array> }, (state, chunk) => {
+  const acc = yield* Stream.runFoldEffect(req.stream, { total: 0, chunks: Chunk.empty<Uint8Array>() }, (state, chunk) => {
     const total = state.total + chunk.byteLength;
     if (total > max_body_bytes) return Effect.fail(payloadTooLarge());
-    return Effect.succeed({ total, chunks: [...state.chunks, chunk] });
+    return Effect.succeed({ total, chunks: Chunk.append(state.chunks, chunk) });
   }).pipe(
     Effect.mapError((e) => (e instanceof CoreError ? e : new CoreError("bad_request", "invalid body"))),
   );
-  const buf = new Uint8Array(acc.total);
-  let off = 0;
-  for (const ch of acc.chunks) {
-    buf.set(ch, off);
-    off += ch.byteLength;
-  }
-  return new TextDecoder().decode(buf);
+  return new TextDecoder().decode(assemble_bytes(acc.total, acc.chunks));
 });
 
 export const parse_json_text = (raw: string) =>
