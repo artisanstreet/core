@@ -113,6 +113,58 @@ describe("sign-in form", () => {
     expect(document.body.textContent).toContain("that address cannot receive mail");
     expect(location.hash).not.toBe("#/account");
   });
+
+  it("shows who-started help and skips finalize when the secret is gone after approval", async () => {
+    const { api, calls } = stubApi((url) => {
+      if (url.includes("/magic/request")) return { requestId: REQUEST_ID, requestSecret: "shh", expiresAt: "2026-10-26T20:00:00.000Z" };
+      if (url.includes("/magic/status")) return { requestId: REQUEST_ID, status: "email_approved", totpRequired: false, email: "a@example.com", expiresAt: "2026-10-26T20:00:00.000Z" };
+      if (url.includes("/magic/finalize")) {
+        return { sessionId: `sess_01K${"A".repeat(23)}`, accountId: ACCOUNT_ID, expiresAt: "2026-10-26T20:00:00.000Z", totpVerified: false };
+      }
+      throw new Error(`unexpected ${url}`);
+    });
+    renderSignin(ctxWith(api));
+    (document.getElementById("signin-email") as HTMLInputElement).value = "a@example.com";
+    (document.querySelector("form") as HTMLFormElement).dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await tick();
+    await tick();
+    clearRequestSecret(REQUEST_ID);
+    sessionStorage.clear();
+    const finish = [...document.querySelectorAll("button")].find((b) => b.textContent?.includes("Finish sign-in"));
+    expect(finish).toBeDefined();
+    const done = (finish as HTMLButtonElement).nextElementSibling as HTMLElement | null;
+    expect(done?.textContent ?? "").toBe("");
+    (finish as HTMLButtonElement).click();
+    await tick();
+    expect(done?.textContent ?? "").toMatch(/did not start/i);
+    expect(calls.some((c) => c.url.includes("/magic/finalize"))).toBe(false);
+    expect(location.hash).not.toBe("#/account");
+  });
+
+  it("shows authenticator help and skips finalize when TOTP is required but empty", async () => {
+    const { api, calls } = stubApi((url) => {
+      if (url.includes("/magic/request")) return { requestId: REQUEST_ID, requestSecret: "shh", expiresAt: "2026-10-26T20:00:00.000Z" };
+      if (url.includes("/magic/status")) return { requestId: REQUEST_ID, status: "email_approved", totpRequired: true, email: "a@example.com", expiresAt: "2026-10-26T20:00:00.000Z" };
+      if (url.includes("/magic/finalize")) {
+        return { sessionId: `sess_01K${"A".repeat(23)}`, accountId: ACCOUNT_ID, expiresAt: "2026-10-26T20:00:00.000Z", totpVerified: false };
+      }
+      throw new Error(`unexpected ${url}`);
+    });
+    renderSignin(ctxWith(api));
+    (document.getElementById("signin-email") as HTMLInputElement).value = "a@example.com";
+    (document.querySelector("form") as HTMLFormElement).dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await tick();
+    await tick();
+    const finish = [...document.querySelectorAll("button")].find((b) => b.textContent?.includes("Finish sign-in"));
+    expect(finish).toBeDefined();
+    const done = (finish as HTMLButtonElement).nextElementSibling as HTMLElement | null;
+    expect(done?.textContent ?? "").toBe("");
+    (finish as HTMLButtonElement).click();
+    await tick();
+    expect(done?.textContent ?? "").toMatch(/authenticator code|recovery code/i);
+    expect(calls.some((c) => c.url.includes("/magic/finalize"))).toBe(false);
+    expect(location.hash).not.toBe("#/account");
+  });
 });
 
 describe("approve form (email link target)", () => {
