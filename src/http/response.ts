@@ -19,18 +19,18 @@ export function encode_ok<A, I>(schema: Schema.Schema<A, I>, value: NoInfer<A>, 
 export function encode_fail(e: unknown, request_id: string) {
   if (e instanceof CoreError) {
     return HttpServerResponse.unsafeJson(
-      { error: { code: e.code, message: e.message, requestId: request_id } },
+      { error: { code: e.code, message: e.message, request_id: request_id } },
       { status: e.status },
     );
   }
   if (ParseResult.isParseError(e)) {
     return HttpServerResponse.unsafeJson(
-      { error: { code: "bad_request", message: "invalid request", requestId: request_id } },
+      { error: { code: "bad_request", message: "invalid request", request_id: request_id } },
       { status: 400 },
     );
   }
   return HttpServerResponse.unsafeJson(
-    { error: { code: "internal", message: "internal error", requestId: request_id } },
+    { error: { code: "internal", message: "internal error", request_id: request_id } },
     { status: 500 },
   );
 }

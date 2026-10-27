@@ -47,7 +47,7 @@ const artifact_assign_handler = Effect.gen(function* () {
   const { json } = yield* read_json_body;
   const input = yield* decode_request(C.ArtifactAssignReq, json);
   const a = yield* Vault.assign_artifact(me.account_id, input.artifactId, input.machineId);
-  return encode_ok(R.artifact_assign.response_schema, { artifactId: a.artifactId, machineId: a.machineId });
+  return encode_ok(R.artifact_assign.response_schema, { artifact_id: a.artifact_id, machine_id: a.machine_id });
 });
 const artifact_unassign_handler = Effect.gen(function* () {
   const me = yield* session_for_mutation;
@@ -60,7 +60,7 @@ const artifact_download_handler = Effect.gen(function* () {
   const { principal } = yield* proof_for_machine;
   const params = yield* HttpRouter.RouteContext.pipe(Effect.map((c) => c.params));
   const data = yield* Vault.download_artifact(principal.account_id, principal.machine_id, params["id"] ?? "");
-  const envelope = yield* Schema.decodeUnknown(C.EngineArtifactEnvelope)(data.envelope).pipe(
+  const envelope = yield* Schema.decodeUnknown(C.EngineArtifactEnvelopeResp)(data.envelope).pipe(
     Effect.mapError((cause) => internal("artifact unavailable", { cause })),
   );
   return encode_ok(C.ArtifactDownloadResp, { envelope });

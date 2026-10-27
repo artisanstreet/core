@@ -28,7 +28,7 @@ const provider_create_handler = Effect.gen(function* () {
     api_key: checked.api_key });
   return encode_ok(
     C.ProviderInfo,
-    { id: created.id, provider: created.provider, label: created.label, createdAt: created.createdAt, revokedAt: null, assignedMachineIds: [] },
+    { id: created.id, provider: created.provider, label: created.label, created_at: created.created_at, revoked_at: null, assigned_machine_ids: [] },
     201,
   );
 });

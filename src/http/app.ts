@@ -21,7 +21,7 @@ export const http_effect = (
     Effect.catchTag("RouteNotFound", () =>
       Effect.succeed(
         HttpServerResponse.unsafeJson(
-          { error: { code: "not_found", message: "not found", requestId: request_id } },
+          { error: { code: "not_found", message: "not found", request_id: request_id } },
           { status: 404 },
         ),
       ),

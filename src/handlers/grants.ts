@@ -33,7 +33,7 @@ const grant_issue_handler = Effect.gen(function* () {
       role: "forge",
       mid: input.targetMachineId ?? principal.machine_id,
       cnf: { kty: "OKP", crv: "Ed25519", x: public_key_x } });
-    return encode_ok(C.GrantIssueResp, { token: issued.token, expiresAt: issued.expiresAt });
+    return encode_ok(C.GrantIssueResp, { token: issued.token, expires_at: issued.expires_at });
   }
   const s = yield* session_for_mutation;
   const { json } = yield* read_json_body;
@@ -48,7 +48,7 @@ const grant_issue_handler = Effect.gen(function* () {
     role: "client",
     mid: input.targetMachineId,
     cnf: input.cnf });
-  return encode_ok(C.GrantIssueResp, { token: issued.token, expiresAt: issued.expiresAt });
+  return encode_ok(C.GrantIssueResp, { token: issued.token, expires_at: issued.expires_at });
 });
 const key_rotate_handler = Effect.gen(function* () {
   const req = yield* HttpServerRequest.HttpServerRequest;

@@ -28,9 +28,9 @@ const deletion_request_handler = Effect.gen(function* () {
   const opened = yield* Deletion.request_account_deletion(s.account_id);
   return encode_ok(C.DeletionStatusResp, {
     status: opened.status,
-    requestedAt: opened.requestedAt,
-    purgeAfter: opened.purgeAfter,
-    completedAt: null });
+    requested_at: opened.requested_at,
+    purge_after: opened.purge_after,
+    completed_at: null });
 });
 const deletion_status_handler = Effect.gen(function* () {
   const { principal: s } = yield* session_of;

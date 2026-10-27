@@ -12,7 +12,7 @@ const version_handler = Effect.gen(function* () {
   const res = encode_ok(C.VersionResp, {
     api: "1",
     contracts: "1.0.0",
-    jwksUri: "/.well-known/jwks.json",
+    jwks_uri: "/.well-known/jwks.json",
     openapi: "/v1/openapi.json" });
   return res.pipe(HttpServerResponse.setHeader("Cache-Control", "public, max-age=60"));
 });

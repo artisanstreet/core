@@ -23,18 +23,23 @@ const me_handler = Effect.gen(function* () {
     { concurrency: 3 },
   );
   return encode_ok(C.MeResp, {
-    accountId: s.account_id,
+    account_id: s.account_id,
     email: s.email,
-    displayName: s.display_name,
-    totpEnrolled: s.totp_enrolled,
-    machines: machines.machines,
-    providerConnections: providers.connections.map((p) => ({
+    display_name: s.display_name,
+    totp_enrolled: s.totp_enrolled,
+    machines: machines.machines.map((m) => ({
+      id: m.id,
+      public_key: m.public_key,
+      label: m.label,
+      created_at: m.created_at,
+      revoked_at: m.revoked_at })),
+    provider_connections: providers.connections.map((p) => ({
       id: p.id,
       provider: p.provider,
       label: p.label,
-      revokedAt: p.revokedAt,
-      assignedMachineIds: p.assignedMachineIds })),
-    latestConfigVersion: latest_config_version ?? null });
+      revoked_at: p.revoked_at,
+      assigned_machine_ids: p.assigned_machine_ids })),
+    latest_config_version: latest_config_version ?? null });
 });
 const sessions_handler = Effect.gen(function* () {
   const { principal: s } = yield* session_of;

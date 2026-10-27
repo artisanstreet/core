@@ -24,7 +24,7 @@ const bundle_publish_handler = Effect.gen(function* () {
   const b = yield* ConfigSvc.publish_bundle(me.account_id, input.manifest);
   return encode_ok(
     C.BundleInfo,
-    { id: b.id, version: b.version, contentHash: b.contentHash, r2Key: b.r2Key, createdAt: b.createdAt },
+    { id: b.id, version: b.version, content_hash: b.content_hash, r2_key: b.r2_key, created_at: b.created_at },
     201,
   );
 });
@@ -39,13 +39,13 @@ const bundle_latest_handler = Effect.gen(function* () {
   const latest = yield* ConfigSvc.latest_bundle(account_id);
   const manifest = latest.manifest == null
     ? null
-    : yield* Schema.decodeUnknown(C.EditorManifest)(latest.manifest).pipe(
+    : yield* Schema.decodeUnknown(C.EditorManifestResp)(latest.manifest).pipe(
       Effect.mapError((cause) => internal("configuration unavailable", { cause })),
     );
   const body = { bundle: latest.bundle, manifest };
   if (latest.bundle) {
-    const etag = `"${latest.bundle.contentHash}"`;
-    const not_modified = yield* if_none_match(latest.bundle.contentHash);
+    const etag = `"${latest.bundle.content_hash}"`;
+    const not_modified = yield* if_none_match(latest.bundle.content_hash);
     if (not_modified) {
       return HttpServerResponse.empty({ status: 304 }).pipe(
         HttpServerResponse.setHeader("ETag", etag),
@@ -68,9 +68,9 @@ const bundle_manifest_handler = Effect.gen(function* () {
   if (!Number.isInteger(version) || version <= 0) {
     return yield* Effect.fail(new CoreError("bad_request", "bad version"));
   }
-  const { bytes, contentHash } = yield* ConfigSvc.bundle_manifest_bytes(principal.account_id, version);
-  const etag = `"${contentHash}"`;
-  const not_modified = yield* if_none_match(contentHash);
+  const { bytes, content_hash } = yield* ConfigSvc.bundle_manifest_bytes(principal.account_id, version);
+  const etag = `"${content_hash}"`;
+  const not_modified = yield* if_none_match(content_hash);
   if (not_modified) {
     return HttpServerResponse.empty({ status: 304 }).pipe(
       HttpServerResponse.setHeader("ETag", etag),
@@ -79,7 +79,7 @@ const bundle_manifest_handler = Effect.gen(function* () {
   }
   return HttpServerResponse.uint8Array(bytes, { status: 200, contentType: "application/json" }).pipe(
     HttpServerResponse.setHeader("ETag", etag),
-    HttpServerResponse.setHeader("X-Content-Sha256", contentHash),
+    HttpServerResponse.setHeader("X-Content-Sha256", content_hash),
     HttpServerResponse.setHeader("Cache-Control", "private, max-age=31536000, immutable"),
   );
 });
