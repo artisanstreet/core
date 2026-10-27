@@ -96,7 +96,8 @@ describe("Worker env binds canonical literals (not raw Config values)", () => {
       stage: "pr-42",
       core_origin,
       relay_origin,
-      mail_from: "Artisan Street <auth@mail.artisan.st>",
+      mail_from: "auth@mail.artisan.st",
+      mail_from_name: "Artisan Street",
       email: dummy_email,
       bucket: dummy_bucket,
       hyperdrive: dummy_hd,
@@ -105,7 +106,8 @@ describe("Worker env binds canonical literals (not raw Config values)", () => {
     expect(props.env.CORE_JWT_ISSUER).toBe("https://core.artisanstreet.dev");
     expect(props.env.CORE_RELAY_ORIGIN).toBe("https://relay.artisanstreet.dev");
     expect(props.env.MAIL_PROVIDER).toBe("cloudflare");
-    expect(props.env.MAIL_FROM).toBe("Artisan Street <auth@mail.artisan.st>");
+    expect(props.env.MAIL_FROM).toBe("auth@mail.artisan.st");
+    expect(props.env.MAIL_FROM_NAME).toBe("Artisan Street");
     expect(props.env.EMAIL).toBe(dummy_email);
     expect("RESEND_API_KEY" in props.env).toBe(false);
     // Handles pass through (single declaration in composition root).
@@ -125,6 +127,7 @@ describe("Worker env binds canonical literals (not raw Config values)", () => {
         core_origin,
         relay_origin,
         mail_from: "   ",
+        mail_from_name: "Artisan Street",
         email: dummy_email,
         bucket: dummy_bucket,
         hyperdrive: dummy_hd,
@@ -140,12 +143,30 @@ describe("Worker env binds canonical literals (not raw Config values)", () => {
         stage: "pr-42",
         core_origin,
         relay_origin,
-        mail_from: "Ast <ops@example.com>",
+        mail_from: "ops@example.com",
+        mail_from_name: "Ast",
         email: dummy_email,
         bucket: dummy_bucket,
         hyperdrive: dummy_hd,
       }),
     ).toThrow();
+  });
+
+  it("rejects a missing display name", () => {
+    const core_origin = normalize_origin("https://core.artisanstreet.dev", "AST_CORE_ORIGIN");
+    const relay_origin = normalize_origin("https://relay.artisanstreet.dev", "AST_RELAY_ORIGIN");
+    expect(() =>
+      build_core_worker_props({
+        stage: "pr-42",
+        core_origin,
+        relay_origin,
+        mail_from: "auth@mail.artisan.st",
+        mail_from_name: "  ",
+        email: dummy_email,
+        bucket: dummy_bucket,
+        hyperdrive: dummy_hd,
+      }),
+    ).toThrow(/MAIL_FROM_NAME/);
   });
 });
 
@@ -158,11 +179,11 @@ describe("native email sending domain (no root MX changes)", () => {
     expect(MAIL_PROVIDER_VALUE).toBe("cloudflare");
   });
 
-  it("parses the sender email from a display-name value", () => {
-    expect(sender_email_from_mail_from("Artisan Street <auth@mail.artisan.st>")).toBe(
+  it("accepts the bare verified sender address", () => {
+    expect(sender_email_from_mail_from("auth@mail.artisan.st")).toBe(
       "auth@mail.artisan.st",
     );
-    expect(assert_valid_mail_from("Artisan Street <auth@mail.artisan.st>")).toBe(
+    expect(assert_valid_mail_from("auth@mail.artisan.st")).toBe(
       "auth@mail.artisan.st",
     );
   });
@@ -179,7 +200,8 @@ describe("stage routes: exact custom domain on every stage, worker-first", () =>
         stage,
         core_origin,
         relay_origin: "https://relay.artisanstreet.dev",
-        mail_from: "Artisan Street <auth@mail.artisan.st>",
+        mail_from: "auth@mail.artisan.st",
+        mail_from_name: "Artisan Street",
         email: dummy_email,
         bucket: dummy_bucket,
         hyperdrive: dummy_hd,
