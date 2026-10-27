@@ -552,4 +552,3 @@ function sendBox(getSession: () => ForgeSession | null, threadId: string): HTMLE
   wrap.append(label, input, btn, msg);
   return wrap;
 }
-

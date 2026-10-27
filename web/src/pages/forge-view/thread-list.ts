@@ -56,4 +56,3 @@ export async function openThreads(ctl: ConnCtl, view: HTMLElement): Promise<Live
     return null;
   }
 }
-
