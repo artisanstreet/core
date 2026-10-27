@@ -74,40 +74,33 @@ preview/dev stages; never demonstrate prod and preview with the same
 Bare `alchemy` is NOT installed by `npm ci`. Use the project-local binary
 via `npx --no-install` or the npm wrappers below.
 
-Fresh clone (builds BOTH artifacts from their lockfiles first):
+One ordered fresh-clone sequence (run from the repo root, portable
+relative paths — root, portal, and infra each install from their own
+lockfile, then the local build DB is prepared before `infra:check`):
 
 ```sh
-cd /home/sander/projects/artisanstreet/core/infra
-npm ci                                   # infra deps (isolated lockfile)
-npm run build                            # portal first, then worker (see below)
-npm run check                            # build + typecheck + tests + verify (needs build DB)
+npm ci                      # root deps (service lockfile)
+npm ci --prefix web         # portal deps (web lockfile)
+npm ci --prefix infra       # infra deps (isolated lockfile)
+cp -n .env.example .env     # local DATABASE_URL -> 127.0.0.1:55432 (see README quickstart)
+# docker: ast-core-dev-pg on 127.0.0.1:55432 (Postgres 18), must be running
+npm run db:setup            # applies db/migrations/*.sql (transactional + locked)
+npm run infra:check --      # portal-first build + typecheck + tests + verify (see below)
 ```
 
-Build-DB prerequisite (distinct from deploy secrets): the worker build
-runs the Reylo Vite plugin `sqlModule`, which `Session.analyze`s every
-`.sql` import against the schema (`.reylo.yaml`
+Why the build needs that local DB (distinct from deploy secrets): the
+worker build runs the Reylo Vite plugin `sqlModule`, which
+`Session.analyze`s every `.sql` import against the schema (`.reylo.yaml`
 `direct_url: ${DATABASE_URL}`, `env: [.env, .env.local]`). A fresh
-checkout has no `.reylo/` cache (gitignored), so the build needs a
-schema-populated local/CI PostgreSQL + `DATABASE_URL` — the existing
-Core setup is reusable, no new hosting:
-
-```sh
-cd /home/sander/projects/artisanstreet/core
-cp .env.example .env        # DATABASE_URL=postgres://core:core@127.0.0.1:55432/core
-# docker: ast-core-dev-pg on 127.0.0.1:55432 (Postgres 18), see README quickstart
-npm ci && npm run db:setup  # applies db/migrations/*.sql (transactional + locked)
-cd web && npm ci && cd ..
-DATABASE_URL=postgres://core:core@127.0.0.1:55432/core npm run infra:build
-```
-
-Verified with explicit `DATABASE_URL` and clean outputs (`.reylo/`,
-`dist/ast_core/`, `web/dist/` removed): worker build re-analyzes and
-succeeds (exit 0, `.reylo/queries` + `dist/` regenerated); portal build
-succeeds (exit 0). So `verify:bundle` and infra unit tests are DB-free,
-but `build` is NOT truly offline — it may touch that local DB. Never
-substitute production creds here: `AST_CORE_DATABASE_URL` (secret
-Hyperdrive deploy origin) is a different variable for a different
-purpose; the build only ever uses local/CI `DATABASE_URL`.
+checkout has no `.reylo/` cache (gitignored), so without the
+schema-populated DB above the worker build fails; with explicit
+`DATABASE_URL` and clean outputs (`.reylo/`, `dist/ast_core/`,
+`web/dist/` removed) it re-analyzes and succeeds (exit 0). So
+`verify:bundle` and infra unit tests are DB-free, but `build` is NOT
+truly offline — it may touch that local DB. Never substitute production
+creds here: `AST_CORE_DATABASE_URL` (secret Hyperdrive deploy origin) is
+a different variable for a different purpose; the build only ever uses
+local/CI `DATABASE_URL`.
 
 `npm run build` = `build:web` + `build:worker` (portal first):
 - `build:web`: `npm --prefix ../web run build --` (portal `vite build`,

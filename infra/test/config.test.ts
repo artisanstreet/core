@@ -53,6 +53,9 @@ describe("public origins (shared AST_CORE_ORIGIN / AST_RELAY_ORIGIN)", () => {
 
   it("rejects wildcard origins", () => {
     expect(() => normalizeOrigin("https://*.example.com", "AST_CORE_ORIGIN")).toThrow();
+    expect(() => normalizeOrigin("https://%2A.example.com", "AST_CORE_ORIGIN")).toThrow();
+    expect(() => normalizeOrigin("https://%2a.example.com", "AST_CORE_ORIGIN")).toThrow();
+    expect(() => normalizeOrigin("https://foo.*.example.com", "AST_CORE_ORIGIN")).toThrow();
   });
 
   it("rejects Core==Relay, including same hostname with different ports", () => {

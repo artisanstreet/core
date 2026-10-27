@@ -94,6 +94,10 @@ export function normalizeOrigin(raw: string | undefined, varName: string): strin
   }
   if (!u.hostname) throw new Error(`${varName} must include a hostname`);
   const host = u.hostname.toLowerCase();
+  // Reject wildcards after URL parse too: percent-encoded forms (e.g.
+  // https://%2A.example.com) contain no literal "*" pre-parse but normalize
+  // to a wildcard hostname.
+  if (host.includes("*")) throw new Error(`${varName} must be a single exact origin (no wildcards)`);
   const defPort = u.protocol === "https:" ? "443" : "80";
   const port = u.port && u.port !== defPort ? `:${u.port}` : "";
   return `${u.protocol}//${host}${port}`;
