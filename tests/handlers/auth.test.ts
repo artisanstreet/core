@@ -10,7 +10,7 @@ describe("magic link sign-in", () => {
     const rig = await setup_rig();
     const r1 = await api(rig.app, "POST", "/v1/auth/magic/request", { body: { email: "a@example.com" } });
     expect(r1.status).toBe(200);
-    const { requestId, requestSecret } = r1.json as { requestId: string; requestSecret: string };
+    const { request_id, request_secret } = r1.json as { request_id: string; request_secret: string };
     const token = rig.token_for_email("a@example.com");
 
     // Mail-scanner behavior: plain GETs only.
@@ -20,11 +20,11 @@ describe("magic link sign-in", () => {
     expect(page.headers.get("content-type")).toContain("application/json");
     const bad = await api(rig.app, "GET", "/v1/auth/magic/confirm?token=short");
     expect(bad.status).toBe(400);
-    const st1 = await api(rig.app, "POST", "/v1/auth/magic/status", { body: { requestId, requestSecret } });
+    const st1 = await api(rig.app, "POST", "/v1/auth/magic/status", { body: { requestId: request_id, requestSecret: request_secret } });
     expect((st1.json as { status: string }).status).toBe("pending");
 
     // Finalize before approval is refused.
-    const early = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId, requestSecret } });
+    const early = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId: request_id, requestSecret: request_secret } });
     expect(early.status).toBe(403);
 
     // Explicit approval from the email.
@@ -36,9 +36,9 @@ describe("magic link sign-in", () => {
     const c2 = await api(rig.app, "POST", "/v1/auth/magic/consume", { body: { token } });
     expect(c2.status).toBe(200);
 
-    const f = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId, requestSecret } });
+    const f = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId: request_id, requestSecret: request_secret } });
     expect(f.status).toBe(200);
-    expect((f.json as { totpVerified: boolean }).totpVerified).toBe(false);
+    expect((f.json as { totp_verified: boolean }).totp_verified).toBe(false);
     expect(f.headers.get("set-cookie") ?? "").toContain("ast_session=");
   });
 
@@ -52,7 +52,7 @@ describe("magic link sign-in", () => {
   it("cross-browser: email device approves, original session completes", async () => {
     const rig = await setup_rig();
     const r1 = await api(rig.app, "POST", "/v1/auth/magic/request", { body: { email: "b@example.com" } });
-    const { requestId, requestSecret } = r1.json as { requestId: string; requestSecret: string };
+    const { request_id, request_secret } = r1.json as { request_id: string; request_secret: string };
     const token = rig.token_for_email("b@example.com");
 
     // Phone browser: no request secret, marks approval only.
@@ -60,11 +60,11 @@ describe("magic link sign-in", () => {
     expect(phone.status).toBe(200);
 
     // Attacker-style finalize without the secret fails.
-    const noSecret = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId, requestSecret: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" } });
+    const noSecret = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId: request_id, requestSecret: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" } });
     expect(noSecret.status).toBe(401);
 
     // Original session explicitly completes (safe binding: session lands here).
-    const done = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId, requestSecret } });
+    const done = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId: request_id, requestSecret: request_secret } });
     expect(done.status).toBe(200);
     const me = await api(rig.app, "GET", "/v1/me", { headers: { cookie: (done.headers.get("set-cookie") ?? "").split(";")[0]! } });
     expect(me.status).toBe(200);
@@ -74,11 +74,11 @@ describe("magic link sign-in", () => {
   it("finalize is single-use under concurrency", async () => {
     const rig = await setup_rig();
     const r1 = await api(rig.app, "POST", "/v1/auth/magic/request", { body: { email: "c@example.com" } });
-    const { requestId, requestSecret } = r1.json as { requestId: string; requestSecret: string };
+    const { request_id, request_secret } = r1.json as { request_id: string; request_secret: string };
     await api(rig.app, "POST", "/v1/auth/magic/consume", { body: { token: rig.token_for_email("c@example.com") } });
     const [a, b] = await Promise.all([
-      api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId, requestSecret } }),
-      api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId, requestSecret } }),
+      api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId: request_id, requestSecret: request_secret } }),
+      api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId: request_id, requestSecret: request_secret } }),
     ]);
     const statuses = [a.status, b.status].sort();
     expect(statuses).toEqual([200, 403]);
@@ -120,56 +120,56 @@ describe("TOTP second factor", () => {
     const acct = await signup(rig, "d@example.com");
     const en = await api(rig.app, "POST", "/v1/auth/totp/enroll", { headers: { cookie: acct.cookie, origin: "http://localhost" } });
     expect(en.status).toBe(200);
-    const { otpauthUrl, recoveryCodes } = en.json as { otpauthUrl: string; recoveryCodes: string[] };
-    expect(recoveryCodes).toHaveLength(10);
+    const { otpauth_url, recovery_codes } = en.json as { otpauth_url: string; recovery_codes: string[] };
+    expect(recovery_codes).toHaveLength(10);
     // Enrollment confirmation consumes the current step.
     const v = await api(rig.app, "POST", "/v1/auth/totp/verify", {
       headers: { cookie: acct.cookie, origin: "http://localhost" },
-      body: { code: totp_code_at(otpauthUrl, T0) } });
+      body: { code: totp_code_at(otpauth_url, T0) } });
     expect(v.status).toBe(200);
 
     // The just-consumed code is dead even though cryptographically valid.
     const r0 = await api(rig.app, "POST", "/v1/auth/magic/request", { body: { email: "d@example.com" } });
-    const j0 = r0.json as { requestId: string; requestSecret: string };
+    const j0 = r0.json as { request_id: string; request_secret: string };
     await api(rig.app, "POST", "/v1/auth/magic/consume", { body: { token: rig.token_for_email("d@example.com") } });
-    const replay0 = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId: j0.requestId, requestSecret: j0.requestSecret, totpCode: totp_code_at(otpauthUrl, T0) } });
+    const replay0 = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId: j0.request_id, requestSecret: j0.request_secret, totpCode: totp_code_at(otpauth_url, T0) } });
     expect(replay0.status).toBe(403);
 
     // New login now requires the factor.
     rig.set_now(T0 + 120_000);
     const r1 = await api(rig.app, "POST", "/v1/auth/magic/request", { body: { email: "d@example.com" } });
-    const { requestId, requestSecret } = r1.json as { requestId: string; requestSecret: string };
+    const { request_id, request_secret } = r1.json as { request_id: string; request_secret: string };
     await api(rig.app, "POST", "/v1/auth/magic/consume", { body: { token: rig.token_for_email("d@example.com") } });
-    const noCode = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId, requestSecret } });
+    const noCode = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId: request_id, requestSecret: request_secret } });
     expect(noCode.status).toBe(403);
-    const badCode = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId, requestSecret, totpCode: "000000" } });
+    const badCode = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId: request_id, requestSecret: request_secret, totpCode: "000000" } });
     expect(badCode.status).toBe(403);
 
     // Valid code works (single-use proven by the replay legs around it).
-    const code = totp_code_at(otpauthUrl, rig.now());
-    const ok = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId, requestSecret, totpCode: code } });
+    const code = totp_code_at(otpauth_url, rig.now());
+    const ok = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId: request_id, requestSecret: request_secret, totpCode: code } });
     expect(ok.status).toBe(200);
-    expect((ok.json as { totpVerified: boolean }).totpVerified).toBe(true);
+    expect((ok.json as { totp_verified: boolean }).totp_verified).toBe(true);
 
     // Reusing the just-consumed TOTP code fails even though still in-window.
     const r2 = await api(rig.app, "POST", "/v1/auth/magic/request", { body: { email: "d@example.com" } });
-    const j2 = r2.json as { requestId: string; requestSecret: string };
+    const j2 = r2.json as { request_id: string; request_secret: string };
     await api(rig.app, "POST", "/v1/auth/magic/consume", { body: { token: rig.token_for_email("d@example.com") } });
-    const replay = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId: j2.requestId, requestSecret: j2.requestSecret, totpCode: code } });
+    const replay = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId: j2.request_id, requestSecret: j2.request_secret, totpCode: code } });
     expect(replay.status).toBe(403);
 
     // Recovery code works once, then dies. (Six requests total including
     // signup; the per-email budget is 10/hour to leave headroom for the
     // legitimate re-request pattern this flow exercises.)
     const r3 = await api(rig.app, "POST", "/v1/auth/magic/request", { body: { email: "d@example.com" } });
-    const j3 = r3.json as { requestId: string; requestSecret: string };
+    const j3 = r3.json as { request_id: string; request_secret: string };
     await api(rig.app, "POST", "/v1/auth/magic/consume", { body: { token: rig.token_for_email("d@example.com") } });
-    const rec = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId: j3.requestId, requestSecret: j3.requestSecret, recoveryCode: recoveryCodes[0] } });
+    const rec = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId: j3.request_id, requestSecret: j3.request_secret, recoveryCode: recovery_codes[0] } });
     expect(rec.status).toBe(200);
     const r4 = await api(rig.app, "POST", "/v1/auth/magic/request", { body: { email: "d@example.com" } });
-    const j4 = r4.json as { requestId: string; requestSecret: string };
+    const j4 = r4.json as { request_id: string; request_secret: string };
     await api(rig.app, "POST", "/v1/auth/magic/consume", { body: { token: rig.token_for_email("d@example.com") } });
-    const rec2 = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId: j4.requestId, requestSecret: j4.requestSecret, recoveryCode: recoveryCodes[0] } });
+    const rec2 = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId: j4.request_id, requestSecret: j4.request_secret, recoveryCode: recovery_codes[0] } });
     expect(rec2.status).toBe(403);
   });
 
@@ -177,16 +177,16 @@ describe("TOTP second factor", () => {
     const rig = await setup_rig();
     const acct = await signup(rig, "e@example.com");
     const en = await api(rig.app, "POST", "/v1/auth/totp/enroll", { headers: { cookie: acct.cookie, origin: "http://localhost" } });
-    const { otpauthUrl } = en.json as { otpauthUrl: string };
+    const { otpauth_url } = en.json as { otpauth_url: string };
     await api(rig.app, "POST", "/v1/auth/totp/verify", {
       headers: { cookie: acct.cookie, origin: "http://localhost" },
-      body: { code: totp_code_for(otpauthUrl) } });
+      body: { code: totp_code_for(otpauth_url) } });
     const r1 = await api(rig.app, "POST", "/v1/auth/magic/request", { body: { email: "e@example.com" } });
-    const { requestId, requestSecret } = r1.json as { requestId: string; requestSecret: string };
+    const { request_id, request_secret } = r1.json as { request_id: string; request_secret: string };
     await api(rig.app, "POST", "/v1/auth/magic/consume", { body: { token: rig.token_for_email("e@example.com") } });
     let limited = 0;
     for (let i = 0; i < 12; i++) {
-      const r = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId, requestSecret, totpCode: "000000" } });
+      const r = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId: request_id, requestSecret: request_secret, totpCode: "000000" } });
       if (r.status === 429) limited++;
       else expect(r.status).toBe(403);
     }
@@ -201,17 +201,17 @@ describe("TOTP second factor", () => {
 
     // Outstanding login created BEFORE the factor exists.
     const r1 = await api(rig.app, "POST", "/v1/auth/magic/request", { body: { email: "f@example.com" } });
-    const j1 = r1.json as { requestId: string; requestSecret: string };
+    const j1 = r1.json as { request_id: string; request_secret: string };
     await api(rig.app, "POST", "/v1/auth/magic/consume", { body: { token: rig.token_for_email("f@example.com") } });
 
     const en = await api(rig.app, "POST", "/v1/auth/totp/enroll", { headers: { cookie: acct.cookie, origin: "http://localhost" } });
-    void (en.json as { otpauthUrl: string });
+    void (en.json as { otpauth_url: string });
 
     // Re-enrolling while only PENDING replaces the pending secret (no
     // active factor exists yet to protect); the latest secret wins.
     const en2 = await api(rig.app, "POST", "/v1/auth/totp/enroll", { headers: { cookie: acct.cookie, origin: "http://localhost" } });
     expect(en2.status).toBe(200); // staged pending, not yet active
-    const { otpauthUrl: url2 } = en2.json as { otpauthUrl: string };
+    const { otpauth_url: url2 } = en2.json as { otpauth_url: string };
     const v = await api(rig.app, "POST", "/v1/auth/totp/verify", {
       headers: { cookie: acct.cookie, origin: "http://localhost" },
       body: { code: totp_code_at(url2, T0) } });
@@ -219,11 +219,11 @@ describe("TOTP second factor", () => {
 
     // The outstanding request was approved pre-enrollment but finalizes
     // against CURRENT factor state: code required now.
-    const noCode = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId: j1.requestId, requestSecret: j1.requestSecret } });
+    const noCode = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId: j1.request_id, requestSecret: j1.request_secret } });
     expect(noCode.status).toBe(403);
     rig.set_now(T0 + 120_000);
     const withCode = await api(rig.app, "POST", "/v1/auth/magic/finalize", {
-      body: { requestId: j1.requestId, requestSecret: j1.requestSecret, totpCode: totp_code_at(url2, rig.now()) } });
+      body: { requestId: j1.request_id, requestSecret: j1.request_secret, totpCode: totp_code_at(url2, rig.now()) } });
     expect(withCode.status).toBe(200);
 
     // Enrolling again while active is a conflict (disable first).

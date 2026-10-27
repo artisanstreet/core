@@ -27,7 +27,7 @@ describe("api-only surface", () => {
     expect(ok.headers.get("content-type")).toContain("application/json");
 
     const fresh = await api(rig.app, "POST", "/v1/auth/magic/request", { body: { email: "surface-fresh@example.com" } });
-    const { requestId: fresh_id, requestSecret: fresh_secret } = fresh.json as { requestId: string; requestSecret: string };
+    const { request_id: fresh_id, request_secret: fresh_secret } = fresh.json as { request_id: string; request_secret: string };
     const fresh_token = rig.token_for_email("surface-fresh@example.com");
     const peek = await api(rig.app, "GET", `/v1/auth/magic/confirm?token=${fresh_token}`);
     expect(peek.status).toBe(200);
@@ -38,13 +38,13 @@ describe("api-only surface", () => {
   it("same-browser/new-tab completion works through the JSON API", async () => {
     const rig = await setup_rig();
     const r1 = await api(rig.app, "POST", "/v1/auth/magic/request", { body: { email: "span@example.com" } });
-    const { requestId, requestSecret } = r1.json as { requestId: string; requestSecret: string };
+    const { request_id, request_secret } = r1.json as { request_id: string; request_secret: string };
     const token = rig.token_for_email("span@example.com");
     const peek = await api(rig.app, "GET", `/v1/auth/magic/confirm?token=${token}`);
     expect(peek.status).toBe(200);
     const c = await api(rig.app, "POST", "/v1/auth/magic/consume", { body: { token } });
     expect(c.status).toBe(200);
-    const f = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId, requestSecret } });
+    const f = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId: request_id, requestSecret: request_secret } });
     expect(f.status).toBe(200);
     expect(f.headers.get("set-cookie")).toContain("ast_session=");
   });

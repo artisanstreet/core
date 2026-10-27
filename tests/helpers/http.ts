@@ -152,17 +152,17 @@ export interface Account {
 export async function signup(rig: TestRig, email: string): Promise<Account> {
   const q1 = await api(rig.app, "POST", "/v1/auth/magic/request", { body: { email } });
   if (q1.status !== 200) throw new Error(`request failed: ${q1.text}`);
-  const { requestId, requestSecret } = q1.json as { requestId: string; requestSecret: string };
+  const { request_id, request_secret } = q1.json as { request_id: string; request_secret: string };
   const token = rig.token_for_email(email);
   const q2 = await api(rig.app, "POST", "/v1/auth/magic/consume", { body: { token } });
   if (q2.status !== 200) throw new Error(`consume failed: ${q2.text}`);
-  const q3 = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId, requestSecret } });
+  const q3 = await api(rig.app, "POST", "/v1/auth/magic/finalize", { body: { requestId: request_id, requestSecret: request_secret } });
   if (q3.status !== 200) throw new Error(`finalize failed: ${q3.text}`);
-  const j = q3.json as { accountId: string };
+  const j = q3.json as { account_id: string };
   const set_cookie = q3.headers.get("set-cookie") ?? "";
   const session_cookie = set_cookie.split(";")[0]!;
   const cookie_token = decodeURIComponent(session_cookie.split("=").slice(1).join("="));
-  return { account_id: j.accountId, token: cookie_token, cookie: session_cookie };
+  return { account_id: j.account_id, token: cookie_token, cookie: session_cookie };
 }
 
 export function totp_code_for(otpauth_url: string): string {
@@ -230,23 +230,23 @@ export async function enroll_machine(
   const start = await api(rig.app, "POST", "/v1/machines/enrollments", {
     body: { publicKey: { kty: "OKP", crv: "Ed25519", x: keys.public_x }, label, timestamp: ts, proof } });
   if (start.status !== 201) throw new Error(`enroll start failed: ${start.text}`);
-  const { enrollmentId, code } = start.json as { enrollmentId: string; code: string };
+  const { enrollment_id, code } = start.json as { enrollment_id: string; code: string };
   const claim = await api(rig.app, "POST", "/v1/machines/enrollments/claim", {
     headers: { cookie: session.cookie, origin: "http://localhost" },
     body: { code } });
   if (claim.status !== 200) throw new Error(`claim failed: ${claim.text}`);
-  const status_path = `/v1/machines/enrollments/${enrollmentId}/status`;
-  const st = await api(rig.app, "GET", status_path, { headers: await machine_headers(enrollmentId, keys, "GET", status_path, "") });
+  const status_path = `/v1/machines/enrollments/${enrollment_id}/status`;
+  const st = await api(rig.app, "GET", status_path, { headers: await machine_headers(enrollment_id, keys, "GET", status_path, "") });
   if (st.status !== 200) throw new Error(`status failed: ${st.text}`);
-  const sj = st.json as { accountId: string };
+  const sj = st.json as { account_id: string };
   const confirmation = await keys.sign(
-    utf8_to_bytes(`enrollment-confirm\n${enrollmentId}\n${sj.accountId}\n${keys.public_x}`),
+    utf8_to_bytes(`enrollment-confirm\n${enrollment_id}\n${sj.account_id}\n${keys.public_x}`),
   );
   const confirm_path = "/v1/machines/enrollments/confirm";
-  const cbody = JSON.stringify({ enrollmentId, accountId: sj.accountId, confirmation });
+  const cbody = JSON.stringify({ enrollmentId: enrollment_id, accountId: sj.account_id, confirmation });
   const done = await api(rig.app, "POST", confirm_path, {
-    headers: await machine_headers(enrollmentId, keys, "POST", confirm_path, cbody),
+    headers: await machine_headers(enrollment_id, keys, "POST", confirm_path, cbody),
     raw_body: cbody });
   if (done.status !== 201) throw new Error(`confirm failed: ${done.text}`);
-  return { machine_id: (done.json as { machineId: string }).machineId, keys };
+  return { machine_id: (done.json as { machine_id: string }).machine_id, keys };
 }

@@ -25,9 +25,9 @@ describe("Forge machine enrollment", () => {
     const start = await api(rig.app, "POST", "/v1/machines/enrollments", {
       body: { publicKey: { kty: "OKP", crv: "Ed25519", x: keys.public_x }, label, timestamp: ts, proof } });
     expect(start.status).toBe(201);
-    const { enrollmentId, code, keyFingerprint } = start.json as { enrollmentId: string; code: string; keyFingerprint: string };
+    const { enrollment_id, code, key_fingerprint } = start.json as { enrollment_id: string; code: string; key_fingerprint: string };
     expect(code).toMatch(/^[A-Z2-9]{8}$/);
-    expect(keyFingerprint.length).toBeGreaterThan(20);
+    expect(key_fingerprint.length).toBeGreaterThan(20);
 
     // Guessing fails without the local key confirmation, even with a look.
     const badClaim = await api(rig.app, "POST", "/v1/machines/enrollments/claim", {
@@ -41,61 +41,61 @@ describe("Forge machine enrollment", () => {
     expect(claim.status).toBe(200);
 
     // Authenticated polling reveals the exact claiming identity.
-    const statusPath = `/v1/machines/enrollments/${enrollmentId}/status`;
-    const st = await api(rig.app, "GET", statusPath, { headers: await machine_headers(enrollmentId, keys, "GET", statusPath, "") });
+    const statusPath = `/v1/machines/enrollments/${enrollment_id}/status`;
+    const st = await api(rig.app, "GET", statusPath, { headers: await machine_headers(enrollment_id, keys, "GET", statusPath, "") });
     expect(st.status).toBe(200);
-    const sj = st.json as { status: string; accountId: string; email: string };
+    const sj = st.json as { status: string; account_id: string; email: string };
     expect(sj.status).toBe("claimed");
     expect(sj.email).toBe("m@example.com");
-    expect(sj.accountId).toBe(acct.account_id);
+    expect(sj.account_id).toBe(acct.account_id);
 
     // Subject mismatch is rejected.
     const wrong = await api(rig.app, "GET", `/v1/machines/enrollments/enr_AAAAAAAAAAAAAAAAAAAAAAAAAA/status`, {
-      headers: await machine_headers(enrollmentId, keys, "GET", `/v1/machines/enrollments/enr_AAAAAAAAAAAAAAAAAAAAAAAAAA/status`, "") });
+      headers: await machine_headers(enrollment_id, keys, "GET", `/v1/machines/enrollments/enr_AAAAAAAAAAAAAAAAAAAAAAAAAA/status`, "") });
     expect(wrong.status).toBe(401);
 
     // Confirmation must bind the exact account+key: a confirmation for a
     // different account is refused before any signature math.
-    const badConfirmBody = JSON.stringify({ enrollmentId, accountId: "acct_AAAAAAAAAAAAAAAAAAAAAAAAAA", confirmation: "AAAA" });
+    const badConfirmBody = JSON.stringify({ enrollmentId: enrollment_id, accountId: "acct_AAAAAAAAAAAAAAAAAAAAAAAAAA", confirmation: "AAAA" });
     const badConfirm = await api(rig.app, "POST", "/v1/machines/enrollments/confirm", {
-      headers: await machine_headers(enrollmentId, keys, "POST", "/v1/machines/enrollments/confirm", badConfirmBody),
+      headers: await machine_headers(enrollment_id, keys, "POST", "/v1/machines/enrollments/confirm", badConfirmBody),
       raw_body: badConfirmBody });
     expect(badConfirm.status).toBe(403);
 
     // Same account but a bad confirmation signature is a 401.
-    const badSigBody = JSON.stringify({ enrollmentId, accountId: sj.accountId, confirmation: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" });
+    const badSigBody = JSON.stringify({ enrollmentId: enrollment_id, accountId: sj.account_id, confirmation: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" });
     const badSig = await api(rig.app, "POST", "/v1/machines/enrollments/confirm", {
-      headers: await machine_headers(enrollmentId, keys, "POST", "/v1/machines/enrollments/confirm", badSigBody),
+      headers: await machine_headers(enrollment_id, keys, "POST", "/v1/machines/enrollments/confirm", badSigBody),
       raw_body: badSigBody });
     expect(badSig.status).toBe(401);
 
-    const confirmation = await keys.sign(new TextEncoder().encode(`enrollment-confirm\n${enrollmentId}\n${sj.accountId}\n${keys.public_x}`));
-    const cbody = JSON.stringify({ enrollmentId, accountId: sj.accountId, confirmation });
+    const confirmation = await keys.sign(new TextEncoder().encode(`enrollment-confirm\n${enrollment_id}\n${sj.account_id}\n${keys.public_x}`));
+    const cbody = JSON.stringify({ enrollmentId: enrollment_id, accountId: sj.account_id, confirmation });
     const done = await api(rig.app, "POST", "/v1/machines/enrollments/confirm", {
-      headers: await machine_headers(enrollmentId, keys, "POST", "/v1/machines/enrollments/confirm", cbody),
+      headers: await machine_headers(enrollment_id, keys, "POST", "/v1/machines/enrollments/confirm", cbody),
       raw_body: cbody });
     expect(done.status).toBe(201);
-    const machine_id = (done.json as { machineId: string }).machineId;
+    const machine_id = (done.json as { machine_id: string }).machine_id;
 
     // Listing exposes the enrolled public key (Editor fetches it to verify
     // the Forge's Noise transcript signature).
     const list = await api(rig.app, "GET", "/v1/machines", { headers: { cookie: acct.cookie } });
     expect(list.status).toBe(200);
-    const machines = (list.json as { machines: Array<{ id: string; publicKey: { x: string } }> }).machines;
-    expect(machines.find((m) => m.id === machine_id)?.publicKey.x).toBe(keys.public_x);
+    const machines = (list.json as { machines: Array<{ id: string; public_key: { x: string } }> }).machines;
+    expect(machines.find((m) => m.id === machine_id)?.public_key.x).toBe(keys.public_x);
 
     // Replay of the confirmation is idempotent, not a second machine.
     const again = await api(rig.app, "POST", "/v1/machines/enrollments/confirm", {
-      headers: await machine_headers(enrollmentId, keys, "POST", "/v1/machines/enrollments/confirm", cbody),
+      headers: await machine_headers(enrollment_id, keys, "POST", "/v1/machines/enrollments/confirm", cbody),
       raw_body: cbody });
     expect(again.status).toBe(201);
-    expect((again.json as { machineId: string }).machineId).toBe(machine_id);
+    expect((again.json as { machine_id: string }).machine_id).toBe(machine_id);
 
     // Revoked machines authenticate no more.
     const rev = await api(rig.app, "POST", `/v1/machines/${machine_id}/revoke`, {
       headers: { cookie: acct.cookie, origin: "http://localhost" } });
     expect(rev.status).toBe(200);
-    const st2 = await api(rig.app, "GET", statusPath, { headers: await machine_headers(enrollmentId, keys, "GET", statusPath, "") });
+    const st2 = await api(rig.app, "GET", statusPath, { headers: await machine_headers(enrollment_id, keys, "GET", statusPath, "") });
     expect(st2.status).toBe(200); // enrollment identity itself is unaffected
     void session;
   });
@@ -179,19 +179,19 @@ describe("Forge machine enrollment", () => {
     const start = await api(rig.app, "POST", "/v1/machines/enrollments", {
       body: { publicKey: { kty: "OKP", crv: "Ed25519", x: keys.public_x }, label, timestamp: ts, proof } });
     expect(start.status).toBe(201);
-    const { enrollmentId } = start.json as { enrollmentId: string };
+    const { enrollment_id } = start.json as { enrollment_id: string };
     const confirm_path = "/v1/machines/enrollments/confirm";
 
     const bad_raw = "{invalid-json";
     const bad = await api(rig.app, "POST", confirm_path, {
-      headers: await machine_headers(enrollmentId, keys, "POST", confirm_path, bad_raw),
+      headers: await machine_headers(enrollment_id, keys, "POST", confirm_path, bad_raw),
       raw_body: bad_raw });
     expect(bad.status).toBe(400);
     expect((bad.json as { error: { code: string } }).error.code).toBe("bad_request");
 
-    const good_raw = JSON.stringify({ enrollmentId, accountId: acct.account_id, confirmation: "AAAA" });
+    const good_raw = JSON.stringify({ enrollmentId: enrollment_id, accountId: acct.account_id, confirmation: "AAAA" });
     const wrong_ct = await api(rig.app, "POST", confirm_path, {
-      headers: { ...(await machine_headers(enrollmentId, keys, "POST", confirm_path, good_raw)), "content-type": "text/plain" },
+      headers: { ...(await machine_headers(enrollment_id, keys, "POST", confirm_path, good_raw)), "content-type": "text/plain" },
       raw_body: good_raw });
     expect(wrong_ct.status).toBe(400);
     expect((wrong_ct.json as { error: { code: string } }).error.code).toBe("bad_request");

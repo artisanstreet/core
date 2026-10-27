@@ -24,7 +24,7 @@ describe("account deletion lifecycle", () => {
     // Janitor before the grace period purges nobody.
     const j1 = await api(rig.app, "POST", "/v1/admin/janitor", { headers: admin });
     expect(j1.status).toBe(200);
-    expect((j1.json as { purgedAccounts: string[] }).purgedAccounts).toEqual([]);
+    expect((j1.json as { purged_accounts: string[] }).purged_accounts).toEqual([]);
     const me = await api(rig.app, "GET", "/v1/me", { headers: { cookie: acct.cookie } });
     expect(me.status).toBe(200);
 
@@ -40,7 +40,7 @@ describe("account deletion lifecycle", () => {
     );
     const j2 = await api(rig.app, "POST", "/v1/admin/janitor", { headers: admin });
     expect(j2.status).toBe(200);
-    expect((j2.json as { purgedAccounts: string[] }).purgedAccounts).toContain(acct.account_id);
+    expect((j2.json as { purged_accounts: string[] }).purged_accounts).toContain(acct.account_id);
 
     // Everything account-owned is gone: sessions, machines, vault rows.
     const me2 = await api(rig.app, "GET", "/v1/me", { headers: { cookie: acct.cookie } });
@@ -56,15 +56,15 @@ describe("account deletion lifecycle", () => {
     const acct = await signup(rig, "del2@example.com");
     const cookie = { cookie: acct.cookie, ...ORIGIN };
     const en = await api(rig.app, "POST", "/v1/auth/totp/enroll", { headers: cookie });
-    const { otpauthUrl } = en.json as { otpauthUrl: string };
-    await api(rig.app, "POST", "/v1/auth/totp/verify", { headers: cookie, body: { code: totp_code_at(otpauthUrl, rig.now()) } });
+    const { otpauth_url } = en.json as { otpauth_url: string };
+    await api(rig.app, "POST", "/v1/auth/totp/verify", { headers: cookie, body: { code: totp_code_at(otpauth_url, rig.now()) } });
 
     const noCode = await api(rig.app, "POST", "/v1/account/deletion/request", { headers: cookie, body: {} });
     expect(noCode.status).toBe(403);
     rig.set_now(rig.now() + 120_000);
     const withCode = await api(rig.app, "POST", "/v1/account/deletion/request", {
       headers: cookie,
-      body: { totpCode: totp_code_at(otpauthUrl, rig.now()) } });
+      body: { totpCode: totp_code_at(otpauth_url, rig.now()) } });
     expect(withCode.status).toBe(200);
   });
 });

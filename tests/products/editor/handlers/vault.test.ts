@@ -118,7 +118,23 @@ describe("engine artifacts", () => {
     const dl = await api(rig.app, "GET", dlPath(artId), {
       headers: await machine_headers(machine_id, keys, "GET", dlPath(artId), "") });
     expect(dl.status).toBe(200);
-    expect(dl.json).toEqual({ envelope: good });
+    expect(dl.json).toEqual({
+      envelope: {
+        format: good.format,
+        engine: good.engine,
+        kind: good.kind,
+        exported_at: good.exportedAt,
+        expires_at: good.expiresAt,
+        files: [
+          {
+            path: good.files[0]!.path,
+            mode: good.files[0]!.mode,
+            sha256: good.files[0]!.sha256,
+            content_base64: good.files[0]!.contentBase64,
+          },
+        ],
+      },
+    });
   });
 });
 
@@ -155,9 +171,9 @@ describe("machine discovery for sync", () => {
     const cpath = "/v1/vault/connections";
     const m1c = await api(rig.app, "GET", cpath, { headers: await machine_headers(m1, k1, "GET", cpath, "") });
     expect(m1c.status).toBe(200);
-    const m1conns = (m1c.json as { connections: Array<{ id: string; assignedMachineIds: string[] }> }).connections;
+    const m1conns = (m1c.json as { connections: Array<{ id: string; assigned_machine_ids: string[] }> }).connections;
     expect(m1conns.map((c) => c.id)).toEqual([connId]);
-    expect(m1conns[0]!.assignedMachineIds).toEqual([m1]);
+    expect(m1conns[0]!.assigned_machine_ids).toEqual([m1]);
     expect(JSON.stringify(m1c.json)).not.toContain("sk-test-sync");
 
     const m2c = await api(rig.app, "GET", cpath, { headers: await machine_headers(m2, k2, "GET", cpath, "") });
@@ -167,9 +183,9 @@ describe("machine discovery for sync", () => {
     const apath = "/v1/engine-artifacts";
     const m1a = await api(rig.app, "GET", apath, { headers: await machine_headers(m1, k1, "GET", apath, "") });
     expect(m1a.status).toBe(200);
-    const m1arts = (m1a.json as { artifacts: Array<{ id: string; assignedMachineIds: string[] }> }).artifacts;
+    const m1arts = (m1a.json as { artifacts: Array<{ id: string; assigned_machine_ids: string[] }> }).artifacts;
     expect(m1arts.map((a) => a.id)).toEqual([artId]);
-    expect(m1arts[0]!.assignedMachineIds).toEqual([m1]);
+    expect(m1arts[0]!.assigned_machine_ids).toEqual([m1]);
     expect(JSON.stringify(m1a.json)).not.toContain("redacted-synthetic");
 
     const m2a = await api(rig.app, "GET", apath, { headers: await machine_headers(m2, k2, "GET", apath, "") });

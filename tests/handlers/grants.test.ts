@@ -81,9 +81,9 @@ describe("grants", () => {
     expect(rot.status).toBe(200);
     const list = await api(rig.app, "GET", "/v1/grants/revocations");
     expect(list.status).toBe(200);
-    const lj = list.json as { revokedMachineIds: string[]; revokedKeyIds: string[] };
-    expect(lj.revokedMachineIds).toContain(machine_id);
-    expect(lj.revokedKeyIds.length).toBeGreaterThan(0);
+    const lj = list.json as { revoked_machine_ids: string[]; revoked_key_ids: string[] };
+    expect(lj.revoked_machine_ids).toContain(machine_id);
+    expect(lj.revoked_key_ids.length).toBeGreaterThan(0);
 
     // Admin endpoints hide without the token.
     const noAuth = await api(rig.app, "POST", "/v1/admin/keys/rotate", {});

@@ -17,9 +17,9 @@ describe("editor config bundles", () => {
 
     const p1 = await api(rig.app, "POST", "/v1/config/bundles", { headers: cookie, body: { manifest } });
     expect(p1.status).toBe(201);
-    const b1 = p1.json as { id: string; version: number; contentHash: string; r2Key: string };
+    const b1 = p1.json as { id: string; version: number; content_hash: string; r2_key: string };
     expect(b1.version).toBe(1);
-    expect(b1.contentHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(b1.content_hash).toMatch(/^[0-9a-f]{64}$/);
 
     // Identical content dedups instead of minting a duplicate revision.
     const p1b = await api(rig.app, "POST", "/v1/config/bundles", { headers: cookie, body: { manifest } });
@@ -30,7 +30,7 @@ describe("editor config bundles", () => {
       headers: cookie,
       body: { manifest: { ...manifest, globalPrompt: "be great" } } });
     expect(p2.status).toBe(201);
-    const b2 = p2.json as { id: string; version: number; contentHash: string };
+    const b2 = p2.json as { id: string; version: number; content_hash: string };
     expect(b2.version).toBe(2);
 
     // Latest serves the manifest for sync.
@@ -45,38 +45,38 @@ describe("editor config bundles", () => {
     const mbytes = await api(rig.app, "GET", mpath, {
       headers: await machine_headers(machine_id, keys, "GET", mpath, "") });
     expect(mbytes.status).toBe(200);
-    expect(mbytes.headers.get("x-content-sha256")).toBe(b2.contentHash);
-    expect(mbytes.headers.get("etag")).toBe(`"${b2.contentHash}"`);
+    expect(mbytes.headers.get("x-content-sha256")).toBe(b2.content_hash);
+    expect(mbytes.headers.get("etag")).toBe(`"${b2.content_hash}"`);
     expect(mbytes.headers.get("cache-control")).toContain("immutable");
     expect(mbytes.headers.get("cache-control")).toContain("private");
     expect(mbytes.headers.get("cache-control")).not.toContain("public");
 
     // Checksum-based invalidation: unchanged hash → 304, changed → 200.
     const h1 = await api(rig.app, "GET", latestPath, {
-      headers: { ...(await machine_headers(machine_id, keys, "GET", latestPath, "")), "if-none-match": `"${b2.contentHash}"` } });
+      headers: { ...(await machine_headers(machine_id, keys, "GET", latestPath, "")), "if-none-match": `"${b2.content_hash}"` } });
     expect(h1.status).toBe(304);
-    expect(h1.headers.get("etag")).toBe(`"${b2.contentHash}"`);
+    expect(h1.headers.get("etag")).toBe(`"${b2.content_hash}"`);
     expect(h1.text).toBe("");
 
     const p3 = await api(rig.app, "POST", "/v1/config/bundles", {
       headers: cookie,
       body: { manifest: { ...manifest, skills: [{ name: "t", source: "local" }] } } });
     expect(p3.status).toBe(201);
-    const b3 = p3.json as { contentHash: string };
+    const b3 = p3.json as { content_hash: string };
     const h2 = await api(rig.app, "GET", latestPath, {
-      headers: { ...(await machine_headers(machine_id, keys, "GET", latestPath, "")), "if-none-match": `"${b2.contentHash}"` } });
+      headers: { ...(await machine_headers(machine_id, keys, "GET", latestPath, "")), "if-none-match": `"${b2.content_hash}"` } });
     expect(h2.status).toBe(200);
-    expect(h2.headers.get("etag")).toBe(`"${b3.contentHash}"`);
+    expect(h2.headers.get("etag")).toBe(`"${b3.content_hash}"`);
 
     // Manifest blob revalidates too.
     const m304 = await api(rig.app, "GET", mpath, {
-      headers: { ...(await machine_headers(machine_id, keys, "GET", mpath, "")), "if-none-match": `"${b2.contentHash}"` } });
+      headers: { ...(await machine_headers(machine_id, keys, "GET", mpath, "")), "if-none-match": `"${b2.content_hash}"` } });
     expect(m304.status).toBe(304);
 
     // Authentication runs before conditional evaluation: bad auth + a
     // matching tag is still a 401, never a 304.
     const unauth = await api(rig.app, "GET", latestPath, {
-      headers: { authorization: "Bearer ast_sess_nope", "if-none-match": `"${b3.contentHash}"` } });
+      headers: { authorization: "Bearer ast_sess_nope", "if-none-match": `"${b3.content_hash}"` } });
     expect(unauth.status).toBe(401);
 
     // Machine reports the applied revision.
