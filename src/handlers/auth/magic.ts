@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import * as HttpRouter from "@effect/platform/HttpRouter";
+import { register_route } from "../../http/register.ts";
 import * as HttpServerResponse from "@effect/platform/HttpServerResponse";
 import * as HttpServerRequest from "@effect/platform/HttpServerRequest";
 import * as C from "../../contracts/v1.ts";
@@ -12,8 +13,8 @@ import { AppConfigTag } from "../../services/deps.ts";
 const finalize_cookie_max_age = 30 * 24 * 60 * 60;
 
 export const router = HttpRouter.empty.pipe(
-  HttpRouter.post(
-    R.magicRequest.path,
+  register_route(
+    R.magicRequest,
       Effect.gen(function* () {
         const { json } = yield* read_json_body();
         const input = yield* decode_request(C.MagicRequest, json);
@@ -22,8 +23,8 @@ export const router = HttpRouter.empty.pipe(
         return encode_ok(C.MagicRequestResp, data);
       }),
   ),
-  HttpRouter.post(
-    R.magicStatus.path,
+  register_route(
+    R.magicStatus,
       Effect.gen(function* () {
         const { json } = yield* read_json_body();
         const input = yield* decode_request(C.MagicStatusReq, json);
@@ -31,8 +32,8 @@ export const router = HttpRouter.empty.pipe(
         return encode_ok(C.MagicStatusResp, data);
       }),
   ),
-  HttpRouter.post(
-    R.magicConsume.path,
+  register_route(
+    R.magicConsume,
       Effect.gen(function* () {
         const { json } = yield* read_json_body();
         const input = yield* decode_request(C.MagicConsumeReq, json);
@@ -41,8 +42,8 @@ export const router = HttpRouter.empty.pipe(
         return encode_ok(C.MagicConsumeResp, data);
       }),
   ),
-  HttpRouter.post(
-    R.magicFinalize.path,
+  register_route(
+    R.magicFinalize,
       Effect.gen(function* () {
         const req = yield* HttpServerRequest.HttpServerRequest;
         const cfg = yield* AppConfigTag;

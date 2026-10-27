@@ -4,6 +4,7 @@ import { decodeBase32 } from "@oslojs/encoding";
 import { generateHOTP, generateTOTP } from "@oslojs/otp";
 import { Cause, Effect, Layer } from "effect";
 import { createApp, type RequestContext } from "../../src/http.ts";
+import { make_service_layers } from "../../src/http/context.ts";
 import type { Db } from "../../src/db.ts";
 import { DbTag } from "../../src/services/deps.ts";
 import { CoreError, internal } from "../../src/errors.ts";
@@ -21,6 +22,7 @@ export interface TestRig {
   app: ReturnType<typeof createApp>;
   db: PGlite;
   mail: SentMail[];
+  layers: ReturnType<typeof make_service_layers>;
   tokenForEmail(email: string): string;
   /** Pin the rig clock (mutable fake time for deterministic tests). */
   setNow(ms: number): void;
@@ -56,25 +58,25 @@ export async function setupRig(opts: {
         ),
       get: (key: string) => Promise.resolve(store.get(key) ?? null),
     },
-    // Test driver-boundary Promise bridge (mirrors the postgres.js adapter
-    // in src/index.ts): PGlite transaction() takes a callback, so the
-    // Effect runs to an Exit inside and typed failures rethrow. The tx
-    // client passes through raw (as before; no Hyperdrive pooling in tests).
+    // Test driver-boundary bridge (mirrors src/index.ts): PGlite
+    // transaction() takes a callback. Uninterruptible like production.
     txRunner: {
-      transaction: <A, E>(effect: Effect.Effect<A, E, DbTag>): Effect.Effect<A, E> =>
-        Effect.tryPromise({
-          try: () =>
-            (db as unknown as { transaction: (f: (tx: unknown) => Promise<A>) => Promise<A> }).transaction(async (tx) => {
-              const exit = await Effect.runPromiseExit(
-                Effect.provide(effect, Layer.succeed(DbTag, { db: tx as unknown as Db })),
-              );
-              if (exit._tag === "Success") return exit.value;
-              const failure = Cause.failureOption(exit.cause);
-              if (failure._tag === "Some") throw failure.value;
-              throw internal("database unavailable", { cause: exit.cause });
-            }),
-          catch: (cause) => (cause instanceof CoreError ? cause : internal("database unavailable", { cause })) as E,
-        }),
+      transaction: <A, E>(effect: Effect.Effect<A, E, DbTag>): Effect.Effect<A, E | CoreError> =>
+        Effect.uninterruptible(
+          Effect.tryPromise({
+            try: () =>
+              (db as unknown as { transaction: (f: (tx: unknown) => Promise<A>) => Promise<A> }).transaction(async (tx) => {
+                const exit = await Effect.runPromiseExit(
+                  Effect.provide(effect, Layer.succeed(DbTag, { db: tx as unknown as Db })),
+                );
+                if (exit._tag === "Success") return exit.value;
+                const failure = Cause.failureOption(exit.cause);
+                if (failure._tag === "Some") throw failure.value;
+                throw internal("database unavailable", { cause: exit.cause });
+              }),
+            catch: (cause) => (cause instanceof CoreError ? cause : internal("database unavailable", { cause })),
+          }),
+        ),
     },
     mailSink: (m) => void mail.push(m),
     now: () => nowMs,
@@ -84,6 +86,7 @@ export async function setupRig(opts: {
     app: createApp(ctx),
     db,
     mail,
+    layers: make_service_layers(ctx),
     tokenForEmail(email: string) {
       const m = [...mail].reverse().find((x) => x.to === email);
       if (!m) throw new Error(`no mail for ${email}`);

@@ -1,5 +1,6 @@
 import { Effect, Option } from "effect";
 import * as HttpRouter from "@effect/platform/HttpRouter";
+import { register_route } from "../../../http/register.ts";
 import * as HttpServerRequest from "@effect/platform/HttpServerRequest";
 import * as Headers from "@effect/platform/Headers";
 import * as C from "../../../contracts/v1.ts";
@@ -16,8 +17,8 @@ function has_machine_header(req: HttpServerRequest.HttpServerRequest): boolean {
 }
 
 export const router = HttpRouter.empty.pipe(
-  HttpRouter.post(
-    R.providerCreate.path,
+  register_route(
+    R.providerCreate,
       Effect.gen(function* () {
         const me = yield* session_for_mutation();
         const { json } = yield* read_json_body();
@@ -35,8 +36,8 @@ export const router = HttpRouter.empty.pipe(
         );
       }),
   ),
-  HttpRouter.get(
-    R.providerList.path,
+  register_route(
+    R.providerList,
       Effect.gen(function* () {
         const req = yield* HttpServerRequest.HttpServerRequest;
         if (has_machine_header(req)) {
@@ -49,8 +50,8 @@ export const router = HttpRouter.empty.pipe(
         return encode_ok(C.ProviderListResp, data);
       }),
   ),
-  HttpRouter.post(
-    R.providerRevoke.path,
+  register_route(
+    R.providerRevoke,
       Effect.gen(function* () {
         const me = yield* session_for_mutation();
         const params = yield* HttpRouter.RouteContext.pipe(Effect.map((c) => c.params));
@@ -59,8 +60,8 @@ export const router = HttpRouter.empty.pipe(
         return encode_ok(R.providerRevoke.responseSchema, data);
       }),
   ),
-  HttpRouter.post(
-    R.providerAssign.path,
+  register_route(
+    R.providerAssign,
       Effect.gen(function* () {
         const me = yield* session_for_mutation();
         const { json } = yield* read_json_body();
@@ -69,8 +70,8 @@ export const router = HttpRouter.empty.pipe(
         return encode_ok(C.AssignResp, data);
       }),
   ),
-  HttpRouter.post(
-    R.providerUnassign.path,
+  register_route(
+    R.providerUnassign,
       Effect.gen(function* () {
         const me = yield* session_for_mutation();
         const { json } = yield* read_json_body();
@@ -79,8 +80,8 @@ export const router = HttpRouter.empty.pipe(
         return encode_ok(R.providerUnassign.responseSchema, data);
       }),
   ),
-  HttpRouter.get(
-    R.credentialRelease.path,
+  register_route(
+    R.credentialRelease,
       Effect.gen(function* () {
         const req = yield* HttpServerRequest.HttpServerRequest;
         const { principal } = yield* proof_for_machine();

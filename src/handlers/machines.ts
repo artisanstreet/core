@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import * as HttpRouter from "@effect/platform/HttpRouter";
+import { register_route } from "../http/register.ts";
 import * as C from "../contracts/v1.ts";
 import { R } from "../contracts/registry.ts";
 import * as Machines from "../services/machines.ts";
@@ -8,8 +9,8 @@ import { encode_ok } from "../http/response.ts";
 import { CoreError, unauthorized } from "../errors.ts";
 
 export const router = HttpRouter.empty.pipe(
-  HttpRouter.post(
-    R.enrollStart.path,
+  register_route(
+    R.enrollStart,
       Effect.gen(function* () {
         const { json } = yield* read_json_body();
         const input = yield* decode_request(C.EnrollmentStartReq, json);
@@ -23,8 +24,8 @@ export const router = HttpRouter.empty.pipe(
         return encode_ok(C.EnrollmentStartResp, data, 201);
       }),
   ),
-  HttpRouter.post(
-    R.enrollClaim.path,
+  register_route(
+    R.enrollClaim,
       Effect.gen(function* () {
         const s = yield* session_for_mutation();
         const { json } = yield* read_json_body();
@@ -38,8 +39,8 @@ export const router = HttpRouter.empty.pipe(
         return encode_ok(C.EnrollmentClaimResp, data);
       }),
   ),
-  HttpRouter.post(
-    R.enrollConfirm.path,
+  register_route(
+    R.enrollConfirm,
       Effect.gen(function* () {
         const { subjectId, rawBody } = yield* proof_for_enrollment();
         yield* require_json_content_type();
@@ -50,16 +51,16 @@ export const router = HttpRouter.empty.pipe(
         return encode_ok(C.EnrollmentConfirmResp, data, 201);
       }),
   ),
-  HttpRouter.get(
-    R.machineList.path,
+  register_route(
+    R.machineList,
       Effect.gen(function* () {
         const { principal: s } = yield* session_of();
         const data = yield* Machines.listMachines(s.accountId);
         return encode_ok(C.MachineListResp, data);
       }),
   ),
-  HttpRouter.post(
-    R.machineRevoke.path,
+  register_route(
+    R.machineRevoke,
       Effect.gen(function* () {
         const s = yield* session_for_mutation();
         const params = yield* HttpRouter.RouteContext.pipe(Effect.map((ctx) => ctx.params));
@@ -68,8 +69,8 @@ export const router = HttpRouter.empty.pipe(
         return encode_ok(R.machineRevoke.responseSchema, data);
       }),
   ),
-  HttpRouter.get(
-    R.enrollStatus.path,
+  register_route(
+    R.enrollStatus,
       Effect.gen(function* () {
         const { publicKeyX, subjectId } = yield* proof_for_enrollment();
         const params = yield* HttpRouter.RouteContext.pipe(Effect.map((c) => c.params));

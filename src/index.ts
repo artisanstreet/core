@@ -71,25 +71,26 @@ function request_layers_from_client(
   if (!bucket && (vars.CORE_ENV ?? "dev").toLowerCase() === "production") {
     throw new Error("CONFIG_BUCKET is required in production");
   }
-  // Driver-boundary Promise bridge (the ONLY raw async in the request
-  // path): postgres.js begin() takes a callback, so the Effect runs to an
-  // Exit inside the callback and typed failures rethrow for rollback.
-  // Driver faults stay opaquely in .cause; HTTP/logs only see redacted codes.
+  // Driver-boundary Promise bridge: postgres.js begin() takes a callback.
+  // Uninterruptible so aborts wait for commit/rollback instead of closing
+  // the client mid-transaction; typed failures roll back and rethrow.
   const tx_runner: RequestContext["txRunner"] = {
-    transaction: <A, E>(effect: Effect.Effect<A, E, DbTag>): Effect.Effect<A, E> =>
-      Effect.tryPromise({
-        try: () =>
-          (client as unknown as { begin: (f: (tx: unknown) => Promise<A>) => Promise<A> }).begin(async (tx) => {
-            const exit = await Effect.runPromiseExit(
-              Effect.provide(effect, Layer.succeed(DbTag, { db: prepareDb(tx as unknown as UnsafeLike) })),
-            );
-            if (exit._tag === "Success") return exit.value;
-            const failure = Cause.failureOption(exit.cause);
-            if (failure._tag === "Some") throw failure.value;
-            throw internal("database unavailable", { cause: exit.cause });
-          }),
-        catch: (cause) => (cause instanceof CoreError ? cause : internal("database unavailable", { cause })) as E,
-      }),
+    transaction: <A, E>(effect: Effect.Effect<A, E, DbTag>): Effect.Effect<A, E | CoreError> =>
+      Effect.uninterruptible(
+        Effect.tryPromise({
+          try: () =>
+            (client as unknown as { begin: (f: (tx: unknown) => Promise<A>) => Promise<A> }).begin(async (tx) => {
+              const exit = await Effect.runPromiseExit(
+                Effect.provide(effect, Layer.succeed(DbTag, { db: prepareDb(tx as unknown as UnsafeLike) })),
+              );
+              if (exit._tag === "Success") return exit.value;
+              const failure = Cause.failureOption(exit.cause);
+              if (failure._tag === "Some") throw failure.value;
+              throw internal("database unavailable", { cause: exit.cause });
+            }),
+          catch: (cause) => (cause instanceof CoreError ? cause : internal("database unavailable", { cause })),
+        }),
+      ),
   };
   const ctx: RequestContext = {
     db,

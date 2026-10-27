@@ -1,5 +1,6 @@
 import { Effect, Option } from "effect";
 import * as HttpRouter from "@effect/platform/HttpRouter";
+import { register_route } from "../http/register.ts";
 import * as HttpServerRequest from "@effect/platform/HttpServerRequest";
 import * as Headers from "@effect/platform/Headers";
 import * as C from "../contracts/v1.ts";
@@ -18,8 +19,8 @@ function get_header(req: HttpServerRequest.HttpServerRequest, name: string): str
 }
 
 export const router = HttpRouter.empty.pipe(
-  HttpRouter.post(
-    R.grantIssue.path,
+  register_route(
+    R.grantIssue,
       Effect.gen(function* () {
         const req = yield* HttpServerRequest.HttpServerRequest;
         if ((get_header(req, "x-ast-machine") ?? "").trim()) {
@@ -53,8 +54,8 @@ export const router = HttpRouter.empty.pipe(
         return encode_ok(C.GrantIssueResp, { token: issued.token, expiresAt: issued.expiresAt });
       }),
   ),
-  HttpRouter.post(
-    R.keyRotate.path,
+  register_route(
+    R.keyRotate,
       Effect.gen(function* () {
         const req = yield* HttpServerRequest.HttpServerRequest;
         const cfg = yield* AppConfigTag;
@@ -65,8 +66,8 @@ export const router = HttpRouter.empty.pipe(
         return encode_ok(R.keyRotate.responseSchema, data);
       }),
   ),
-  HttpRouter.post(
-    R.janitorRun.path,
+  register_route(
+    R.janitorRun,
       Effect.gen(function* () {
         const req = yield* HttpServerRequest.HttpServerRequest;
         const cfg = yield* AppConfigTag;

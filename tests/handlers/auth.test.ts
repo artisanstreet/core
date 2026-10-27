@@ -1,5 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { assert, describe, expect, it } from "vitest";
+import { Cause, Effect, Exit } from "effect";
 import { api, setupRig, signup, totpCodeAt, totpCodeFor } from "../helpers/http.ts";
+import { TxTag } from "../../src/services/deps.ts";
+import { record } from "../../src/services/activity.ts";
+import { CoreError, forbidden } from "../../src/errors.ts";
 
 describe("magic link sign-in", () => {
   it("scanner-safe: GET confirm page never consumes; explicit POST approves", async () => {
@@ -75,6 +79,33 @@ describe("magic link sign-in", () => {
     ]);
     const statuses = [a.status, b.status].sort();
     expect(statuses).toEqual([200, 403]);
+  });
+
+  it("transaction rolls back writes on typed failure", async () => {
+    const rig = await setupRig();
+    const acct = await signup(rig, "txrb@example.com");
+    const count_probe = async () =>
+      ((await rig.db.query("select count(*)::int as n from activity_events where account_id = $1 and kind = 'test.rollback_probe'", [acct.accountId])) as unknown as { rows: Array<{ n: number }> }).rows[0]!.n;
+    expect(await count_probe()).toBe(0);
+    const exit = await Effect.runPromiseExit(
+      Effect.flatMap(TxTag, (tx) =>
+        tx.transaction(
+          Effect.gen(function* () {
+            yield* record(acct.accountId, "test.rollback_probe", {});
+            return yield* Effect.fail(forbidden("boom"));
+          }),
+        ),
+      ).pipe(Effect.provide(rig.layers)),
+    );
+    expect(exit._tag).toBe("Failure");
+    assert(Exit.isFailure(exit));
+    const failure = Cause.failureOption(exit.cause);
+    expect(failure._tag).toBe("Some");
+    if (failure._tag === "Some") {
+      expect(failure.value).toBeInstanceOf(CoreError);
+      expect((failure.value as CoreError).code).toBe("forbidden");
+    }
+    expect(await count_probe()).toBe(0);
   });
 });
 

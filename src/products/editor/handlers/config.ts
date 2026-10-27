@@ -1,6 +1,7 @@
 import { Effect, Option } from "effect";
 import { Schema } from "effect";
 import * as HttpRouter from "@effect/platform/HttpRouter";
+import { register_route } from "../../../http/register.ts";
 import * as HttpServerRequest from "@effect/platform/HttpServerRequest";
 import * as HttpServerResponse from "@effect/platform/HttpServerResponse";
 import * as Headers from "@effect/platform/Headers";
@@ -17,8 +18,8 @@ function has_machine_header(req: HttpServerRequest.HttpServerRequest): boolean {
 }
 
 export const router = HttpRouter.empty.pipe(
-  HttpRouter.post(
-    R.bundlePublish.path,
+  register_route(
+    R.bundlePublish,
       Effect.gen(function* () {
         const me = yield* session_for_mutation();
         const { json } = yield* read_json_body();
@@ -31,8 +32,8 @@ export const router = HttpRouter.empty.pipe(
         );
       }),
   ),
-  HttpRouter.get(
-    R.bundleLatest.path,
+  register_route(
+    R.bundleLatest,
       Effect.gen(function* () {
         const req = yield* HttpServerRequest.HttpServerRequest;
         let account_id: string;
@@ -67,8 +68,8 @@ export const router = HttpRouter.empty.pipe(
         return ok.pipe(HttpServerResponse.setHeader("Cache-Control", "private, max-age=0, must-revalidate"));
       }),
   ),
-  HttpRouter.get(
-    R.bundleManifest.path,
+  register_route(
+    R.bundleManifest,
       Effect.gen(function* () {
         const { principal } = yield* proof_for_machine();
         const params = yield* HttpRouter.RouteContext.pipe(Effect.map((c) => c.params));
@@ -92,8 +93,8 @@ export const router = HttpRouter.empty.pipe(
         );
       }),
   ),
-  HttpRouter.get(
-    R.configRead.path,
+  register_route(
+    R.configRead,
       Effect.gen(function* () {
         const req = yield* HttpServerRequest.HttpServerRequest;
         const { principal: me } = yield* session_of();
@@ -106,8 +107,8 @@ export const router = HttpRouter.empty.pipe(
         return encode_ok(C.ConfigStateResp, data);
       }),
   ),
-  HttpRouter.post(
-    R.configReport.path,
+  register_route(
+    R.configReport,
       Effect.gen(function* () {
         const { principal, rawBody } = yield* proof_for_machine();
         yield* require_json_content_type();

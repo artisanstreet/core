@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import * as HttpRouter from "@effect/platform/HttpRouter";
+import { register_route } from "../../http/register.ts";
 import * as C from "../../contracts/v1.ts";
 import { R } from "../../contracts/registry.ts";
 import * as Auth from "../../services/auth.ts";
@@ -7,16 +8,16 @@ import { decode_request, read_json_body, session_for_mutation } from "../../http
 import { encode_ok } from "../../http/response.ts";
 
 export const router = HttpRouter.empty.pipe(
-  HttpRouter.post(
-    R.totpEnroll.path,
+  register_route(
+    R.totpEnroll,
       Effect.gen(function* () {
         const s = yield* session_for_mutation();
         const data = yield* Auth.enrollTotp(s.accountId);
         return encode_ok(C.TotpEnrollResp, data);
       }),
   ),
-  HttpRouter.post(
-    R.totpVerify.path,
+  register_route(
+    R.totpVerify,
       Effect.gen(function* () {
         const s = yield* session_for_mutation();
         const { json } = yield* read_json_body();
@@ -25,8 +26,8 @@ export const router = HttpRouter.empty.pipe(
         return encode_ok(C.TotpVerifyResp, data);
       }),
   ),
-  HttpRouter.post(
-    R.totpDisable.path,
+  register_route(
+    R.totpDisable,
       Effect.gen(function* () {
         const s = yield* session_for_mutation();
         const { json } = yield* read_json_body();

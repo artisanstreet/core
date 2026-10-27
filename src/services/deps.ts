@@ -2,7 +2,7 @@ import { Context, Effect, Layer } from "effect";
 import type { Db } from "../db.ts";
 import type { MasterKey } from "../crypto.ts";
 import { loadMasterKey } from "../crypto.ts";
-import { internal } from "../errors.ts";
+import { internal, type CoreError } from "../errors.ts";
 
 export interface AppConfig {
   readonly env: Record<string, string | undefined>;
@@ -44,15 +44,10 @@ export function configFromEnv(
 export class DbTag extends Context.Tag("Db")<DbTag, { readonly db: Db }>() {}
 export const DbLive = (db: Db) => Layer.succeed(DbTag, { db });
 
-// Transaction service: runs an Effect atomically with a transactional
-// client. The login finalize path commits its state changes atomically;
-// without this, a crash between completion and session insert would burn
-// the request and strand the user. Domain logic composes Effects against
-// DbTag; ONLY the driver adapters (postgres.js in the Worker, PGlite in
-// tests) bridge Promise callbacks, so atomicity and replay invariants are
-// proven by the same behavioral tests in both runtimes.
+// Transaction runner: Effect-composed atomic unit run with a
+// transactional client (postgres.js/PGlite adapters only).
 export interface TxRunner {
-  readonly transaction: <A, E>(effect: Effect.Effect<A, E, DbTag>) => Effect.Effect<A, E>;
+  readonly transaction: <A, E>(effect: Effect.Effect<A, E, DbTag>) => Effect.Effect<A, E | CoreError>;
 }
 export class TxTag extends Context.Tag("Tx")<TxTag, TxRunner>() {}
 

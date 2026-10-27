@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import * as HttpRouter from "@effect/platform/HttpRouter";
+import { register_route } from "../../http/register.ts";
 import * as HttpServerResponse from "@effect/platform/HttpServerResponse";
 import * as C from "../../contracts/v1.ts";
 import { R } from "../../contracts/registry.ts";
@@ -12,8 +13,8 @@ import { encode_ok, session_cookie_value } from "../../http/response.ts";
 import { AppConfigTag } from "../../services/deps.ts";
 
 export const router = HttpRouter.empty.pipe(
-  HttpRouter.get(
-    R.me.path,
+  register_route(
+    R.me,
       Effect.gen(function* () {
         const { principal: s } = yield* session_of();
         const [machines, providers, latest_config_version] = yield* Effect.all(
@@ -39,16 +40,16 @@ export const router = HttpRouter.empty.pipe(
           latestConfigVersion: latest_config_version ?? null });
       }),
   ),
-  HttpRouter.get(
-    R.sessions.path,
+  register_route(
+    R.sessions,
       Effect.gen(function* () {
         const { principal: s } = yield* session_of();
         const data = yield* Auth.listSessions(s.accountId, 50);
         return encode_ok(C.SessionListResp, data);
       }),
   ),
-  HttpRouter.post(
-    R.logout.path,
+  register_route(
+    R.logout,
       Effect.gen(function* () {
         const cfg = yield* AppConfigTag;
         const sess = yield* session_of();
@@ -62,8 +63,8 @@ export const router = HttpRouter.empty.pipe(
         return ok.pipe(HttpServerResponse.setHeader("Set-Cookie", session_cookie_value(null, 0, secure)));
       }),
   ),
-  HttpRouter.post(
-    R.sessionsRevokeAll.path,
+  register_route(
+    R.sessionsRevokeAll,
       Effect.gen(function* () {
         const cfg = yield* AppConfigTag;
         const s = yield* session_for_mutation();
