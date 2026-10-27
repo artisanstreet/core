@@ -1,7 +1,7 @@
 import { Effect, Schema } from "effect";
-import { base64urlDecode, sha256Hex } from "../../crypto.js";
-import { badRequest } from "../../errors.js";
-import { EngineArtifactEnvelope } from "../../contracts/v1.js";
+import { base64urlDecode, sha256Hex } from "../../crypto.ts";
+import { badRequest } from "../../errors.ts";
+import { EngineArtifactEnvelope } from "../../contracts/v1.ts";
 
 const MAX_ENVELOPE_BYTES = 262144;
 

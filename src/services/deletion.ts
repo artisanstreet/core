@@ -1,8 +1,8 @@
 import { Effect } from "effect";
-import { forbidden, gone } from "../errors.js";
-import { DbTag, dbRun } from "./deps.js";
-import { AppConfigTag } from "./deps.js";
-import { record } from "./activity.js";
+import { forbidden, gone } from "../errors.ts";
+import { DbTag, dbRun } from "./deps.ts";
+import { AppConfigTag } from "./deps.ts";
+import { record } from "./activity.ts";
 import upsertDeletionRequest from "../db/queries/deletion/upsertDeletionRequest.sql";
 import getDeletionRequest from "../db/queries/deletion/getDeletionRequest.sql";
 import listDueDeletionRequests from "../db/queries/deletion/listDueDeletionRequests.sql";

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { importJWK, jwtVerify, createLocalJWKSet } from "jose";
-import { admin, api, enrollMachine, machineHeaders, newMachineKeys, setupRig, signup, type MachineKeys } from "./helpers.js";
+import { admin, api, enrollMachine, machineHeaders, newMachineKeys, setupRig, signup, type MachineKeys } from "../helpers/http.ts";
 
 type Rig = Awaited<ReturnType<typeof setupRig>>;
 

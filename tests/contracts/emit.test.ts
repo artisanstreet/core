@@ -1,8 +1,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { verifyGrantWithArtifactJwks, verifyGrantWithKeyId } from "./helpers-grants.js";
-import { buildOpenApi } from "../src/contracts/openapi.js";
-import { api, enrollMachine, machineHeaders, newMachineKeys, setupRig, signup } from "./helpers.js";
+import { verifyGrantWithArtifactJwks, verifyGrantWithKeyId } from "../helpers/grants.ts";
+import { buildOpenApi } from "../../src/contracts/openapi.ts";
+import { api, enrollMachine, machineHeaders, newMachineKeys, setupRig, signup } from "../helpers/http.ts";
 
 // Regenerates machine-readable contracts from the runtime schemas when
 // EMIT_CONTRACTS=1, otherwise asserts the committed files are current.
@@ -11,8 +11,8 @@ import { api, enrollMachine, machineHeaders, newMachineKeys, setupRig, signup } 
 describe("emit contracts + fixtures", () => {
   it("openapi matches runtime registry; core-issued fixture verifies", async () => {
     const doc = buildOpenApi();
-    const openapiPath = new URL("../contracts/v1.openapi.json", import.meta.url);
-    const fixturesDir = new URL("../fixtures/v1/", import.meta.url);
+    const openapiPath = new URL("../../contracts/v1.openapi.json", import.meta.url);
+    const fixturesDir = new URL("../../fixtures/v1/", import.meta.url);
 
     if (process.env.EMIT_CONTRACTS === "1") {
       await writeFile(openapiPath, `${JSON.stringify(doc, null, 2)}\n`);

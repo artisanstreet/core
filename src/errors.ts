@@ -12,8 +12,8 @@ export type ErrorCode =
 export class CoreError extends Error {
   readonly code: ErrorCode;
   readonly status: number;
-  constructor(code: ErrorCode, message: string) {
-    super(message);
+  constructor(code: ErrorCode, message: string, options?: { cause?: unknown }) {
+    super(message, options);
     this.code = code;
     this.status =
       code === "bad_request" ? 400
@@ -28,12 +28,12 @@ export class CoreError extends Error {
   }
 }
 
-export const badRequest = (m = "bad request") => new CoreError("bad_request", m);
-export const unauthorized = (m = "unauthorized") => new CoreError("unauthorized", m);
-export const forbidden = (m = "forbidden") => new CoreError("forbidden", m);
-export const notFound = (m = "not found") => new CoreError("not_found", m);
-export const conflict = (m = "conflict") => new CoreError("conflict", m);
-export const gone = (m = "gone") => new CoreError("gone", m);
+export const badRequest = (m = "bad request", options?: { cause?: unknown }) => new CoreError("bad_request", m, options);
+export const unauthorized = (m = "unauthorized", options?: { cause?: unknown }) => new CoreError("unauthorized", m, options);
+export const forbidden = (m = "forbidden", options?: { cause?: unknown }) => new CoreError("forbidden", m, options);
+export const notFound = (m = "not found", options?: { cause?: unknown }) => new CoreError("not_found", m, options);
+export const conflict = (m = "conflict", options?: { cause?: unknown }) => new CoreError("conflict", m, options);
+export const gone = (m = "gone", options?: { cause?: unknown }) => new CoreError("gone", m, options);
 export const rateLimited = (m = "rate limited") => new CoreError("rate_limited", m);
 export const payloadTooLarge = (m = "body too large") => new CoreError("payload_too_large", m);
-export const internal = (m = "internal error") => new CoreError("internal", m);
+export const internal = (m = "internal error", options?: { cause?: unknown }) => new CoreError("internal", m, options);

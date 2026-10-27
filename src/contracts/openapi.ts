@@ -1,5 +1,5 @@
-import { ROUTES, type RouteDef } from "./registry.js";
-import { ErrorBody, jsonSchemaFor } from "./v1.js";
+import { ROUTES, type RouteDef } from "./registry.ts";
+import { ErrorBody, jsonSchemaFor } from "./v1.ts";
 
 const STATUS_BY_AUTH: Record<RouteDef["auth"], string[]> = {
   none: ["400", "429"],

@@ -1,6 +1,6 @@
 import { Context, Effect, Layer } from "effect";
-import { internal } from "../errors.js";
-import type { R2Like } from "../db.js";
+import { internal } from "../errors.ts";
+import type { R2Like } from "../db.ts";
 
 export class StorageTag extends Context.Tag("Storage")<StorageTag, { readonly r2: R2Like }>() {}
 

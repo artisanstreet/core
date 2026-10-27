@@ -1,11 +1,11 @@
-import { Effect } from "effect";
+import { Cache, Context, Effect, Layer } from "effect";
 import { SignJWT, exportJWK, jwtVerify } from "jose";
-import { base64urlDecode, base64urlEncode, decryptWithKey, encryptWithKey, randomBytes } from "../crypto.js";
-import { GRANT_MAX_TTL_SECONDS } from "../constants.js";
-import { badRequest, forbidden, unauthorized, type CoreError } from "../errors.js";
-import { newId } from "../ids.js";
-import { AppConfigTag, DbTag, dbRun } from "./deps.js";
-import { record } from "./activity.js";
+import { base64urlDecode, base64urlEncode, decryptWithKey, encryptWithKey, randomBytes } from "../crypto.ts";
+import { GRANT_MAX_TTL_SECONDS } from "../constants.ts";
+import { badRequest, forbidden, unauthorized, type CoreError } from "../errors.ts";
+import { newId } from "../ids.ts";
+import { AppConfigTag, DbTag, dbRun } from "./deps.ts";
+import { record } from "./activity.ts";
 import insertGrantKey from "../db/queries/grants/insertGrantKey.sql";
 import getGrantKeyByKid from "../db/queries/grants/getGrantKeyByKid.sql";
 import listActiveGrantKeys from "../db/queries/grants/listActiveGrantKeys.sql";
@@ -16,7 +16,21 @@ import listRevokedMachineIds from "../db/queries/grants/listRevokedMachineIds.sq
 import getMachineById from "../db/queries/machines/getMachineById.sql";
 
 const SEED_PURPOSE = "grant-key-seed v1";
-const keyCache = new Map<string, CryptoKey>();
+
+export class KeyCacheTag extends Context.Tag("GrantKeyCache")<
+  KeyCacheTag,
+  Cache.Cache<string, CryptoKey, CoreError>
+>() {}
+
+export const global_key_cache: Cache.Cache<string, CryptoKey, CoreError> = Effect.runSync(
+  Cache.make({
+    capacity: 8,
+    timeToLive: "15 minutes",
+    lookup: (_kid: string): Effect.Effect<CryptoKey, CoreError> => Effect.fail(badRequest("signing key unavailable")),
+  }),
+);
+
+export const KeyCacheLive = Layer.succeed(KeyCacheTag, global_key_cache);
 
 function newKid(nowMs: number): string {
   const d = new Date(nowMs);
@@ -29,11 +43,14 @@ export function ensureActiveKey() {
   return Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
+    const cache = yield* KeyCacheTag.pipe(Effect.orElseSucceed(() => null));
     const active = yield* dbRun(() => listActiveGrantKeys.run(db, { limit: 5 }));
     const first = active[0];
     if (first) {
-      const cached = keyCache.get(first.kid);
-      if (cached) return { kid: first.kid, privateKey: cached };
+      if (cache) {
+        const hit_opt = yield* cache.getOption(first.kid);
+        if (hit_opt._tag === "Some") return { kid: first.kid, privateKey: hit_opt.value };
+      }
       const row = yield* dbRun(() => getGrantKeyByKid.run(db, { kid: first.kid }));
       if (!row || row.retired_at) return yield* Effect.fail(badRequest("signing key unavailable"));
       const seed = yield* Effect.tryPromise({
@@ -41,7 +58,7 @@ export function ensureActiveKey() {
         catch: () => unauthorized("signing key unavailable"),
       });
       const privateKey = yield* importSeed(seed, row.public_x);
-      keyCache.set(first.kid, privateKey);
+      if (cache) yield* cache.set(first.kid, privateKey).pipe(Effect.orElseSucceed(() => undefined));
       return { kid: first.kid, privateKey };
     }
     // Generate the first (or replacement) signing key.
@@ -56,7 +73,7 @@ export function ensureActiveKey() {
     );
     yield* dbRun(() => insertGrantKey.run(db, { kid, publicX: priv.x as string, privateSeedEnc: seedEnc }));
     const privateKey = yield* importSeed(base64urlDecode(priv.d as string), priv.x as string);
-    keyCache.set(kid, privateKey);
+    if (cache) yield* cache.set(kid, privateKey).pipe(Effect.orElseSucceed(() => undefined));
     return { kid, privateKey };
   });
 }
@@ -180,6 +197,7 @@ export function rotateKeys() {
   return Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;
+    const cache = yield* KeyCacheTag.pipe(Effect.orElseSucceed(() => null));
     const kp = (yield* Effect.promise(() =>
       crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]),
     )) as CryptoKeyPair;
@@ -194,7 +212,7 @@ export function rotateKeys() {
     for (const a of actives) {
       if (a.kid === kid) continue;
       yield* dbRun(() => retireGrantKey.run(db, { kid: a.kid }));
-      keyCache.delete(a.kid);
+      if (cache) yield* cache.invalidate(a.kid);
     }
     return { kid };
   });

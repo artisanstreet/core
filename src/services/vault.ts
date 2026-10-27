@@ -1,10 +1,10 @@
 import { Effect } from "effect";
-import { decryptWithKey, encryptWithKey } from "../crypto.js";
-import { badRequest, forbidden } from "../errors.js";
-import { newId } from "../ids.js";
-import { AppConfigTag, DbTag, dbRun } from "./deps.js";
-import { record } from "./activity.js";
-import { EngineArtifactEnvelope } from "../contracts/v1.js";
+import { decryptWithKey, encryptWithKey } from "../crypto.ts";
+import { badRequest, forbidden } from "../errors.ts";
+import { newId } from "../ids.ts";
+import { AppConfigTag, DbTag, dbRun } from "./deps.ts";
+import { record } from "./activity.ts";
+import { EngineArtifactEnvelope } from "../contracts/v1.ts";
 
 // Validated envelope shape (shared wire language). Domain validation lives
 // in the Editor product layer (products/editor/artifacts.ts); the generic

@@ -2,8 +2,11 @@ import { PGlite } from "@electric-sql/pglite";
 import { readFile } from "node:fs/promises";
 import { decodeBase32 } from "@oslojs/encoding";
 import { generateHOTP, generateTOTP } from "@oslojs/otp";
-import { createApp, type RequestContext } from "../src/http.js";
-import type { Db } from "../src/db.js";
+import { Cause, Effect, Layer } from "effect";
+import { createApp, type RequestContext } from "../../src/http.ts";
+import type { Db } from "../../src/db.ts";
+import { DbTag } from "../../src/services/deps.ts";
+import { CoreError, internal } from "../../src/errors.ts";
 
 const MASTER_KEY = "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI"; // 32x 0x42, TEST ONLY
 
@@ -30,7 +33,7 @@ export async function setupRig(opts: {
   assets?: { fetch(request: Request): Promise<Response> };
 } = {}): Promise<TestRig> {
   const db = new PGlite();
-  await db.exec(await readFile(new URL("../db/schema.sql", import.meta.url), "utf8"));
+  await db.exec(await readFile(new URL("../../db/schema.sql", import.meta.url), "utf8"));
   const mail: SentMail[] = [];
   const store = new Map<string, Uint8Array>();
   let nowMs = Date.now();
@@ -53,10 +56,26 @@ export async function setupRig(opts: {
         ),
       get: (key: string) => Promise.resolve(store.get(key) ?? null),
     },
-    txRunner: ((fn: (t: Db) => Promise<unknown>) =>
-      (db as unknown as { transaction: (f: (tx: unknown) => Promise<unknown>) => Promise<unknown> }).transaction(
-        (tx) => fn(tx as unknown as Db),
-      )) as RequestContext["txRunner"],
+    // Test driver-boundary Promise bridge (mirrors the postgres.js adapter
+    // in src/index.ts): PGlite transaction() takes a callback, so the
+    // Effect runs to an Exit inside and typed failures rethrow. The tx
+    // client passes through raw (as before; no Hyperdrive pooling in tests).
+    txRunner: {
+      transaction: <A, E>(effect: Effect.Effect<A, E, DbTag>): Effect.Effect<A, E> =>
+        Effect.tryPromise({
+          try: () =>
+            (db as unknown as { transaction: (f: (tx: unknown) => Promise<A>) => Promise<A> }).transaction(async (tx) => {
+              const exit = await Effect.runPromiseExit(
+                Effect.provide(effect, Layer.succeed(DbTag, { db: tx as unknown as Db })),
+              );
+              if (exit._tag === "Success") return exit.value;
+              const failure = Cause.failureOption(exit.cause);
+              if (failure._tag === "Some") throw failure.value;
+              throw internal("database unavailable", { cause: exit.cause });
+            }),
+          catch: (cause) => (cause instanceof CoreError ? cause : internal("database unavailable", { cause })) as E,
+        }),
+    },
     mailSink: (m) => void mail.push(m),
     now: () => nowMs,
     ...(opts.assets ? { assets: opts.assets } : {}),

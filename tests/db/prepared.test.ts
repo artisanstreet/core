@@ -5,7 +5,7 @@
 // ignores `prepare` entirely). Uses fakes — no database needed. Real-PG
 // validation was done separately against the local database (see docs).
 import { describe, expect, it, vi } from "vitest";
-import { prepareDb } from "../src/db/prepared.js";
+import { prepareDb } from "../../src/db/prepared.ts";
 
 function fakeQuery() {
   const q = { raw: () => Promise.resolve([] as unknown[]) };

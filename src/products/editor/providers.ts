@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { badRequest } from "../../errors.js";
+import { badRequest } from "../../errors.ts";
 
 // Editor product: provider credential adapter rules.
 //

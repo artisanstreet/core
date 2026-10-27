@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { api, b64url, enrollMachine, machineHeaders, setupRig, sha256HexStr, signup } from "./helpers.js";
+import { api, b64url, enrollMachine, machineHeaders, setupRig, sha256HexStr, signup } from "../../helpers/http.ts";
 
 const ORIGIN = { origin: "http://localhost" };
 const manifest = {

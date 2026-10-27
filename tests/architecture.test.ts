@@ -3,8 +3,9 @@ import { describe, expect, it } from "vitest";
 
 // Ecosystem split, enforced: shared modules (services, contracts, db
 // helpers) must never import Editor product code. Products depend on
-// shared, never the reverse. The central HTTP router composes product
-// routers (products/*/routes.ts registered from http.ts).
+// shared, never the reverse. HTTP handlers compose product services
+// (handlers/* using products/* + services/*, composed once in
+// http/router.ts).
 async function sourceFiles(dir: URL, out: string[] = []): Promise<string[]> {
   for (const e of await readdir(dir, { withFileTypes: true })) {
     const u = new URL(e.name, dir);
@@ -34,13 +35,18 @@ describe("ecosystem split", () => {
     expect(bad).toEqual([]);
   });
 
-  it("product code lives under src/products/*", async () => {
+  it("product code lives under src/products/* and handlers compose it", async () => {
     const editor = await sourceFiles(new URL("../src/products/editor/", import.meta.url));
     expect(editor.length).toBeGreaterThan(0);
     const names = editor.map((f) => f.split("/").pop());
-    expect(names).toContain("routes.ts");
     expect(names).toContain("config.ts");
     expect(names).toContain("artifacts.ts");
     expect(names).toContain("providers.ts");
+    const handlers = await sourceFiles(new URL("../src/handlers/", import.meta.url));
+    expect(handlers.length).toBeGreaterThan(0);
+    const hnames = handlers.map((f) => f.split("/").slice(-2).join("/"));
+    expect(hnames).toContain("auth/magic.ts");
+    expect(hnames).toContain("auth/totp.ts");
+    expect(hnames).toContain("auth/sessions.ts");
   });
 });

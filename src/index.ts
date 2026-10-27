@@ -1,11 +1,14 @@
-import { Effect, Layer } from "effect";
+import { Cause, Effect, Layer } from "effect";
 import postgres from "postgres";
-import { createApp, type RequestContext } from "./http.js";
-import type { Db, R2Like } from "./db.js";
-import { prepareDb, type UnsafeLike } from "./db/prepared.js";
+import { createApp, type RequestContext } from "./http.ts";
+import type { Db, R2Like } from "./db.ts";
+import { prepareDb, type UnsafeLike } from "./db/prepared.ts";
+import { configFromEnv, DbTag } from "./services/deps.ts";
+import { CoreError, internal } from "./errors.ts";
+import { make_service_layers } from "./http/context.ts";
+import { http_effect } from "./http/app.ts";
+import { with_scoped_db } from "./db/lifecycle.ts";
 
-// Cloudflare Worker entry. Local dev (vite dev / wrangler dev) reads
-// .dev.vars; production uses Hyperdrive + R2 bindings + secrets.
 interface WorkerEnv {
   readonly HYPERDRIVE?: { readonly connectionString: string };
   readonly CONFIG_BUCKET?: {
@@ -19,7 +22,7 @@ interface WorkerEnv {
   readonly [k: string]: unknown;
 }
 
-function stringVars(env: WorkerEnv): Record<string, string | undefined> {
+function string_vars(env: WorkerEnv): Record<string, string | undefined> {
   const pick = (v: unknown) => (typeof v === "string" ? v : undefined);
   return {
     CORE_ENV: pick(env.CORE_ENV),
@@ -33,7 +36,7 @@ function stringVars(env: WorkerEnv): Record<string, string | undefined> {
   };
 }
 
-function r2Adapter(bucket: NonNullable<WorkerEnv["CONFIG_BUCKET"]>): R2Like {
+function r2_adapter(bucket: NonNullable<WorkerEnv["CONFIG_BUCKET"]>): R2Like {
   return {
     put: (key: string, body: Uint8Array | string) => bucket.put(key, body).then(() => undefined),
     get: (key: string) =>
@@ -41,7 +44,7 @@ function r2Adapter(bucket: NonNullable<WorkerEnv["CONFIG_BUCKET"]>): R2Like {
   };
 }
 
-function memoryR2(): R2Like {
+function memory_r2(): R2Like {
   const store = new Map<string, Uint8Array>();
   return {
     put: (key: string, body: Uint8Array | string) =>
@@ -52,63 +55,87 @@ function memoryR2(): R2Like {
   };
 }
 
-/**
- * Per-request database client. Cloudflare forbids reusing I/O handles
- * across requests (the old global `postgres()` cache caused alternating
- * query failures in production): every handler builds its own client and
- * Hyperdrive owns the pooling. Options follow the official postgres.js
- * example (max 5, no type fetching, prepared statements). The client is
- * closed via waitUntil/after the request (and the scheduled task finally),
- * never cached globally.
- */
-function openDb(env: WorkerEnv) {
+function open_db(env: WorkerEnv) {
   const cs = env.HYPERDRIVE?.connectionString ?? env.DATABASE_URL;
   if (!cs) throw new Error("no database: bind HYPERDRIVE or set DATABASE_URL");
   return postgres(cs, { max: 5, fetch_types: false, prepare: true });
 }
 
-function getContext(env: WorkerEnv): { ctx: RequestContext; done: () => Promise<unknown> } {
-  const client = openDb(env);
+function request_layers_from_client(
+  env: WorkerEnv,
+  client: ReturnType<typeof open_db>,
+): ReturnType<typeof make_service_layers> {
   const db = prepareDb(client);
   const bucket = env.CONFIG_BUCKET;
+  const vars = string_vars(env);
+  if (!bucket && (vars.CORE_ENV ?? "dev").toLowerCase() === "production") {
+    throw new Error("CONFIG_BUCKET is required in production");
+  }
+  // Driver-boundary Promise bridge (the ONLY raw async in the request
+  // path): postgres.js begin() takes a callback, so the Effect runs to an
+  // Exit inside the callback and typed failures rethrow for rollback.
+  // Driver faults stay opaquely in .cause; HTTP/logs only see redacted codes.
+  const tx_runner: RequestContext["txRunner"] = {
+    transaction: <A, E>(effect: Effect.Effect<A, E, DbTag>): Effect.Effect<A, E> =>
+      Effect.tryPromise({
+        try: () =>
+          (client as unknown as { begin: (f: (tx: unknown) => Promise<A>) => Promise<A> }).begin(async (tx) => {
+            const exit = await Effect.runPromiseExit(
+              Effect.provide(effect, Layer.succeed(DbTag, { db: prepareDb(tx as unknown as UnsafeLike) })),
+            );
+            if (exit._tag === "Success") return exit.value;
+            const failure = Cause.failureOption(exit.cause);
+            if (failure._tag === "Some") throw failure.value;
+            throw internal("database unavailable", { cause: exit.cause });
+          }),
+        catch: (cause) => (cause instanceof CoreError ? cause : internal("database unavailable", { cause })) as E,
+      }),
+  };
   const ctx: RequestContext = {
     db,
-    env: { vars: stringVars(env), hyperdriveConnectionString: env.HYPERDRIVE?.connectionString, adminToken: env.CORE_ADMIN_TOKEN },
-    mailer: (stringVars(env).MAIL_PROVIDER ?? "log") === "resend" ? "resend" : "log",
+    env: { vars, hyperdriveConnectionString: env.HYPERDRIVE?.connectionString, adminToken: env.CORE_ADMIN_TOKEN },
+    mailer: (vars.MAIL_PROVIDER ?? "log") === "resend" ? "resend" : "log",
     resendApiKey: env.RESEND_API_KEY,
-    r2: bucket ? r2Adapter(bucket) : memoryR2(),
+    r2: bucket ? r2_adapter(bucket) : memory_r2(),
     assets: env.ASSETS,
-    txRunner: ((fn: (db: Db) => Promise<unknown>) =>
-      (client as unknown as { begin: (f: (tx: unknown) => Promise<unknown>) => Promise<unknown> }).begin((tx) =>
-        fn(prepareDb(tx as unknown as UnsafeLike)),
-      )) as RequestContext["txRunner"],
+    txRunner: tx_runner,
   };
-  return { ctx, done: () => client.end() };
+  return make_service_layers(ctx);
+}
+
+function with_request_scope<R, E, A>(
+  env: WorkerEnv,
+  use: (layers: ReturnType<typeof make_service_layers>) => Effect.Effect<A, E, R>,
+): Effect.Effect<A, E, R> {
+  return with_scoped_db(
+    Effect.sync(() => open_db(env)),
+    (client) => use(request_layers_from_client(env, client)),
+    (client) => Effect.promise(() => client.end()),
+  );
 }
 
 export default {
   async fetch(request: Request, env: WorkerEnv, ctx: { waitUntil(p: Promise<unknown>): void }): Promise<Response> {
-    const { ctx: rc, done } = getContext(env);
-    try {
-      const app = createApp(rc);
-      return await app.fetch(request);
-    } finally {
-      ctx.waitUntil(done());
-    }
+    void ctx;
+    return Effect.runPromise(
+      Effect.scoped(with_request_scope(env, (layers) => http_effect(request, layers))),
+    );
   },
   async scheduled(_event: unknown, env: WorkerEnv, ctx: { waitUntil(p: Promise<unknown>): void }): Promise<void> {
-    const { janitor } = await import("./services/janitor.js");
-    const { configFromEnv, AppConfigTag, DbTag } = await import("./services/deps.js");
-    const { ctx: rc, done } = getContext(env);
-    const cfg = configFromEnv(rc.env.vars);
-    const program = Effect.provide(
-      janitor(cfg.now()),
-      Layer.mergeAll(Layer.succeed(DbTag, { db: rc.db }), Layer.succeed(AppConfigTag, cfg)),
+    const { janitor } = await import("./services/janitor.ts");
+    const program = with_scoped_db(
+      Effect.sync(() => open_db(env)),
+      (client) => {
+        const db = prepareDb(client);
+        const cfg = configFromEnv(string_vars(env));
+        return janitor(cfg.now()).pipe(Effect.provide(Layer.succeed(DbTag, { db })));
+      },
+      (client) => Effect.promise(() => client.end()),
     );
-    try {
-      ctx.waitUntil(Effect.runPromise(program as Effect.Effect<unknown>));
-    } finally {
-      await done();
-    }
+    const task = Effect.runPromise(program as Effect.Effect<unknown>);
+    ctx.waitUntil(task);
+    await task;
   },
 };
+
+export { createApp };

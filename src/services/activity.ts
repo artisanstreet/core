@@ -1,6 +1,6 @@
 import { Effect } from "effect";
-import { newId } from "../ids.js";
-import { DbTag, dbRun } from "./deps.js";
+import { newId } from "../ids.ts";
+import { DbTag, dbRun } from "./deps.ts";
 import insertActivity from "../db/queries/activity/insertActivity.sql";
 import listActivityByAccount from "../db/queries/activity/listActivityByAccount.sql";
 

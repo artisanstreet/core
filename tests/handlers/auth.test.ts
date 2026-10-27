@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { api, setupRig, signup, totpCodeAt, totpCodeFor } from "./helpers.js";
+import { api, setupRig, signup, totpCodeAt, totpCodeFor } from "../helpers/http.ts";
 
 describe("magic link sign-in", () => {
   it("scanner-safe: GET confirm page never consumes; explicit POST approves", async () => {

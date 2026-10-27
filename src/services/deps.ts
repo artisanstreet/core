@@ -1,8 +1,8 @@
 import { Context, Effect, Layer } from "effect";
-import type { Db } from "../db.js";
-import type { MasterKey } from "../crypto.js";
-import { loadMasterKey } from "../crypto.js";
-import { internal } from "../errors.js";
+import type { Db } from "../db.ts";
+import type { MasterKey } from "../crypto.ts";
+import { loadMasterKey } from "../crypto.ts";
+import { internal } from "../errors.ts";
 
 export interface AppConfig {
   readonly env: Record<string, string | undefined>;
@@ -44,17 +44,24 @@ export function configFromEnv(
 export class DbTag extends Context.Tag("Db")<DbTag, { readonly db: Db }>() {}
 export const DbLive = (db: Db) => Layer.succeed(DbTag, { db });
 
-// Transaction runner: executes fn with a transactional client. The login
-// finalize path commits its state changes atomically; without this, a crash
-// between completion and session insert would burn the request and strand
-// the user. Provided per runtime (postgres.js in the Worker, PGlite tests).
-export type TxRunner = <T>(fn: (db: Db) => Promise<T>) => Promise<T>;
+// Transaction service: runs an Effect atomically with a transactional
+// client. The login finalize path commits its state changes atomically;
+// without this, a crash between completion and session insert would burn
+// the request and strand the user. Domain logic composes Effects against
+// DbTag; ONLY the driver adapters (postgres.js in the Worker, PGlite in
+// tests) bridge Promise callbacks, so atomicity and replay invariants are
+// proven by the same behavioral tests in both runtimes.
+export interface TxRunner {
+  readonly transaction: <A, E>(effect: Effect.Effect<A, E, DbTag>) => Effect.Effect<A, E>;
+}
 export class TxTag extends Context.Tag("Tx")<TxTag, TxRunner>() {}
 
 export function dbRun<A>(attempt: () => Promise<A>) {
   return Effect.tryPromise({
     try: attempt,
-    // Never leak driver detail to callers or logs.
-    catch: () => internal("database unavailable"),
+    // Never leak driver detail to callers or logs: the driver error is
+    // preserved opaquely as .cause for internal Cause chains, while HTTP
+    // responses and logs only ever carry the redacted code/message.
+    catch: (cause) => internal("database unavailable", { cause }),
   });
 }

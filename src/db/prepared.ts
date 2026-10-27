@@ -19,7 +19,7 @@
 //
 // Official reference:
 // https://developers.cloudflare.com/hyperdrive/examples/connect-to-postgres/postgres-drivers-and-libraries/postgres-js/
-import type { Db } from "../db.js";
+import type { Db } from "../db.ts";
 
 /** Minimal surface Reylo needs: `unsafe(text, params?)`. */
 export interface UnsafeLike {

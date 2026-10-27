@@ -5,13 +5,13 @@ import {
   randomBytes,
   sha256Bytes,
   sha256Hex,
-} from "../crypto.js";
-import { ENROLLMENT_TTL_SECONDS, LOGIN_CODE_ALPHABET, RATE_WINDOW_SECONDS } from "../constants.js";
-import { badRequest, forbidden, unauthorized } from "../errors.js";
-import { newId } from "../ids.js";
-import { AppConfigTag, DbTag, dbRun } from "./deps.js";
-import { checkBudget } from "./ratelimit.js";
-import { record } from "./activity.js";
+} from "../crypto.ts";
+import { ENROLLMENT_TTL_SECONDS, LOGIN_CODE_ALPHABET, RATE_WINDOW_SECONDS } from "../constants.ts";
+import { badRequest, forbidden, unauthorized } from "../errors.ts";
+import { newId } from "../ids.ts";
+import { AppConfigTag, DbTag, dbRun } from "./deps.ts";
+import { checkBudget } from "./ratelimit.ts";
+import { record } from "./activity.ts";
 import getAccountById from "../db/queries/accounts/getAccountById.sql";
 import insertEnrollment from "../db/queries/enrollments/insertEnrollment.sql";
 import getEnrollmentById from "../db/queries/enrollments/getEnrollmentById.sql";

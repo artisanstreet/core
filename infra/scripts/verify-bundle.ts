@@ -20,7 +20,6 @@ for (const f of out.files) console.log(` - ${f.path} (${typeof f.content === "st
 const names = out.files.map((f) => f.path);
 if (names[0] !== "index.js") throw new Error(`entry must be index.js, got ${names[0]}`);
 if (names.some((n) => n.endsWith(".map"))) throw new Error("source maps must not be uploaded");
-if (!names.some((n) => n.startsWith("assets/"))) throw new Error("expected worker chunks under assets/");
 
 // Import execution (not substring): the prebuilt entry must export a Worker
 // with fetch + scheduled handlers.

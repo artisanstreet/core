@@ -25,7 +25,7 @@ async function shape(db: PGlite) {
 
 describe("schema parity", () => {
   it("db/schema.sql equals db/migrations/*.sql applied in order", async () => {
-    const root = new URL("..", import.meta.url);
+    const root = new URL("../..", import.meta.url);
     const schemaSql = await readFile(new URL("db/schema.sql", root), "utf8");
     const a = new PGlite();
     await a.exec(schemaSql);

@@ -1,6 +1,6 @@
 import { Effect } from "effect";
-import { rateLimited } from "../errors.js";
-import { DbTag, dbRun } from "./deps.js";
+import { rateLimited } from "../errors.ts";
+import { DbTag, dbRun } from "./deps.ts";
 import bumpRateCounter from "../db/queries/rate/bumpRateCounter.sql";
 
 // Fixed-window budgets backed by the database so every isolate enforces the

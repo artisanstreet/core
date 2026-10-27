@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { admin, api, enrollMachine, setupRig, signup, totpCodeAt } from "./helpers.js";
+import { admin, api, enrollMachine, setupRig, signup, totpCodeAt } from "../helpers/http.ts";
 
 const ORIGIN = { origin: "http://localhost" };
 

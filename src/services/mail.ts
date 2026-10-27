@@ -1,7 +1,11 @@
-import { Context, Effect, Layer } from "effect";
-import { internal, type CoreError } from "../errors.js";
-import type { AppConfig } from "./deps.js";
-import { AppConfigTag } from "./deps.js";
+import { Context, Effect, Layer, Schedule } from "effect";
+import * as HttpClient from "@effect/platform/HttpClient";
+import * as HttpClientRequest from "@effect/platform/HttpClientRequest";
+import * as HttpBody from "@effect/platform/HttpBody";
+import { FetchHttpClient } from "@effect/platform";
+import { internal, type CoreError } from "../errors.ts";
+import type { AppConfig } from "./deps.ts";
+import { AppConfigTag } from "./deps.ts";
 
 export interface Mail {
   readonly to: string;
@@ -12,41 +16,49 @@ export interface Mail {
 
 export class MailTag extends Context.Tag("Mail")<MailTag, { readonly send: (m: Mail) => Effect.Effect<void, CoreError> }>() {}
 
-// "log" is a dev/test delivery mechanism: it prints the confirmation URL to
-// the server log so a developer can click it. The token inside is a live
-// credential, so this mailer refuses to run in production (see deps.ts).
-// Production uses "resend" (or another HTTP mail API configured at deploy;
-// the request below is plain fetch, no SDK), which never logs the link.
+const resend_retry_schedule = Schedule.exponential("200 millis").pipe(Schedule.compose(Schedule.recurs(2)));
+
+function send_with_client(
+  cfg: AppConfig,
+  client: HttpClient.HttpClient,
+  m: Mail,
+): Effect.Effect<void, CoreError> {
+  return Effect.gen(function* () {
+    if (cfg.mailer === "log") {
+      return yield* Effect.sync(() => {
+        console.log(`[ast-core mail] to=${m.to} subject=${m.subject} confirm=${m.confirmUrl}`);
+      });
+    }
+    if (!cfg.resendApiKey) return yield* Effect.fail(internal("mail delivery failed"));
+    const from = cfg.env.MAIL_FROM ?? "Ast <noreply@example.invalid>";
+    const req = HttpClientRequest.post("https://api.resend.com/emails").pipe(
+      HttpClientRequest.setHeader("Authorization", `Bearer ${cfg.resendApiKey}`),
+      HttpClientRequest.setBody(HttpBody.unsafeJson({ from, to: [m.to], subject: m.subject, text: m.text })),
+    );
+    const res = yield* Effect.gen(function* () {
+      const r = yield* client.execute(req).pipe(Effect.mapError(() => internal("mail delivery failed")));
+      if (r.status === 429 || r.status >= 500) {
+        return yield* Effect.fail(internal("mail delivery failed"));
+      }
+      return r;
+    }).pipe(
+      Effect.retry(resend_retry_schedule),
+    );
+    if (res.status !== 200 && res.status !== 202) {
+      return yield* Effect.fail(internal("mail delivery failed"));
+    }
+  });
+}
+
 export const MailLive = Layer.effect(
   MailTag,
   Effect.gen(function* () {
     const cfg: AppConfig = yield* AppConfigTag;
-    const send = (m: Mail): Effect.Effect<void, CoreError> =>
-      Effect.tryPromise({
-        try: async () => {
-          if (cfg.mailer === "log") {
-            console.log(`[ast-core mail] to=${m.to} subject=${m.subject} confirm=${m.confirmUrl}`);
-            return;
-          }
-          if (!cfg.resendApiKey) throw new Error("RESEND_API_KEY is not set");
-          const from = cfg.env.MAIL_FROM ?? "Ast <noreply@example.invalid>";
-          const res = await fetch("https://api.resend.com/emails", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${cfg.resendApiKey}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ from, to: [m.to], subject: m.subject, text: m.text }),
-          });
-          if (!res.ok) throw new Error(`mail provider answered ${res.status}`);
-        },
-        catch: () => internal("mail delivery failed"),
-      });
-    return { send };
+    const client = yield* HttpClient.HttpClient;
+    return { send: (m: Mail) => send_with_client(cfg, client, m) };
   }),
 );
 
-// Test mailer: captures deliveries in memory for behavioral tests.
 export function memoryMailBox() {
   const out: Mail[] = [];
   const layer = Layer.succeed(MailTag, {
@@ -54,3 +66,5 @@ export function memoryMailBox() {
   });
   return { out, layer };
 }
+
+export const MailFetchLive = FetchHttpClient.layer.pipe(Layer.provideMerge(MailLive));

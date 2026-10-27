@@ -6,14 +6,14 @@ import {
   encryptWithKey,
   randomBytes,
   sha256Hex,
-} from "../crypto.js";
-import { MAGIC_LINK_TTL_SECONDS, RATE_WINDOW_SECONDS, SESSION_TTL_SECONDS } from "../constants.js";
-import { CoreError, badRequest, conflict, forbidden, gone, unauthorized } from "../errors.js";
-import { newId } from "../ids.js";
-import { AppConfigTag, DbTag, TxTag, dbRun } from "./deps.js";
-import { checkBudget } from "./ratelimit.js";
-import { record } from "./activity.js";
-import { MailTag } from "./mail.js";
+} from "../crypto.ts";
+import { MAGIC_LINK_TTL_SECONDS, RATE_WINDOW_SECONDS, SESSION_TTL_SECONDS } from "../constants.ts";
+import { CoreError, badRequest, conflict, forbidden, gone, internal, unauthorized } from "../errors.ts";
+import { newId } from "../ids.ts";
+import { AppConfigTag, DbTag, TxTag, dbRun } from "./deps.ts";
+import { checkBudget } from "./ratelimit.ts";
+import { record } from "./activity.ts";
+import { MailTag } from "./mail.ts";
 import insertAccount from "../db/queries/accounts/insertAccount.sql";
 import getAccountById from "../db/queries/accounts/getAccountById.sql";
 import getAccountByEmail from "../db/queries/accounts/getAccountByEmail.sql";
@@ -218,12 +218,13 @@ export function finalizeMagicLink(opts: {
     const token = newSessionToken();
     const tokenHash = yield* hashSecret(token);
     const expiresAt = new Date(nowMs + SESSION_TTL_SECONDS * 1000).toISOString();
-    const sess = yield* Effect.tryPromise({
-      try: () =>
-        tx(async (t) => {
-          const completed = await markLoginCompleted.run(t, { id: row.id });
-          if (!completed) throw forbidden("already completed or expired");
-          const s = await insertSession.run(t, {
+    const sess = yield* tx.transaction(
+      Effect.gen(function* () {
+        const { db: tx_db } = yield* DbTag;
+        const completed = yield* dbRun(() => markLoginCompleted.run(tx_db, { id: row.id }));
+        if (!completed) return yield* Effect.fail(forbidden("already completed or expired"));
+        const s = yield* dbRun(() =>
+          insertSession.run(tx_db, {
             id: newId("sess"),
             accountId: account!.id,
             tokenHash,
@@ -232,20 +233,22 @@ export function finalizeMagicLink(opts: {
             userAgent: (opts.userAgent ?? "").slice(0, 300),
             totpVerifiedAt: totpVerified ? new Date(nowMs).toISOString() : null,
             expiresAt,
-          });
-          if (!s) throw new CoreError("internal", "database unavailable");
-          await insertActivity.run(t, {
+          }),
+        );
+        if (!s) return yield* Effect.fail(internal("database unavailable"));
+        yield* dbRun(() =>
+          insertActivity.run(tx_db, {
             id: newId("evt"),
             accountId: account!.id,
             machineId: null,
             kind: "login.completed",
             detail: "{}",
             ip: opts.ip ?? null,
-          });
-          return s;
-        }),
-      catch: (e) => (e instanceof CoreError ? e : new CoreError("internal", "database unavailable")),
-    });
+          }),
+        );
+        return s;
+      }),
+    );
     return {
       sessionId: sess.id,
       rawToken: token,
@@ -302,7 +305,7 @@ function satisfyTotpChallenge(
   recoveryCode: string | undefined,
   ip: string | null,
   nowMs: number,
-): Effect.Effect<boolean, CoreError, import("./deps.js").DbTag | AppConfigTag> {
+): Effect.Effect<boolean, CoreError, import("./deps.ts").DbTag | AppConfigTag> {
   return Effect.gen(function* () {
     const { db } = yield* DbTag;
     const cfg = yield* AppConfigTag;

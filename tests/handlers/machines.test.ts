@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { newEnrollmentCode } from "../src/services/machines.js";
-import { api, enrollMachine, machineHeaders, newMachineKeys, setupRig, signup } from "./helpers.js";
+import { newEnrollmentCode } from "../../src/services/machines.ts";
+import { api, enrollMachine, machineHeaders, newMachineKeys, setupRig, signup } from "../helpers/http.ts";
 
 describe("enrollment codes", () => {
   it("generates exact 8-char codes from the unambiguous alphabet", () => {
@@ -177,5 +177,36 @@ describe("Forge machine enrollment", () => {
     const r = await api(rig.app, "GET", path, { headers: { cookie: acct.cookie, ...old } });
     // Session auth succeeds regardless of the bogus proof headers.
     expect(r.status).toBe(200);
+  });
+
+  it("signed confirm with malformed JSON or wrong content-type is 400, not 500", async () => {
+    const rig = await setupRig();
+    const acct = await signup(rig, "q@example.com");
+    const keys = await newMachineKeys();
+    const label = "bad-json-forge";
+    const ts = Math.floor(Date.now() / 1000);
+    const proof = await keys.sign(new TextEncoder().encode(`enrollment-request\n${keys.publicX}\n${label}\n${ts}`));
+    const start = await api(rig.app, "POST", "/v1/machines/enrollments", {
+      body: { publicKey: { kty: "OKP", crv: "Ed25519", x: keys.publicX }, label, timestamp: ts, proof },
+    });
+    expect(start.status).toBe(201);
+    const { enrollmentId } = start.json as { enrollmentId: string };
+    const confirm_path = "/v1/machines/enrollments/confirm";
+
+    const bad_raw = "{invalid-json";
+    const bad = await api(rig.app, "POST", confirm_path, {
+      headers: await machineHeaders(enrollmentId, keys, "POST", confirm_path, bad_raw),
+      rawBody: bad_raw,
+    });
+    expect(bad.status).toBe(400);
+    expect((bad.json as { error: { code: string } }).error.code).toBe("bad_request");
+
+    const good_raw = JSON.stringify({ enrollmentId, accountId: acct.accountId, confirmation: "AAAA" });
+    const wrong_ct = await api(rig.app, "POST", confirm_path, {
+      headers: { ...(await machineHeaders(enrollmentId, keys, "POST", confirm_path, good_raw)), "content-type": "text/plain" },
+      rawBody: good_raw,
+    });
+    expect(wrong_ct.status).toBe(400);
+    expect((wrong_ct.json as { error: { code: string } }).error.code).toBe("bad_request");
   });
 });

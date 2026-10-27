@@ -4,13 +4,13 @@
 // from shared services; the generic vault is untouched by editor content.
 
 import { Effect, Schema } from "effect";
-import { base64urlDecode, sha256Hex } from "../../crypto.js";
-import { badRequest, conflict, forbidden, internal, CoreError } from "../../errors.js";
-import { newId } from "../../ids.js";
-import { AppConfigTag, DbTag, dbRun } from "../../services/deps.js";
-import { record } from "../../services/activity.js";
-import { getBlob, putBlob } from "../../services/storage.js";
-import { EditorManifest } from "../../contracts/v1.js";
+import { base64urlDecode, sha256Hex } from "../../crypto.ts";
+import { badRequest, conflict, forbidden, internal, CoreError } from "../../errors.ts";
+import { newId } from "../../ids.ts";
+import { AppConfigTag, DbTag, dbRun } from "../../services/deps.ts";
+import { record } from "../../services/activity.ts";
+import { getBlob, putBlob } from "../../services/storage.ts";
+import { EditorManifest } from "../../contracts/v1.ts";
 import insertBundle from "../../db/queries/config/insertBundle.sql";
 import getLatestBundleByAccount from "../../db/queries/config/getLatestBundleByAccount.sql";
 import getBundleById from "../../db/queries/config/getBundleById.sql";
@@ -25,29 +25,31 @@ const MAX_SKILL_BUNDLE_BYTES = 1024 * 1024;
 // Skill bundles install onto machines that lack the skill. Source refs
 // alone only enable already-installed skills, so a bundle carries the
 // files; bytes ride inside the content-hashed manifest (ETag-gated).
-async function validateSkillBundles(manifest: ValidatedManifest): Promise<void> {
-  for (const s of manifest.skills) {
-    if (!s.bundle) continue;
-    let total = 0;
-    let hasSkillMd = false;
-    for (const f of s.bundle.files) {
-      if (f.path.length > 256 || f.path.startsWith("/") || /(^|\/)\.\.(\/|$)/.test(f.path)) {
-        throw badRequest("invalid skill file path");
+function validate_skill_bundles(manifest: ValidatedManifest) {
+  return Effect.gen(function* () {
+    for (const s of manifest.skills) {
+      if (!s.bundle) continue;
+      let total = 0;
+      let has_skill_md = false;
+      for (const f of s.bundle.files) {
+        if (f.path.length > 256 || f.path.startsWith("/") || /(^|\/)\.\.(\/|$)/.test(f.path)) {
+          return yield* Effect.fail(badRequest("invalid skill file path"));
+        }
+        let file_bytes: Uint8Array;
+        try {
+          file_bytes = base64urlDecode(f.contentBase64);
+        } catch {
+          return yield* Effect.fail(badRequest("invalid skill file encoding"));
+        }
+        total += file_bytes.length;
+        if (total > MAX_SKILL_BUNDLE_BYTES) return yield* Effect.fail(badRequest("skill bundle too large"));
+        const digest = yield* Effect.promise(() => sha256Hex(file_bytes));
+        if (digest !== f.sha256) return yield* Effect.fail(badRequest("skill file hash mismatch"));
+        if (f.path === "SKILL.md") has_skill_md = true;
       }
-      let bytes: Uint8Array;
-      try {
-        bytes = base64urlDecode(f.contentBase64);
-      } catch {
-        throw badRequest("invalid skill file encoding");
-      }
-      total += bytes.length;
-      if (total > MAX_SKILL_BUNDLE_BYTES) throw badRequest("skill bundle too large");
-      const digest = await sha256Hex(bytes);
-      if (digest !== f.sha256) throw badRequest("skill file hash mismatch");
-      if (f.path === "SKILL.md") hasSkillMd = true;
+      if (!has_skill_md) return yield* Effect.fail(badRequest("skill bundle must include SKILL.md"));
     }
-    if (!hasSkillMd) throw badRequest("skill bundle must include SKILL.md");
-  }
+  });
 }
 
 export function publishBundle(accountId: string, manifestInput: unknown) {
@@ -62,10 +64,7 @@ export function publishBundle(accountId: string, manifestInput: unknown) {
     if (manifest.mcpServers.length > 64 || manifest.skills.length > 256) {
       return yield* Effect.fail(badRequest("manifest too large"));
     }
-    yield* Effect.tryPromise({
-      try: () => validateSkillBundles(manifest),
-      catch: (e) => (e instanceof CoreError ? e : internal("database unavailable")),
-    });
+    yield* validate_skill_bundles(manifest);
     // Canonical bytes: stable key order, no whitespace. The hash names the
     // exact bytes stored in R2, so Forge can verify what it downloads.
     const canonical = JSON.stringify(sortKeys(manifest));

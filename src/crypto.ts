@@ -27,6 +27,15 @@ export function constantTimeEqualHex(a: string, b: string): boolean {
   return d === 0;
 }
 
+export function constantTimeEqual(a: string, b: string): boolean {
+  const ab = new TextEncoder().encode(a);
+  const bb = new TextEncoder().encode(b);
+  if (ab.length !== bb.length) return false;
+  let d = 0;
+  for (let i = 0; i < ab.length; i++) d |= ab[i]! ^ bb[i]!;
+  return d === 0;
+}
+
 export async function sha256Hex(data: Uint8Array | string): Promise<string> {
   const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
   const digest = await crypto.subtle.digest("SHA-256", bytes.buffer as ArrayBuffer);

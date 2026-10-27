@@ -1,6 +1,6 @@
 import { Effect } from "effect";
-import { DbTag, dbRun } from "./deps.js";
-import { purgeDueAccounts } from "./deletion.js";
+import { DbTag, dbRun } from "./deps.ts";
+import { purgeDueAccounts } from "./deletion.ts";
 import expireOverdueLogins from "../db/queries/login/expireOverdueLogins.sql";
 import expireOverdueEnrollments from "../db/queries/enrollments/expireOverdueEnrollments.sql";
 import pruneNonces from "../db/queries/nonces/pruneNonces.sql";

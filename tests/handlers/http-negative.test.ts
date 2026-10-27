@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { api, setupRig, signup } from "./helpers.js";
+import { api, setupRig, signup } from "../helpers/http.ts";
 
 // Negative HTTP behavior: strict bodies, bounded reads, CSRF, trusted IP,
 // unknown routes, and auth failures carry stable codes without leaking detail.

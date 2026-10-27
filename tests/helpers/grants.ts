@@ -1,5 +1,5 @@
 import { createLocalJWKSet, jwtVerify } from "jose";
-import type { setupRig } from "./helpers.js";
+import type { setupRig } from "./http.ts";
 
 type Rig = Awaited<ReturnType<typeof setupRig>>;
 

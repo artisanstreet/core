@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { api, setupRig, signup } from "./helpers.js";
+import { api, setupRig, signup } from "../helpers/http.ts";
 
 function memoryAssets(files: Record<string, { body: string; contentType: string; cache?: string }>) {
   return {
@@ -85,6 +85,44 @@ describe("portal asset hosting", () => {
     expect((nope.json as { error: { code: string } }).error.code).toBe("not_found");
     const ui = await api(rig.app, "GET", "/ui/signin");
     expect(ui.status).toBe(200);
+  });
+
+  it("shell serves html mime on the final response; file-like misses stay JSON", async () => {
+    const rig = await setupRig({
+      assets: memoryAssets({
+        "/index.html": { body: INDEX, contentType: "text/html" },
+        "/assets/app-abc123.js": { body: "console.log(1)", contentType: "text/javascript", cache: "public, max-age=31536000, immutable" },
+      }),
+    });
+
+    const shell = await api(rig.app, "GET", "/");
+    expect(shell.status).toBe(200);
+    expect(shell.headers.get("content-type")).toContain("text/html");
+    const nav = await api(rig.app, "GET", "/dash/projects");
+    expect(nav.status).toBe(200);
+    expect(nav.headers.get("content-type")).toContain("text/html");
+    const js = await api(rig.app, "GET", "/assets/app-abc123.js");
+    expect(js.status).toBe(200);
+    expect(js.headers.get("content-type")).toContain("javascript");
+    const missing_asset = await api(rig.app, "GET", "/assets/missing-xyz.js");
+    expect(missing_asset.status).toBe(404);
+    expect((missing_asset.json as { error: { code: string } }).error.code).toBe("not_found");
+  });
+
+  it("rejecting asset backend degrades to JSON 404, not shell bytes", async () => {
+    const rig = await setupRig({
+      assets: {
+        fetch: async () => {
+          throw new Error("backend down");
+        },
+      },
+    });
+    const shell = await api(rig.app, "GET", "/");
+    expect(shell.status).toBe(404);
+    expect((shell.json as { error: { code: string } }).error.code).toBe("not_found");
+    const nav = await api(rig.app, "GET", "/dash/projects");
+    expect(nav.status).toBe(404);
+    expect((nav.json as { error: { code: string } }).error.code).toBe("not_found");
   });
 
   it("without assets, unknown paths stay JSON 404", async () => {
