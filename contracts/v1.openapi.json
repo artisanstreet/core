@@ -23,7 +23,7 @@
                   "required": [
                     "api",
                     "contracts",
-                    "jwksUri",
+                    "jwks_uri",
                     "openapi"
                   ],
                   "properties": {
@@ -33,7 +33,7 @@
                     "contracts": {
                       "type": "string"
                     },
-                    "jwksUri": {
+                    "jwks_uri": {
                       "type": "string"
                     },
                     "openapi": {
@@ -61,7 +61,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -70,7 +70,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -98,7 +98,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -107,7 +107,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -157,7 +157,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -166,7 +166,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -194,7 +194,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -203,7 +203,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -307,7 +307,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -316,7 +316,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -344,7 +344,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -353,7 +353,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -383,12 +383,12 @@
                   "$schema": "http://json-schema.org/draft-07/schema#",
                   "type": "object",
                   "required": [
-                    "revokedMachineIds",
-                    "revokedKeyIds",
-                    "asOf"
+                    "revoked_machine_ids",
+                    "revoked_key_ids",
+                    "as_of"
                   ],
                   "properties": {
-                    "revokedMachineIds": {
+                    "revoked_machine_ids": {
                       "type": "array",
                       "items": {
                         "type": "string",
@@ -396,13 +396,13 @@
                         "pattern": "^mch_[0-9A-HJKMNP-TV-Z]{26}$"
                       }
                     },
-                    "revokedKeyIds": {
+                    "revoked_key_ids": {
                       "type": "array",
                       "items": {
                         "type": "string"
                       }
                     },
-                    "asOf": {
+                    "as_of": {
                       "type": "string"
                     }
                   },
@@ -427,7 +427,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -436,7 +436,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -464,7 +464,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -473,7 +473,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -503,20 +503,20 @@
                   "$schema": "http://json-schema.org/draft-07/schema#",
                   "type": "object",
                   "required": [
-                    "requestId",
-                    "requestSecret",
-                    "expiresAt"
+                    "request_id",
+                    "request_secret",
+                    "expires_at"
                   ],
                   "properties": {
-                    "requestId": {
+                    "request_id": {
                       "type": "string",
                       "description": "a string matching the pattern ^logreq_[0-9A-HJKMNP-TV-Z]{26}$",
                       "pattern": "^logreq_[0-9A-HJKMNP-TV-Z]{26}$"
                     },
-                    "requestSecret": {
+                    "request_secret": {
                       "type": "string"
                     },
-                    "expiresAt": {
+                    "expires_at": {
                       "type": "string"
                     }
                   },
@@ -541,7 +541,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -550,7 +550,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -578,7 +578,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -587,7 +587,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -645,14 +645,14 @@
                   "$schema": "http://json-schema.org/draft-07/schema#",
                   "type": "object",
                   "required": [
-                    "requestId",
+                    "request_id",
                     "status",
-                    "totpRequired",
+                    "totp_required",
                     "email",
-                    "expiresAt"
+                    "expires_at"
                   ],
                   "properties": {
-                    "requestId": {
+                    "request_id": {
                       "type": "string",
                       "description": "a string matching the pattern ^logreq_[0-9A-HJKMNP-TV-Z]{26}$",
                       "pattern": "^logreq_[0-9A-HJKMNP-TV-Z]{26}$"
@@ -666,7 +666,7 @@
                         "expired"
                       ]
                     },
-                    "totpRequired": {
+                    "totp_required": {
                       "type": "boolean"
                     },
                     "email": {
@@ -674,7 +674,7 @@
                       "description": "a string matching the pattern ^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
                       "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
                     },
-                    "expiresAt": {
+                    "expires_at": {
                       "type": "string"
                     }
                   },
@@ -699,7 +699,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -708,7 +708,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -736,7 +736,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -745,7 +745,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -801,12 +801,12 @@
                   "$schema": "http://json-schema.org/draft-07/schema#",
                   "type": "object",
                   "required": [
-                    "requestId",
+                    "request_id",
                     "status",
-                    "totpRequired"
+                    "totp_required"
                   ],
                   "properties": {
-                    "requestId": {
+                    "request_id": {
                       "type": "string",
                       "description": "a string matching the pattern ^logreq_[0-9A-HJKMNP-TV-Z]{26}$",
                       "pattern": "^logreq_[0-9A-HJKMNP-TV-Z]{26}$"
@@ -820,7 +820,7 @@
                         "expired"
                       ]
                     },
-                    "totpRequired": {
+                    "totp_required": {
                       "type": "boolean"
                     }
                   },
@@ -845,7 +845,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -854,7 +854,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -882,7 +882,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -891,7 +891,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -975,7 +975,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -984,7 +984,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -1012,7 +1012,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -1021,7 +1021,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -1051,26 +1051,26 @@
                   "$schema": "http://json-schema.org/draft-07/schema#",
                   "type": "object",
                   "required": [
-                    "sessionId",
-                    "accountId",
-                    "expiresAt",
-                    "totpVerified"
+                    "session_id",
+                    "account_id",
+                    "expires_at",
+                    "totp_verified"
                   ],
                   "properties": {
-                    "sessionId": {
+                    "session_id": {
                       "type": "string",
                       "description": "a string matching the pattern ^sess_[0-9A-HJKMNP-TV-Z]{26}$",
                       "pattern": "^sess_[0-9A-HJKMNP-TV-Z]{26}$"
                     },
-                    "accountId": {
+                    "account_id": {
                       "type": "string",
                       "description": "a string matching the pattern ^acct_[0-9A-HJKMNP-TV-Z]{26}$",
                       "pattern": "^acct_[0-9A-HJKMNP-TV-Z]{26}$"
                     },
-                    "expiresAt": {
+                    "expires_at": {
                       "type": "string"
                     },
-                    "totpVerified": {
+                    "totp_verified": {
                       "type": "boolean"
                     }
                   },
@@ -1095,7 +1095,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -1104,7 +1104,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -1132,7 +1132,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -1141,7 +1141,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -1203,14 +1203,14 @@
                   "$schema": "http://json-schema.org/draft-07/schema#",
                   "type": "object",
                   "required": [
-                    "otpauthUrl",
-                    "recoveryCodes"
+                    "otpauth_url",
+                    "recovery_codes"
                   ],
                   "properties": {
-                    "otpauthUrl": {
+                    "otpauth_url": {
                       "type": "string"
                     },
-                    "recoveryCodes": {
+                    "recovery_codes": {
                       "type": "array",
                       "items": {
                         "type": "string"
@@ -1238,7 +1238,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -1247,7 +1247,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -1275,7 +1275,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -1284,7 +1284,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -1312,7 +1312,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -1321,7 +1321,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -1349,7 +1349,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -1358,7 +1358,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -1416,7 +1416,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -1425,7 +1425,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -1453,7 +1453,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -1462,7 +1462,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -1490,7 +1490,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -1499,7 +1499,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -1527,7 +1527,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -1536,7 +1536,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -1614,7 +1614,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -1623,7 +1623,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -1651,7 +1651,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -1660,7 +1660,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -1688,7 +1688,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -1697,7 +1697,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -1725,7 +1725,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -1734,7 +1734,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -1784,16 +1784,16 @@
                   "$schema": "http://json-schema.org/draft-07/schema#",
                   "type": "object",
                   "required": [
-                    "accountId",
+                    "account_id",
                     "email",
-                    "displayName",
-                    "totpEnrolled",
+                    "display_name",
+                    "totp_enrolled",
                     "machines",
-                    "providerConnections",
-                    "latestConfigVersion"
+                    "provider_connections",
+                    "latest_config_version"
                   ],
                   "properties": {
-                    "accountId": {
+                    "account_id": {
                       "type": "string",
                       "description": "a string matching the pattern ^acct_[0-9A-HJKMNP-TV-Z]{26}$",
                       "pattern": "^acct_[0-9A-HJKMNP-TV-Z]{26}$"
@@ -1803,10 +1803,10 @@
                       "description": "a string matching the pattern ^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
                       "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
                     },
-                    "displayName": {
+                    "display_name": {
                       "type": "string"
                     },
-                    "totpEnrolled": {
+                    "totp_enrolled": {
                       "type": "boolean"
                     },
                     "machines": {
@@ -1815,10 +1815,10 @@
                         "type": "object",
                         "required": [
                           "id",
-                          "publicKey",
+                          "public_key",
                           "label",
-                          "createdAt",
-                          "revokedAt"
+                          "created_at",
+                          "revoked_at"
                         ],
                         "properties": {
                           "id": {
@@ -1826,7 +1826,7 @@
                             "description": "a string matching the pattern ^mch_[0-9A-HJKMNP-TV-Z]{26}$",
                             "pattern": "^mch_[0-9A-HJKMNP-TV-Z]{26}$"
                           },
-                          "publicKey": {
+                          "public_key": {
                             "type": "object",
                             "required": [
                               "kty",
@@ -1857,10 +1857,10 @@
                           "label": {
                             "type": "string"
                           },
-                          "createdAt": {
+                          "created_at": {
                             "type": "string"
                           },
-                          "revokedAt": {
+                          "revoked_at": {
                             "anyOf": [
                               {
                                 "type": "string"
@@ -1874,7 +1874,7 @@
                         "additionalProperties": false
                       }
                     },
-                    "providerConnections": {
+                    "provider_connections": {
                       "type": "array",
                       "items": {
                         "type": "object",
@@ -1882,8 +1882,8 @@
                           "id",
                           "provider",
                           "label",
-                          "revokedAt",
-                          "assignedMachineIds"
+                          "revoked_at",
+                          "assigned_machine_ids"
                         ],
                         "properties": {
                           "id": {
@@ -1897,7 +1897,7 @@
                           "label": {
                             "type": "string"
                           },
-                          "revokedAt": {
+                          "revoked_at": {
                             "anyOf": [
                               {
                                 "type": "string"
@@ -1907,7 +1907,7 @@
                               }
                             ]
                           },
-                          "assignedMachineIds": {
+                          "assigned_machine_ids": {
                             "type": "array",
                             "items": {
                               "type": "string",
@@ -1919,7 +1919,7 @@
                         "additionalProperties": false
                       }
                     },
-                    "latestConfigVersion": {
+                    "latest_config_version": {
                       "anyOf": [
                         {
                           "type": "number"
@@ -1951,7 +1951,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -1960,7 +1960,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -1988,7 +1988,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -1997,7 +1997,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -2025,7 +2025,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -2034,7 +2034,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -2062,7 +2062,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -2071,7 +2071,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -2110,11 +2110,11 @@
                         "type": "object",
                         "required": [
                           "id",
-                          "deviceName",
-                          "totpVerifiedAt",
-                          "createdAt",
-                          "expiresAt",
-                          "revokedAt"
+                          "device_name",
+                          "totp_verified_at",
+                          "created_at",
+                          "expires_at",
+                          "revoked_at"
                         ],
                         "properties": {
                           "id": {
@@ -2122,10 +2122,10 @@
                             "description": "a string matching the pattern ^sess_[0-9A-HJKMNP-TV-Z]{26}$",
                             "pattern": "^sess_[0-9A-HJKMNP-TV-Z]{26}$"
                           },
-                          "deviceName": {
+                          "device_name": {
                             "type": "string"
                           },
-                          "totpVerifiedAt": {
+                          "totp_verified_at": {
                             "anyOf": [
                               {
                                 "type": "string"
@@ -2135,13 +2135,13 @@
                               }
                             ]
                           },
-                          "createdAt": {
+                          "created_at": {
                             "type": "string"
                           },
-                          "expiresAt": {
+                          "expires_at": {
                             "type": "string"
                           },
-                          "revokedAt": {
+                          "revoked_at": {
                             "anyOf": [
                               {
                                 "type": "string"
@@ -2177,7 +2177,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -2186,7 +2186,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -2214,7 +2214,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -2223,7 +2223,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -2251,7 +2251,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -2260,7 +2260,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -2288,7 +2288,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -2297,7 +2297,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -2355,7 +2355,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -2364,7 +2364,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -2392,7 +2392,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -2401,7 +2401,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -2429,7 +2429,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -2438,7 +2438,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -2466,7 +2466,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -2475,7 +2475,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -2533,7 +2533,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -2542,7 +2542,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -2570,7 +2570,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -2579,7 +2579,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -2607,7 +2607,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -2616,7 +2616,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -2644,7 +2644,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -2653,7 +2653,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -2683,13 +2683,13 @@
                   "$schema": "http://json-schema.org/draft-07/schema#",
                   "type": "object",
                   "required": [
-                    "enrollmentId",
+                    "enrollment_id",
                     "code",
-                    "expiresAt",
-                    "keyFingerprint"
+                    "expires_at",
+                    "key_fingerprint"
                   ],
                   "properties": {
-                    "enrollmentId": {
+                    "enrollment_id": {
                       "type": "string",
                       "description": "a string matching the pattern ^enr_[0-9A-HJKMNP-TV-Z]{26}$",
                       "pattern": "^enr_[0-9A-HJKMNP-TV-Z]{26}$"
@@ -2697,10 +2697,10 @@
                     "code": {
                       "type": "string"
                     },
-                    "expiresAt": {
+                    "expires_at": {
                       "type": "string"
                     },
-                    "keyFingerprint": {
+                    "key_fingerprint": {
                       "type": "string",
                       "description": "a string matching the pattern ^[A-Za-z0-9_-]+$",
                       "pattern": "^[A-Za-z0-9_-]+$"
@@ -2727,7 +2727,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -2736,7 +2736,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -2764,7 +2764,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -2773,7 +2773,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -2862,11 +2862,11 @@
                   "$schema": "http://json-schema.org/draft-07/schema#",
                   "type": "object",
                   "required": [
-                    "enrollmentId",
+                    "enrollment_id",
                     "status"
                   ],
                   "properties": {
-                    "enrollmentId": {
+                    "enrollment_id": {
                       "type": "string",
                       "description": "a string matching the pattern ^enr_[0-9A-HJKMNP-TV-Z]{26}$",
                       "pattern": "^enr_[0-9A-HJKMNP-TV-Z]{26}$"
@@ -2899,7 +2899,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -2908,7 +2908,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -2936,7 +2936,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -2945,7 +2945,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -2973,7 +2973,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -2982,7 +2982,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -3010,7 +3010,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -3019,7 +3019,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -3069,15 +3069,15 @@
                   "$schema": "http://json-schema.org/draft-07/schema#",
                   "type": "object",
                   "required": [
-                    "enrollmentId",
+                    "enrollment_id",
                     "status",
-                    "accountId",
+                    "account_id",
                     "email",
-                    "displayName",
-                    "expiresAt"
+                    "display_name",
+                    "expires_at"
                   ],
                   "properties": {
-                    "enrollmentId": {
+                    "enrollment_id": {
                       "type": "string",
                       "description": "a string matching the pattern ^enr_[0-9A-HJKMNP-TV-Z]{26}$",
                       "pattern": "^enr_[0-9A-HJKMNP-TV-Z]{26}$"
@@ -3092,7 +3092,7 @@
                         "voided"
                       ]
                     },
-                    "accountId": {
+                    "account_id": {
                       "anyOf": [
                         {
                           "type": "string",
@@ -3116,7 +3116,7 @@
                         }
                       ]
                     },
-                    "displayName": {
+                    "display_name": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -3126,7 +3126,7 @@
                         }
                       ]
                     },
-                    "expiresAt": {
+                    "expires_at": {
                       "type": "string"
                     }
                   },
@@ -3151,7 +3151,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -3160,7 +3160,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -3188,7 +3188,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -3197,7 +3197,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -3225,7 +3225,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -3234,7 +3234,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -3264,16 +3264,16 @@
                   "$schema": "http://json-schema.org/draft-07/schema#",
                   "type": "object",
                   "required": [
-                    "machineId",
-                    "accountId"
+                    "machine_id",
+                    "account_id"
                   ],
                   "properties": {
-                    "machineId": {
+                    "machine_id": {
                       "type": "string",
                       "description": "a string matching the pattern ^mch_[0-9A-HJKMNP-TV-Z]{26}$",
                       "pattern": "^mch_[0-9A-HJKMNP-TV-Z]{26}$"
                     },
-                    "accountId": {
+                    "account_id": {
                       "type": "string",
                       "description": "a string matching the pattern ^acct_[0-9A-HJKMNP-TV-Z]{26}$",
                       "pattern": "^acct_[0-9A-HJKMNP-TV-Z]{26}$"
@@ -3300,7 +3300,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -3309,7 +3309,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -3337,7 +3337,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -3346,7 +3346,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -3374,7 +3374,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -3383,7 +3383,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -3456,11 +3456,11 @@
                         "type": "object",
                         "required": [
                           "id",
-                          "publicKey",
+                          "public_key",
                           "label",
-                          "createdAt",
-                          "revokedAt",
-                          "lastSeenAt"
+                          "created_at",
+                          "revoked_at",
+                          "last_seen_at"
                         ],
                         "properties": {
                           "id": {
@@ -3468,7 +3468,7 @@
                             "description": "a string matching the pattern ^mch_[0-9A-HJKMNP-TV-Z]{26}$",
                             "pattern": "^mch_[0-9A-HJKMNP-TV-Z]{26}$"
                           },
-                          "publicKey": {
+                          "public_key": {
                             "type": "object",
                             "required": [
                               "kty",
@@ -3499,10 +3499,10 @@
                           "label": {
                             "type": "string"
                           },
-                          "createdAt": {
+                          "created_at": {
                             "type": "string"
                           },
-                          "revokedAt": {
+                          "revoked_at": {
                             "anyOf": [
                               {
                                 "type": "string"
@@ -3512,7 +3512,7 @@
                               }
                             ]
                           },
-                          "lastSeenAt": {
+                          "last_seen_at": {
                             "anyOf": [
                               {
                                 "type": "string"
@@ -3548,7 +3548,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -3557,7 +3557,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -3585,7 +3585,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -3594,7 +3594,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -3622,7 +3622,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -3631,7 +3631,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -3659,7 +3659,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -3668,7 +3668,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -3726,7 +3726,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -3735,7 +3735,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -3763,7 +3763,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -3772,7 +3772,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -3800,7 +3800,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -3809,7 +3809,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -3837,7 +3837,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -3846,7 +3846,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -3877,13 +3877,13 @@
                   "type": "object",
                   "required": [
                     "token",
-                    "expiresAt"
+                    "expires_at"
                   ],
                   "properties": {
                     "token": {
                       "type": "string"
                     },
-                    "expiresAt": {
+                    "expires_at": {
                       "type": "string"
                     }
                   },
@@ -3908,7 +3908,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -3917,7 +3917,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -3945,7 +3945,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -3954,7 +3954,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -3982,7 +3982,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -3991,7 +3991,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -4122,7 +4122,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -4131,7 +4131,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -4159,7 +4159,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -4168,7 +4168,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -4218,7 +4218,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -4227,7 +4227,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -4255,7 +4255,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -4264,7 +4264,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -4297,9 +4297,9 @@
                     "id",
                     "provider",
                     "label",
-                    "createdAt",
-                    "revokedAt",
-                    "assignedMachineIds"
+                    "created_at",
+                    "revoked_at",
+                    "assigned_machine_ids"
                   ],
                   "properties": {
                     "id": {
@@ -4319,10 +4319,10 @@
                     "label": {
                       "type": "string"
                     },
-                    "createdAt": {
+                    "created_at": {
                       "type": "string"
                     },
-                    "revokedAt": {
+                    "revoked_at": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -4332,7 +4332,7 @@
                         }
                       ]
                     },
-                    "assignedMachineIds": {
+                    "assigned_machine_ids": {
                       "type": "array",
                       "items": {
                         "type": "string",
@@ -4362,7 +4362,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -4371,7 +4371,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -4399,7 +4399,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -4408,7 +4408,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -4436,7 +4436,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -4445,7 +4445,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -4473,7 +4473,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -4482,7 +4482,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -4554,9 +4554,9 @@
                           "id",
                           "provider",
                           "label",
-                          "createdAt",
-                          "revokedAt",
-                          "assignedMachineIds"
+                          "created_at",
+                          "revoked_at",
+                          "assigned_machine_ids"
                         ],
                         "properties": {
                           "id": {
@@ -4576,10 +4576,10 @@
                           "label": {
                             "type": "string"
                           },
-                          "createdAt": {
+                          "created_at": {
                             "type": "string"
                           },
-                          "revokedAt": {
+                          "revoked_at": {
                             "anyOf": [
                               {
                                 "type": "string"
@@ -4589,7 +4589,7 @@
                               }
                             ]
                           },
-                          "assignedMachineIds": {
+                          "assigned_machine_ids": {
                             "type": "array",
                             "items": {
                               "type": "string",
@@ -4623,7 +4623,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -4632,7 +4632,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -4660,7 +4660,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -4669,7 +4669,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -4697,7 +4697,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -4706,7 +4706,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -4764,7 +4764,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -4773,7 +4773,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -4801,7 +4801,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -4810,7 +4810,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -4838,7 +4838,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -4847,7 +4847,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -4875,7 +4875,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -4884,7 +4884,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -4914,16 +4914,16 @@
                   "$schema": "http://json-schema.org/draft-07/schema#",
                   "type": "object",
                   "required": [
-                    "connectionId",
-                    "machineId"
+                    "connection_id",
+                    "machine_id"
                   ],
                   "properties": {
-                    "connectionId": {
+                    "connection_id": {
                       "type": "string",
                       "description": "a string matching the pattern ^conn_[0-9A-HJKMNP-TV-Z]{26}$",
                       "pattern": "^conn_[0-9A-HJKMNP-TV-Z]{26}$"
                     },
-                    "machineId": {
+                    "machine_id": {
                       "type": "string",
                       "description": "a string matching the pattern ^mch_[0-9A-HJKMNP-TV-Z]{26}$",
                       "pattern": "^mch_[0-9A-HJKMNP-TV-Z]{26}$"
@@ -4950,7 +4950,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -4959,7 +4959,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -4987,7 +4987,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -4996,7 +4996,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -5024,7 +5024,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -5033,7 +5033,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -5061,7 +5061,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -5070,7 +5070,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -5156,7 +5156,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -5165,7 +5165,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -5193,7 +5193,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -5202,7 +5202,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -5230,7 +5230,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -5239,7 +5239,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -5267,7 +5267,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -5276,7 +5276,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -5372,7 +5372,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -5381,7 +5381,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -5409,7 +5409,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -5418,7 +5418,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -5446,7 +5446,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -5455,7 +5455,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -5515,7 +5515,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -5524,7 +5524,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -5552,7 +5552,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -5561,7 +5561,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -5589,7 +5589,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -5598,7 +5598,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -5626,7 +5626,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -5635,7 +5635,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -5782,11 +5782,11 @@
                           "engine",
                           "kind",
                           "label",
-                          "formatVersion",
-                          "exportedAt",
-                          "createdAt",
-                          "revokedAt",
-                          "assignedMachineIds"
+                          "format_version",
+                          "exported_at",
+                          "created_at",
+                          "revoked_at",
+                          "assigned_machine_ids"
                         ],
                         "properties": {
                           "id": {
@@ -5812,16 +5812,16 @@
                           "label": {
                             "type": "string"
                           },
-                          "formatVersion": {
+                          "format_version": {
                             "type": "string"
                           },
-                          "exportedAt": {
+                          "exported_at": {
                             "type": "string"
                           },
-                          "createdAt": {
+                          "created_at": {
                             "type": "string"
                           },
-                          "revokedAt": {
+                          "revoked_at": {
                             "anyOf": [
                               {
                                 "type": "string"
@@ -5831,7 +5831,7 @@
                               }
                             ]
                           },
-                          "assignedMachineIds": {
+                          "assigned_machine_ids": {
                             "type": "array",
                             "items": {
                               "type": "string",
@@ -5865,7 +5865,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -5874,7 +5874,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -5902,7 +5902,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -5911,7 +5911,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -5939,7 +5939,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -5948,7 +5948,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -6006,7 +6006,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -6015,7 +6015,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -6043,7 +6043,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -6052,7 +6052,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -6080,7 +6080,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -6089,7 +6089,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -6117,7 +6117,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -6126,7 +6126,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -6156,16 +6156,16 @@
                   "$schema": "http://json-schema.org/draft-07/schema#",
                   "type": "object",
                   "required": [
-                    "artifactId",
-                    "machineId"
+                    "artifact_id",
+                    "machine_id"
                   ],
                   "properties": {
-                    "artifactId": {
+                    "artifact_id": {
                       "type": "string",
                       "description": "a string matching the pattern ^art_[0-9A-HJKMNP-TV-Z]{26}$",
                       "pattern": "^art_[0-9A-HJKMNP-TV-Z]{26}$"
                     },
-                    "machineId": {
+                    "machine_id": {
                       "type": "string",
                       "description": "a string matching the pattern ^mch_[0-9A-HJKMNP-TV-Z]{26}$",
                       "pattern": "^mch_[0-9A-HJKMNP-TV-Z]{26}$"
@@ -6192,7 +6192,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -6201,7 +6201,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -6229,7 +6229,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -6238,7 +6238,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -6266,7 +6266,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -6275,7 +6275,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -6303,7 +6303,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -6312,7 +6312,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -6398,7 +6398,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -6407,7 +6407,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -6435,7 +6435,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -6444,7 +6444,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -6472,7 +6472,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -6481,7 +6481,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -6509,7 +6509,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -6518,7 +6518,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -6585,8 +6585,8 @@
                         "format",
                         "engine",
                         "kind",
-                        "exportedAt",
-                        "expiresAt",
+                        "exported_at",
+                        "expires_at",
                         "files"
                       ],
                       "properties": {
@@ -6611,10 +6611,10 @@
                             "api_key"
                           ]
                         },
-                        "exportedAt": {
+                        "exported_at": {
                           "type": "string"
                         },
-                        "expiresAt": {
+                        "expires_at": {
                           "anyOf": [
                             {
                               "type": "string"
@@ -6633,7 +6633,7 @@
                               "path",
                               "mode",
                               "sha256",
-                              "contentBase64"
+                              "content_base64"
                             ],
                             "properties": {
                               "path": {
@@ -6651,7 +6651,7 @@
                                 "description": "a string matching the pattern ^[0-9a-f]{64}$",
                                 "pattern": "^[0-9a-f]{64}$"
                               },
-                              "contentBase64": {
+                              "content_base64": {
                                 "type": "string",
                                 "description": "a string matching the pattern ^[A-Za-z0-9_-]+$",
                                 "pattern": "^[A-Za-z0-9_-]+$"
@@ -6688,7 +6688,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -6697,7 +6697,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -6725,7 +6725,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -6734,7 +6734,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -6762,7 +6762,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -6771,7 +6771,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -6803,9 +6803,9 @@
                   "required": [
                     "id",
                     "version",
-                    "contentHash",
-                    "r2Key",
-                    "createdAt"
+                    "content_hash",
+                    "r2_key",
+                    "created_at"
                   ],
                   "properties": {
                     "id": {
@@ -6816,15 +6816,15 @@
                     "version": {
                       "type": "number"
                     },
-                    "contentHash": {
+                    "content_hash": {
                       "type": "string",
                       "description": "a string matching the pattern ^[0-9a-f]{64}$",
                       "pattern": "^[0-9a-f]{64}$"
                     },
-                    "r2Key": {
+                    "r2_key": {
                       "type": "string"
                     },
-                    "createdAt": {
+                    "created_at": {
                       "type": "string"
                     }
                   },
@@ -6849,7 +6849,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -6858,7 +6858,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -6886,7 +6886,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -6895,7 +6895,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -6923,7 +6923,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -6932,7 +6932,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -6960,7 +6960,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -6969,7 +6969,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -7178,9 +7178,9 @@
                           "required": [
                             "id",
                             "version",
-                            "contentHash",
-                            "r2Key",
-                            "createdAt"
+                            "content_hash",
+                            "r2_key",
+                            "created_at"
                           ],
                           "properties": {
                             "id": {
@@ -7191,15 +7191,15 @@
                             "version": {
                               "type": "number"
                             },
-                            "contentHash": {
+                            "content_hash": {
                               "type": "string",
                               "description": "a string matching the pattern ^[0-9a-f]{64}$",
                               "pattern": "^[0-9a-f]{64}$"
                             },
-                            "r2Key": {
+                            "r2_key": {
                               "type": "string"
                             },
-                            "createdAt": {
+                            "created_at": {
                               "type": "string"
                             }
                           },
@@ -7216,7 +7216,7 @@
                           "type": "object",
                           "required": [
                             "format",
-                            "mcpServers",
+                            "mcp_servers",
                             "skills"
                           ],
                           "properties": {
@@ -7226,7 +7226,7 @@
                                 "ast-editor-config/1"
                               ]
                             },
-                            "mcpServers": {
+                            "mcp_servers": {
                               "type": "array",
                               "items": {
                                 "type": "object",
@@ -7307,7 +7307,7 @@
                                           "type": "object",
                                           "required": [
                                             "path",
-                                            "contentBase64",
+                                            "content_base64",
                                             "sha256"
                                           ],
                                           "properties": {
@@ -7318,7 +7318,7 @@
                                               "minLength": 1,
                                               "maxLength": 256
                                             },
-                                            "contentBase64": {
+                                            "content_base64": {
                                               "type": "string",
                                               "description": "a string matching the pattern ^[A-Za-z0-9_-]+$",
                                               "pattern": "^[A-Za-z0-9_-]+$"
@@ -7343,7 +7343,7 @@
                                 "additionalProperties": false
                               }
                             },
-                            "globalPrompt": {
+                            "global_prompt": {
                               "type": "string"
                             }
                           },
@@ -7387,7 +7387,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -7396,7 +7396,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -7424,7 +7424,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -7433,7 +7433,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -7461,7 +7461,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -7470,7 +7470,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -7556,7 +7556,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -7565,7 +7565,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -7593,7 +7593,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -7602,7 +7602,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -7630,7 +7630,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -7639,7 +7639,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -7680,18 +7680,18 @@
                   "$schema": "http://json-schema.org/draft-07/schema#",
                   "type": "object",
                   "required": [
-                    "machineId",
-                    "bundleId",
+                    "machine_id",
+                    "bundle_id",
                     "status",
-                    "appliedAt"
+                    "applied_at"
                   ],
                   "properties": {
-                    "machineId": {
+                    "machine_id": {
                       "type": "string",
                       "description": "a string matching the pattern ^mch_[0-9A-HJKMNP-TV-Z]{26}$",
                       "pattern": "^mch_[0-9A-HJKMNP-TV-Z]{26}$"
                     },
-                    "bundleId": {
+                    "bundle_id": {
                       "type": "string",
                       "description": "a string matching the pattern ^bundle_[0-9A-HJKMNP-TV-Z]{26}$",
                       "pattern": "^bundle_[0-9A-HJKMNP-TV-Z]{26}$"
@@ -7703,7 +7703,7 @@
                         "failed"
                       ]
                     },
-                    "appliedAt": {
+                    "applied_at": {
                       "type": "string"
                     }
                   },
@@ -7728,7 +7728,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -7737,7 +7737,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -7765,7 +7765,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -7774,7 +7774,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -7802,7 +7802,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -7811,7 +7811,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -7872,18 +7872,18 @@
                   "$schema": "http://json-schema.org/draft-07/schema#",
                   "type": "object",
                   "required": [
-                    "machineId",
-                    "bundleId",
+                    "machine_id",
+                    "bundle_id",
                     "status",
-                    "appliedAt"
+                    "applied_at"
                   ],
                   "properties": {
-                    "machineId": {
+                    "machine_id": {
                       "type": "string",
                       "description": "a string matching the pattern ^mch_[0-9A-HJKMNP-TV-Z]{26}$",
                       "pattern": "^mch_[0-9A-HJKMNP-TV-Z]{26}$"
                     },
-                    "bundleId": {
+                    "bundle_id": {
                       "type": "string",
                       "description": "a string matching the pattern ^bundle_[0-9A-HJKMNP-TV-Z]{26}$",
                       "pattern": "^bundle_[0-9A-HJKMNP-TV-Z]{26}$"
@@ -7895,7 +7895,7 @@
                         "failed"
                       ]
                     },
-                    "appliedAt": {
+                    "applied_at": {
                       "type": "string"
                     }
                   },
@@ -7920,7 +7920,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -7929,7 +7929,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -7957,7 +7957,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -7966,7 +7966,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -7994,7 +7994,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -8003,7 +8003,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -8031,7 +8031,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -8040,7 +8040,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -8079,11 +8079,11 @@
                         "type": "object",
                         "required": [
                           "id",
-                          "machineId",
+                          "machine_id",
                           "kind",
                           "detail",
                           "ip",
-                          "createdAt"
+                          "created_at"
                         ],
                         "properties": {
                           "id": {
@@ -8091,7 +8091,7 @@
                             "description": "a string matching the pattern ^evt_[0-9A-HJKMNP-TV-Z]{26}$",
                             "pattern": "^evt_[0-9A-HJKMNP-TV-Z]{26}$"
                           },
-                          "machineId": {
+                          "machine_id": {
                             "anyOf": [
                               {
                                 "type": "string",
@@ -8120,7 +8120,7 @@
                               }
                             ]
                           },
-                          "createdAt": {
+                          "created_at": {
                             "type": "string"
                           }
                         },
@@ -8149,7 +8149,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -8158,7 +8158,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -8186,7 +8186,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -8195,7 +8195,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -8223,7 +8223,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -8232,7 +8232,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -8260,7 +8260,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -8269,7 +8269,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -8300,9 +8300,9 @@
                   "type": "object",
                   "required": [
                     "status",
-                    "requestedAt",
-                    "purgeAfter",
-                    "completedAt"
+                    "requested_at",
+                    "purge_after",
+                    "completed_at"
                   ],
                   "properties": {
                     "status": {
@@ -8314,7 +8314,7 @@
                         "done"
                       ]
                     },
-                    "requestedAt": {
+                    "requested_at": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -8324,7 +8324,7 @@
                         }
                       ]
                     },
-                    "purgeAfter": {
+                    "purge_after": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -8334,7 +8334,7 @@
                         }
                       ]
                     },
-                    "completedAt": {
+                    "completed_at": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -8366,7 +8366,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -8375,7 +8375,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -8403,7 +8403,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -8412,7 +8412,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -8440,7 +8440,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -8449,7 +8449,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -8477,7 +8477,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -8486,7 +8486,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -8535,9 +8535,9 @@
                   "type": "object",
                   "required": [
                     "status",
-                    "requestedAt",
-                    "purgeAfter",
-                    "completedAt"
+                    "requested_at",
+                    "purge_after",
+                    "completed_at"
                   ],
                   "properties": {
                     "status": {
@@ -8549,7 +8549,7 @@
                         "done"
                       ]
                     },
-                    "requestedAt": {
+                    "requested_at": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -8559,7 +8559,7 @@
                         }
                       ]
                     },
-                    "purgeAfter": {
+                    "purge_after": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -8569,7 +8569,7 @@
                         }
                       ]
                     },
-                    "completedAt": {
+                    "completed_at": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -8601,7 +8601,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -8610,7 +8610,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -8638,7 +8638,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -8647,7 +8647,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -8675,7 +8675,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -8684,7 +8684,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -8712,7 +8712,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -8721,7 +8721,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -8752,9 +8752,9 @@
                   "type": "object",
                   "required": [
                     "status",
-                    "requestedAt",
-                    "purgeAfter",
-                    "completedAt"
+                    "requested_at",
+                    "purge_after",
+                    "completed_at"
                   ],
                   "properties": {
                     "status": {
@@ -8766,7 +8766,7 @@
                         "done"
                       ]
                     },
-                    "requestedAt": {
+                    "requested_at": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -8776,7 +8776,7 @@
                         }
                       ]
                     },
-                    "purgeAfter": {
+                    "purge_after": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -8786,7 +8786,7 @@
                         }
                       ]
                     },
-                    "completedAt": {
+                    "completed_at": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -8818,7 +8818,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -8827,7 +8827,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -8855,7 +8855,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -8864,7 +8864,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -8892,7 +8892,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -8901,7 +8901,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },
@@ -8929,7 +8929,7 @@
                       "required": [
                         "code",
                         "message",
-                        "requestId"
+                        "request_id"
                       ],
                       "properties": {
                         "code": {
@@ -8938,7 +8938,7 @@
                         "message": {
                           "type": "string"
                         },
-                        "requestId": {
+                        "request_id": {
                           "type": "string"
                         }
                       },

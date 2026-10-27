@@ -8,6 +8,14 @@ import { JSONSchema, Schema } from "effect";
 // Rules: requests decode STRICT (unknown fields rejected); responses are
 // read forward-compatibly by peers (unknown fields ignored). SQL-inferred
 // row types are private and never re-exported here.
+//
+// Wire rule (greenfield v1 breaking): ALL Core-owned JSON response field
+// names are snake_case, recursively. REQUEST shapes stay camelCase as
+// currently defined. Shared envelope/manifest types therefore SPLIT:
+//   EngineArtifactEnvelope (request, camel) vs EngineArtifactEnvelopeResp
+//   EditorManifest (request, camel) vs EditorManifestResp (response, snake)
+// Standard third-party formats keep mandated names (JWK/JWT/OpenAPI,
+// provider opaque bytes values unchanged, only key names migrate).
 
 // ---------------------------------------------------------------------------
 // Primitives
@@ -59,7 +67,7 @@ export const ErrorBody = Schema.Struct({
   error: Schema.Struct({
     code: Schema.String,
     message: Schema.String,
-    requestId: Schema.String }) });
+    request_id: Schema.String }) });
 
 // ---------------------------------------------------------------------------
 // Grant JWT claims (mirrors the signed JWT payload; cnf binds the key)
@@ -96,29 +104,29 @@ export const MagicRequest = Schema.Struct({
   displayName: Schema.optional(Schema.String),
   deviceName: Schema.optional(Schema.String) });
 export const MagicRequestResp = Schema.Struct({
-  requestId: LoginRequestId,
+  request_id: LoginRequestId,
   // Returned ONCE to the originating session only (never emailed, never
   // logged). The email token alone can never mint a session.
-  requestSecret: Schema.String,
-  expiresAt: Rfc3339 });
+  request_secret: Schema.String,
+  expires_at: Rfc3339 });
 
 export const MagicStatusReq = Schema.Struct({
   requestId: LoginRequestId,
   requestSecret: Schema.String });
 export const MagicStatusResp = Schema.Struct({
-  requestId: LoginRequestId,
+  request_id: LoginRequestId,
   status: Schema.Literal("pending", "email_approved", "completed", "expired"),
-  totpRequired: Schema.Boolean,
+  totp_required: Schema.Boolean,
   email: Email,
-  expiresAt: Rfc3339 });
+  expires_at: Rfc3339 });
 
 export const MagicConsumeReq = Schema.Struct({
   token: Schema.String,
   requestSecret: Schema.optional(Schema.String) });
 export const MagicConsumeResp = Schema.Struct({
-  requestId: LoginRequestId,
+  request_id: LoginRequestId,
   status: Schema.Literal("pending", "email_approved", "completed", "expired"),
-  totpRequired: Schema.Boolean });
+  totp_required: Schema.Boolean });
 
 export const MagicConfirmResp = Schema.Struct({
   status: Schema.Literal("confirmation_required") });
@@ -129,14 +137,14 @@ export const MagicFinalizeReq = Schema.Struct({
   totpCode: Schema.optional(Schema.String),
   recoveryCode: Schema.optional(Schema.String) });
 export const MagicFinalizeResp = Schema.Struct({
-  sessionId: SessionId,
-  accountId: AccountId,
-  expiresAt: Rfc3339,
-  totpVerified: Schema.Boolean });
+  session_id: SessionId,
+  account_id: AccountId,
+  expires_at: Rfc3339,
+  totp_verified: Schema.Boolean });
 
 export const TotpEnrollResp = Schema.Struct({
-  otpauthUrl: Schema.String,
-  recoveryCodes: Schema.Array(Schema.String) });
+  otpauth_url: Schema.String,
+  recovery_codes: Schema.Array(Schema.String) });
 export const TotpVerifyReq = Schema.Struct({ code: Schema.String });
 export const TotpVerifyResp = Schema.Struct({ enrolled: Schema.Boolean });
 export const TotpDisableReq = Schema.Struct({ code: Schema.String });
@@ -144,34 +152,34 @@ export const TotpDisableResp = Schema.Struct({ disabled: Schema.Boolean });
 
 export const SessionInfo = Schema.Struct({
   id: SessionId,
-  deviceName: Schema.String,
-  totpVerifiedAt: Schema.NullOr(Rfc3339),
-  createdAt: Rfc3339,
-  expiresAt: Rfc3339,
-  revokedAt: Schema.NullOr(Rfc3339) });
+  device_name: Schema.String,
+  totp_verified_at: Schema.NullOr(Rfc3339),
+  created_at: Rfc3339,
+  expires_at: Rfc3339,
+  revoked_at: Schema.NullOr(Rfc3339) });
 export const SessionListResp = Schema.Struct({ sessions: Schema.Array(SessionInfo) });
 
 // Login gives the account its Forges, provider connections, and config.
 export const MeMachine = Schema.Struct({
   id: MachineId,
-  publicKey: JwkOkp,
+  public_key: JwkOkp,
   label: Schema.String,
-  createdAt: Rfc3339,
-  revokedAt: Schema.NullOr(Rfc3339) });
+  created_at: Rfc3339,
+  revoked_at: Schema.NullOr(Rfc3339) });
 export const MeProvider = Schema.Struct({
   id: ConnectionId,
   provider: Schema.String,
   label: Schema.String,
-  revokedAt: Schema.NullOr(Rfc3339),
-  assignedMachineIds: Schema.Array(MachineId) });
+  revoked_at: Schema.NullOr(Rfc3339),
+  assigned_machine_ids: Schema.Array(MachineId) });
 export const MeResp = Schema.Struct({
-  accountId: AccountId,
+  account_id: AccountId,
   email: Email,
-  displayName: Schema.String,
-  totpEnrolled: Schema.Boolean,
+  display_name: Schema.String,
+  totp_enrolled: Schema.Boolean,
   machines: Schema.Array(MeMachine),
-  providerConnections: Schema.Array(MeProvider),
-  latestConfigVersion: Schema.NullOr(Schema.Number) });
+  provider_connections: Schema.Array(MeProvider),
+  latest_config_version: Schema.NullOr(Schema.Number) });
 
 // ---------------------------------------------------------------------------
 // Machines: enrollment + registry
@@ -183,39 +191,39 @@ export const EnrollmentStartReq = Schema.Struct({
   timestamp: Schema.Number,
   proof: Base64url });
 export const EnrollmentStartResp = Schema.Struct({
-  enrollmentId: EnrollmentId,
+  enrollment_id: EnrollmentId,
   code: Schema.String,
-  expiresAt: Rfc3339,
-  keyFingerprint: Base64url });
+  expires_at: Rfc3339,
+  key_fingerprint: Base64url });
 
 export const EnrollmentClaimReq = Schema.Struct({ code: Schema.String });
 export const EnrollmentClaimResp = Schema.Struct({
-  enrollmentId: EnrollmentId,
+  enrollment_id: EnrollmentId,
   status: Schema.Literal("claimed") });
 
 export const EnrollmentStatusResp = Schema.Struct({
-  enrollmentId: EnrollmentId,
+  enrollment_id: EnrollmentId,
   status: Schema.Literal("pending", "claimed", "confirmed", "expired", "voided"),
-  accountId: Schema.NullOr(AccountId),
+  account_id: Schema.NullOr(AccountId),
   email: Schema.NullOr(Email),
-  displayName: Schema.NullOr(Schema.String),
-  expiresAt: Rfc3339 });
+  display_name: Schema.NullOr(Schema.String),
+  expires_at: Rfc3339 });
 
 export const EnrollmentConfirmReq = Schema.Struct({
   enrollmentId: EnrollmentId,
   accountId: AccountId,
   confirmation: Base64url });
 export const EnrollmentConfirmResp = Schema.Struct({
-  machineId: MachineId,
-  accountId: AccountId });
+  machine_id: MachineId,
+  account_id: AccountId });
 
 export const MachineInfo = Schema.Struct({
   id: MachineId,
-  publicKey: JwkOkp,
+  public_key: JwkOkp,
   label: Schema.String,
-  createdAt: Rfc3339,
-  revokedAt: Schema.NullOr(Rfc3339),
-  lastSeenAt: Schema.NullOr(Rfc3339) });
+  created_at: Rfc3339,
+  revoked_at: Schema.NullOr(Rfc3339),
+  last_seen_at: Schema.NullOr(Rfc3339) });
 export const MachineListResp = Schema.Struct({ machines: Schema.Array(MachineInfo) });
 
 // ---------------------------------------------------------------------------
@@ -230,7 +238,7 @@ export const GrantIssueReq = Schema.Struct({
   cnf: Schema.optional(JwkOkp) });
 export const GrantIssueResp = Schema.Struct({
   token: Schema.String,
-  expiresAt: Rfc3339 });
+  expires_at: Rfc3339 });
 
 export const JwksResp = Schema.Struct({
   keys: Schema.Array(
@@ -245,9 +253,9 @@ export const JwksResp = Schema.Struct({
 export type JwksResp = typeof JwksResp.Type;
 
 export const RevocationsResp = Schema.Struct({
-  revokedMachineIds: Schema.Array(MachineId),
-  revokedKeyIds: Schema.Array(Schema.String),
-  asOf: Rfc3339 });
+  revoked_machine_ids: Schema.Array(MachineId),
+  revoked_key_ids: Schema.Array(Schema.String),
+  as_of: Rfc3339 });
 
 // ---------------------------------------------------------------------------
 // Vault: provider API keys (API keys only; Core performs no OAuth)
@@ -264,21 +272,24 @@ export const ProviderInfo = Schema.Struct({
   id: ConnectionId,
   provider: ProviderKind,
   label: Schema.String,
-  createdAt: Rfc3339,
-  revokedAt: Schema.NullOr(Rfc3339),
-  assignedMachineIds: Schema.Array(MachineId) });
+  created_at: Rfc3339,
+  revoked_at: Schema.NullOr(Rfc3339),
+  assigned_machine_ids: Schema.Array(MachineId) });
 export const ProviderListResp = Schema.Struct({ connections: Schema.Array(ProviderInfo) });
 
 export const AssignReq = Schema.Struct({
   connectionId: ConnectionId,
   machineId: MachineId });
 export const AssignResp = Schema.Struct({
-  connectionId: ConnectionId,
-  machineId: MachineId });
+  connection_id: ConnectionId,
+  machine_id: MachineId });
 
 export const ArtifactAssignReq = Schema.Struct({
   artifactId: ArtifactId,
   machineId: MachineId });
+export const ArtifactAssignResp = Schema.Struct({
+  artifact_id: ArtifactId,
+  machine_id: MachineId });
 
 export const CredentialResp = Schema.Struct({
   provider: ProviderKind,
@@ -286,8 +297,9 @@ export const CredentialResp = Schema.Struct({
 
 // ---------------------------------------------------------------------------
 // Engine artifacts: opaque envelopes from the harness's own local login.
-// Core validates the envelope SHAPE; inner file bytes stay opaque.
-// Core performs no OAuth for engines either.
+// Request shape stays camelCase (strict decode); response shape is
+// snake_case (EngineArtifactEnvelopeResp). Core validates the envelope
+// SHAPE; inner file bytes stay opaque. Core performs no OAuth.
 // ---------------------------------------------------------------------------
 
 export const ArtifactFile = Schema.Struct({
@@ -296,6 +308,13 @@ export const ArtifactFile = Schema.Struct({
   sha256: Sha256Hex,
   contentBase64: Base64url });
 export type ArtifactFile = typeof ArtifactFile.Type;
+
+export const ArtifactFileResp = Schema.Struct({
+  path: Schema.String,
+  mode: Schema.Literal("0600", "0400"),
+  sha256: Sha256Hex,
+  content_base64: Base64url });
+export type ArtifactFileResp = typeof ArtifactFileResp.Type;
 
 export const EngineArtifactEnvelope = Schema.Struct({
   format: Schema.Literal("ast-engine-credential/1"),
@@ -307,6 +326,16 @@ export const EngineArtifactEnvelope = Schema.Struct({
   note: Schema.optional(Schema.String) });
 export type EngineArtifactEnvelope = typeof EngineArtifactEnvelope.Type;
 
+export const EngineArtifactEnvelopeResp = Schema.Struct({
+  format: Schema.Literal("ast-engine-credential/1"),
+  engine: Schema.Literal("claude", "codex", "opencode"),
+  kind: Schema.Literal("oauth", "api_key"),
+  exported_at: Rfc3339,
+  expires_at: Schema.NullOr(Rfc3339),
+  files: Schema.NonEmptyArray(ArtifactFileResp),
+  note: Schema.optional(Schema.String) });
+export type EngineArtifactEnvelopeResp = typeof EngineArtifactEnvelopeResp.Type;
+
 export const ArtifactCreateReq = Schema.Struct({
   label: Schema.optional(Schema.String),
   envelope: EngineArtifactEnvelope });
@@ -315,16 +344,19 @@ export const ArtifactInfo = Schema.Struct({
   engine: Schema.Literal("claude", "codex", "opencode"),
   kind: Schema.Literal("oauth", "api_key"),
   label: Schema.String,
-  formatVersion: Schema.String,
-  exportedAt: Rfc3339,
-  createdAt: Rfc3339,
-  revokedAt: Schema.NullOr(Rfc3339),
-  assignedMachineIds: Schema.Array(MachineId) });
+  format_version: Schema.String,
+  exported_at: Rfc3339,
+  created_at: Rfc3339,
+  revoked_at: Schema.NullOr(Rfc3339),
+  assigned_machine_ids: Schema.Array(MachineId) });
 export const ArtifactListResp = Schema.Struct({ artifacts: Schema.Array(ArtifactInfo) });
-export const ArtifactDownloadResp = Schema.Struct({ envelope: EngineArtifactEnvelope });
+export const ArtifactDownloadResp = Schema.Struct({ envelope: EngineArtifactEnvelopeResp });
 
 // ---------------------------------------------------------------------------
 // Editor configuration: versioned MCP/skill bundles + applied revisions
+// Request manifest stays camelCase; response manifest is snake_case
+// (EditorManifestResp). content_hash always hashes the exact snake
+// canonical bytes served via bundle_latest / manifest bytes.
 // ---------------------------------------------------------------------------
 
 export const McpServer = Schema.Struct({
@@ -339,6 +371,11 @@ export const SkillFile = Schema.Struct({
   contentBase64: Base64url,
   sha256: Sha256Hex });
 export type SkillFile = typeof SkillFile.Type;
+export const SkillFileResp = Schema.Struct({
+  path: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(256)),
+  content_base64: Base64url,
+  sha256: Sha256Hex });
+export type SkillFileResp = typeof SkillFileResp.Type;
 export const SkillRef = Schema.Struct({
   name: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(120)),
   // Where an already-installed skill lives (local path/URL understood by
@@ -353,6 +390,14 @@ export const SkillRef = Schema.Struct({
     Schema.Struct({
       files: Schema.Array(SkillFile).pipe(Schema.minItems(1), Schema.maxItems(64)) }),
   ) });
+export const SkillRefResp = Schema.Struct({
+  name: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(120)),
+  source: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(2000)),
+  version: Schema.optional(Schema.String.pipe(Schema.maxLength(60))),
+  bundle: Schema.optional(
+    Schema.Struct({
+      files: Schema.Array(SkillFileResp).pipe(Schema.minItems(1), Schema.maxItems(64)) }),
+  ) });
 export const EditorManifest = Schema.Struct({
   format: Schema.Literal("ast-editor-config/1"),
   mcpServers: Schema.Array(McpServer),
@@ -360,26 +405,33 @@ export const EditorManifest = Schema.Struct({
   globalPrompt: Schema.optional(Schema.String) });
 export type EditorManifest = typeof EditorManifest.Type;
 
+export const EditorManifestResp = Schema.Struct({
+  format: Schema.Literal("ast-editor-config/1"),
+  mcp_servers: Schema.Array(McpServer),
+  skills: Schema.Array(SkillRefResp),
+  global_prompt: Schema.optional(Schema.String) });
+export type EditorManifestResp = typeof EditorManifestResp.Type;
+
 export const BundlePublishReq = Schema.Struct({ manifest: EditorManifest });
 export const BundleInfo = Schema.Struct({
   id: BundleId,
   version: Schema.Number,
-  contentHash: Sha256Hex,
-  r2Key: Schema.String,
-  createdAt: Rfc3339 });
+  content_hash: Sha256Hex,
+  r2_key: Schema.String,
+  created_at: Rfc3339 });
 export const BundleLatestResp = Schema.Struct({
   bundle: Schema.NullOr(BundleInfo),
-  manifest: Schema.NullOr(EditorManifest) });
+  manifest: Schema.NullOr(EditorManifestResp) });
 
 export const ConfigStateReq = Schema.Struct({
   bundleId: BundleId,
   status: Schema.Literal("applied", "failed"),
   detail: Schema.optional(Schema.String) });
 export const ConfigStateResp = Schema.Struct({
-  machineId: MachineId,
-  bundleId: BundleId,
+  machine_id: MachineId,
+  bundle_id: BundleId,
   status: Schema.Literal("applied", "failed"),
-  appliedAt: Rfc3339 });
+  applied_at: Rfc3339 });
 
 // ---------------------------------------------------------------------------
 // Activity + deletion + version
@@ -387,25 +439,27 @@ export const ConfigStateResp = Schema.Struct({
 
 export const ActivityEvent = Schema.Struct({
   id: EventId,
-  machineId: Schema.NullOr(MachineId),
+  machine_id: Schema.NullOr(MachineId),
   kind: Schema.String,
+  // Opaque to Core: Core-generated keys inside detail are already
+  // snake_case (machine_id, ip); user/provider maps stay untouched.
   detail: Schema.Unknown,
   ip: Schema.NullOr(Schema.String),
-  createdAt: Rfc3339 });
+  created_at: Rfc3339 });
 export const ActivityResp = Schema.Struct({ events: Schema.Array(ActivityEvent) });
 
 export const DeletionRequestReq = Schema.Struct({
   totpCode: Schema.optional(Schema.String) });
 export const DeletionStatusResp = Schema.Struct({
   status: Schema.Literal("none", "pending", "cancelled", "done"),
-  requestedAt: Schema.NullOr(Rfc3339),
-  purgeAfter: Schema.NullOr(Rfc3339),
-  completedAt: Schema.NullOr(Rfc3339) });
+  requested_at: Schema.NullOr(Rfc3339),
+  purge_after: Schema.NullOr(Rfc3339),
+  completed_at: Schema.NullOr(Rfc3339) });
 
 export const VersionResp = Schema.Struct({
   api: Schema.String,
   contracts: Schema.String,
-  jwksUri: Schema.String,
+  jwks_uri: Schema.String,
   openapi: Schema.String });
 
 // ---------------------------------------------------------------------------
