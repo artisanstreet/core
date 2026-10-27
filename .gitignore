@@ -8,8 +8,10 @@ dist/
 # Stage-specific deploy env files (secrets). Only *.example files are committed.
 .env.*
 !*.example
+!.env.schema
 infra/.env*
 !infra/.env.example
+!infra/.env.schema
 .reylo/
 .wrangler/
 .alchemy/

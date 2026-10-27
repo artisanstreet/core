@@ -5,38 +5,21 @@
 // driver's simple-query mode (multi-statement files), bookkeeping through
 // the driver's file loader. No SQL lives in this script: every statement
 // is in db/migrations/*.sql or db/migrate-helpers/*.sql.
+//
+// Env comes from `varlock run` (validates .env.schema, explicit DATABASE_URL
+// in the ambient environment wins); no custom dotenv parsing here.
 import { readdir, readFile as read_file } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath as file_url_to_path } from "node:url";
 import postgres from "postgres";
-import { Either } from "effect";
 
 const root = path.dirname(path.dirname(file_url_to_path(import.meta.url)));
 const migrations_dir = path.join(root, "db", "migrations");
 const helpers_dir = path.join(root, "db", "migrate-helpers");
 
-// Minimal .env loader (config, not SQL): KEY=VALUE lines, no interpolation.
-for (const name of [".env.local", ".env"]) {
-  const loaded = await read_file(path.join(root, name), "utf8").then(
-    (text) => Either.right(text),
-    () => Either.left(null as const),
-  );
-  if (Either.isLeft(loaded)) continue;
-  const text = loaded.right;
-  for (const line of text.split("\n")) {
-    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
-    if (m && process.env[m[1]] === undefined) {
-      let v = m[2].trim();
-      if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
-        v = v.slice(1, -1);
-      }
-      process.env[m[1]] = v;
-    }
-  }
-}
 const url = process.env.DATABASE_URL;
 if (!url) {
-  console.error("DATABASE_URL is not set (see .env.example)");
+  console.error("DATABASE_URL is not set (run via `varlock run`, see .env.schema)");
   process.exit(1);
 }
 const sql = postgres(url, { max: 1 });

@@ -11,8 +11,8 @@
     "build:web": "pnpm --dir ../web run build",
     "build": "pnpm run build:web && pnpm run build:worker",
     "check": "pnpm run build && pnpm run typecheck && pnpm run test",
-    "deploy": "pnpm run build && pnpm exec alchemy deploy --config alchemy.run.ts",
-    "plan": "pnpm run build && pnpm exec alchemy deploy --dry-run --config alchemy.run.ts",
+    "deploy": "pnpm run build && varlock run --inject vars -- pnpm exec alchemy deploy --config alchemy.run.ts",
+    "plan": "pnpm run build && varlock run --inject vars -- pnpm exec alchemy deploy --dry-run --config alchemy.run.ts",
     "destroy": "pnpm exec alchemy destroy --config alchemy.run.ts"
   },
   "dependencies": {
@@ -25,8 +25,10 @@
   },
   "devDependencies": {
     "@types/node": "24.10.1",
+    "@varlock/effect-plugin": "0.1.0",
     "tsrs": "0.20.0-ts7.1.0-beta",
     "typescript": "7.1.0-beta",
+    "varlock": "1.23.0",
     "vite-plus": "1.4.0",
     "vitest": "5.0.5"
   },

@@ -24,7 +24,7 @@ and pairing lifecycle below are normative for v1.
 
 ## 1. Base, versioning, conventions
 
-- Base URLs: prod `https://core.artisanstreet.dev` (configurable via
+- Base URLs: prod `https://api.artisan.st` (configurable via
   `CORE_PUBLIC_BASE_URL`); dev `http://127.0.0.1:8787`.
 - All product endpoints are versioned: `/v1/*`. Breaking wire change → `/v2`;
   additive fields are allowed within v1.
@@ -100,7 +100,7 @@ Standards JWT, JWS compact, `alg: "EdDSA"` (Ed25519), `typ: "JWT"`.
 - Claims (all required unless noted):
   - `v` (integer): `1`. Contract version of the claim set; verifiers reject
     unknown `v`. Audience stays `ast-relay`/`ast-core` (no `-v1` suffix).
-  - `iss` (string): `https://core.artisanstreet.dev` (value equals
+  - `iss` (string): `https://api.artisan.st` (value equals
     `CORE_JWT_ISSUER`; dev `http://127.0.0.1:8787`).
   - `aud` (string, exact match): `ast-relay` (present to Relay / used inside
     tunnel setup) or `ast-core` (machine sync: vault/config). One audience

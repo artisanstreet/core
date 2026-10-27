@@ -33,9 +33,9 @@ export type SendStatus = "sent" | "dropped-window-full";
 
 export interface ForgeSessionOptions {
   core: CoreApi;
-  /** e.g. wss://relay.artisanstreet.dev — never carries credentials. */
+  /** e.g. wss://relay.editor.artisan.st — never carries credentials. */
   relay_ws_url: string;
-  /** e.g. https://relay.artisanstreet.dev for presence reads. */
+  /** e.g. https://relay.editor.artisan.st for presence reads. */
   relay_http_url: string;
   account_id: string;
   machine_id: string;

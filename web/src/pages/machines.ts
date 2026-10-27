@@ -7,8 +7,8 @@ import { fetch_presence, new_ephemeral_cnf } from "../relay-forge.ts";
 import { friendly } from "./signin.ts";
 
 export function relay_defaults(): { ws: string; http: string } {
-  const ws_default = "wss://relay.artisanstreet.dev";
-  const http_default = "https://relay.artisanstreet.dev";
+  const ws_default = "wss://relay.editor.artisan.st";
+  const http_default = "https://relay.editor.artisan.st";
   const read_key = (key: string): string | null =>
     Either.match(Either.try({ try: () => localStorage.getItem(key), catch: () => null }), {
       onLeft: (): string | null => null,

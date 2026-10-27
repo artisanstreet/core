@@ -38,6 +38,8 @@ const SQL_ROOT = Path.join(CORE_ROOT, "src/db/queries");
 const dummy_bucket = { __dummy: "bucket" } as never;
 const dummy_hd = { __dummy: "hyperdrive" } as never;
 const dummy_email = { kind: "Cloudflare.Email.SendEmail", name: "EMAIL" } as never;
+const dummy_master_key = Redacted.make("test-master-key-not-a-secret");
+const dummy_admin_token = Redacted.make("test-admin-token-not-a-secret");
 
 describe("stack identity (stage isolation, no sibling imports)", () => {
   it("uses the Core stack name (Relay owns its own stack)", () => {
@@ -99,6 +101,8 @@ describe("Worker env binds canonical literals (not raw Config values)", () => {
       mail_from: "auth@mail.artisan.st",
       mail_from_name: "Artisan Street",
       email: dummy_email,
+      master_key: dummy_master_key,
+      admin_token: dummy_admin_token,
       bucket: dummy_bucket,
       hyperdrive: dummy_hd,
     });
@@ -113,9 +117,11 @@ describe("Worker env binds canonical literals (not raw Config values)", () => {
     // Handles pass through (single declaration in composition root).
     expect(props.env.CONFIG_BUCKET).toBe(dummy_bucket);
     expect(props.env.HYPERDRIVE).toBe(dummy_hd);
-    // Secrets stay Config (never plain strings).
+    // Secrets stay Redacted (never plain strings).
     expect(typeof props.env.CORE_MASTER_KEY).not.toBe("string");
     expect(typeof props.env.CORE_ADMIN_TOKEN).not.toBe("string");
+    expect(props.env.CORE_MASTER_KEY).toBe(dummy_master_key);
+    expect(props.env.CORE_ADMIN_TOKEN).toBe(dummy_admin_token);
   });
 
   it("rejects empty MAIL_FROM (verified sender required, no default)", () => {
@@ -129,6 +135,8 @@ describe("Worker env binds canonical literals (not raw Config values)", () => {
         mail_from: "   ",
         mail_from_name: "Artisan Street",
         email: dummy_email,
+        master_key: dummy_master_key,
+        admin_token: dummy_admin_token,
         bucket: dummy_bucket,
         hyperdrive: dummy_hd,
       }),
@@ -146,6 +154,8 @@ describe("Worker env binds canonical literals (not raw Config values)", () => {
         mail_from: "ops@example.com",
         mail_from_name: "Ast",
         email: dummy_email,
+        master_key: dummy_master_key,
+        admin_token: dummy_admin_token,
         bucket: dummy_bucket,
         hyperdrive: dummy_hd,
       }),
@@ -163,6 +173,8 @@ describe("Worker env binds canonical literals (not raw Config values)", () => {
         mail_from: "auth@mail.artisan.st",
         mail_from_name: "  ",
         email: dummy_email,
+        master_key: dummy_master_key,
+        admin_token: dummy_admin_token,
         bucket: dummy_bucket,
         hyperdrive: dummy_hd,
       }),
@@ -203,6 +215,8 @@ describe("stage routes: exact custom domain on every stage, worker-first", () =>
         mail_from: "auth@mail.artisan.st",
         mail_from_name: "Artisan Street",
         email: dummy_email,
+        master_key: dummy_master_key,
+        admin_token: dummy_admin_token,
         bucket: dummy_bucket,
         hyperdrive: dummy_hd,
       });

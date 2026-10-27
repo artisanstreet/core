@@ -138,8 +138,8 @@ without them — first `plan`/`dev` bootstraps account state, see below).
 
 ```sh
 # prod (example; use stage-specific env files, never share domains)
-AST_CORE_ORIGIN=https://core.artisanstreet.dev \
-AST_RELAY_ORIGIN=https://relay.artisanstreet.dev \
+AST_CORE_ORIGIN=https://api.artisan.st \
+AST_RELAY_ORIGIN=https://relay.editor.artisan.st \
 AST_CORE_DATABASE_URL='postgres://…' \
 CORE_MASTER_KEY='…' CORE_ADMIN_TOKEN='…' RESEND_API_KEY='…' MAIL_FROM='Ast <ops@example.com>' \
 pnpm run deploy --stage prod --profile default

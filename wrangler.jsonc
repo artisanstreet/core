@@ -6,8 +6,8 @@
   "compatibility_flags": ["nodejs_compat"],
   "vars": {
     "CORE_ENV": "production",
-    "CORE_PUBLIC_BASE_URL": "https://core.artisanstreet.dev",
-    "CORE_JWT_ISSUER": "https://core.artisanstreet.dev",
+    "CORE_PUBLIC_BASE_URL": "https://api.artisan.st",
+    "CORE_JWT_ISSUER": "https://api.artisan.st",
     "MAIL_PROVIDER": "resend"
   },
   "hyperdrive": [
