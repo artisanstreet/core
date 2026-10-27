@@ -16,7 +16,6 @@ interface WorkerEnv {
     put(key: string, body: Uint8Array | string): Promise<unknown>;
     get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
   };
-  readonly ASSETS?: { fetch(request: Request): Promise<Response> };
   readonly EMAIL?: SendEmailBinding;
   readonly DATABASE_URL?: string;
   readonly RESEND_API_KEY?: string;
@@ -34,7 +33,6 @@ function string_vars(env: WorkerEnv): Record<string, string | undefined> {
     MAIL_PROVIDER: pick(env.MAIL_PROVIDER),
     MAIL_FROM: pick(env.MAIL_FROM),
     MAIL_FROM_NAME: pick(env.MAIL_FROM_NAME),
-    CORE_SPA_APPROVE_PATH: pick(env.CORE_SPA_APPROVE_PATH),
     CORE_RELAY_ORIGIN: pick(env.CORE_RELAY_ORIGIN) };
 }
 
@@ -101,7 +99,6 @@ function request_layers_from_client(
     resend_api_key: env.RESEND_API_KEY,
     ...(env.EMAIL ? { send_email: env.EMAIL } : {}),
     r2: bucket ? r2_adapter(bucket) : memory_r2(),
-    assets: env.ASSETS,
     tx_runner: tx_runner };
   return make_service_layers(ctx);
 }

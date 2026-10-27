@@ -5,7 +5,7 @@ import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import * as Path from "node:path";
 import { fileURLToPath as file_url_to_path } from "node:url";
-import { CORE_ENV_VALUE, CORE_SPA_APPROVE_PATH_VALUE, MAIL_PROVIDER_VALUE, MAIL_SENDER_EMAIL, MAIL_SENDER_NAME, WORKER_COMPATIBILITY_DATE, WORKER_COMPATIBILITY_FLAGS, WORKER_PREBUILT_ENTRY, WEB_DIST_DIR, assert_distinct_origins, assert_origin_for_stage, assert_valid_mail_from, hostname_from_origin, normalize_origin, worker_name } from "./config.ts";
+import { CORE_ENV_VALUE, MAIL_PROVIDER_VALUE, MAIL_SENDER_EMAIL, MAIL_SENDER_NAME, WORKER_COMPATIBILITY_DATE, WORKER_COMPATIBILITY_FLAGS, WORKER_PREBUILT_ENTRY, assert_distinct_origins, assert_origin_for_stage, assert_valid_mail_from, hostname_from_origin, normalize_origin, worker_name } from "./config.ts";
 import type { ConfigBucket } from "./storage.ts";
 import type { CoreHyperdrive } from "./hyperdrive.ts";
 import { config as deploy_config } from "./env.generated.ts";
@@ -20,7 +20,6 @@ type EmailHandle = Effect.Success<ReturnType<typeof Cloudflare.Email.SendEmail>>
 // Alchemy stores them as portable relative paths when inside cwd.
 const CORE_ROOT = Path.resolve(Path.dirname(file_url_to_path(import.meta.url)), "../..");
 export const WORKER_ENTRY_ABS = Path.join(CORE_ROOT, WORKER_PREBUILT_ENTRY);
-export const WEB_DIST_ABS = Path.join(CORE_ROOT, WEB_DIST_DIR);
 
 export interface CoreWorkerPropsInput {
   readonly stage: string;
@@ -52,22 +51,17 @@ export function build_core_worker_props(input: CoreWorkerPropsInput) {
   const domain_host = hostname_from_origin(input.core_origin);
   return {
     name: worker_name(input.stage),
-    // Prebuilt ESM from `npm run build` (core root). No re-bundling:
+    // Prebuilt ESM from `pnpm run build` (core root). No re-bundling:
     // Reylo .sql transforms are already compiled in.
     main: WORKER_ENTRY_ABS,
     bundle: false as const,
     compatibility: {
       date: WORKER_COMPATIBILITY_DATE,
       flags: [...WORKER_COMPATIBILITY_FLAGS] as ["nodejs_compat"] },
-    assets: {
-      directory: WEB_DIST_ABS,
-      runWorkerFirst: true as const,
-      notFoundHandling: "none" as const },
     env: {
       CORE_ENV: CORE_ENV_VALUE,
       CORE_PUBLIC_BASE_URL: input.core_origin,
       CORE_JWT_ISSUER: input.core_origin,
-      CORE_SPA_APPROVE_PATH: CORE_SPA_APPROVE_PATH_VALUE,
       CORE_RELAY_ORIGIN: input.relay_origin,
       MAIL_PROVIDER: MAIL_PROVIDER_VALUE,
       MAIL_FROM: input.mail_from,

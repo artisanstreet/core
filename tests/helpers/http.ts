@@ -36,7 +36,6 @@ export interface TestRig {
 
 export async function setup_rig(opts: {
   vars?: Record<string, string | undefined>;
-  assets?: { fetch(request: Request): Promise<Response> };
 } = {}): Promise<TestRig> {
   const db = new PGlite();
   await db.exec(await read_file(file_url_to_path(new URL("../../db/schema.sql", import.meta.url).href), "utf8"));
@@ -79,8 +78,7 @@ export async function setup_rig(opts: {
             catch: (cause) => (cause instanceof CoreError ? cause : internal("database unavailable", { cause })) }),
         ) },
     mail_sink: (m) => void mail.push(m),
-    now: () => now_ms,
-    ...(opts.assets ? { assets: opts.assets } : {}) };
+    now: () => now_ms };
   return {
     app: create_app(ctx),
     db,

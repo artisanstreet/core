@@ -10,8 +10,6 @@ import { router as vault_router } from "../products/editor/handlers/vault.ts";
 import { router as artifacts_router } from "../products/editor/handlers/artifacts.ts";
 import { router as config_router } from "../products/editor/handlers/config.ts";
 import { router as account_router } from "../handlers/account.ts";
-import { router as ui_router } from "../handlers/ui.ts";
-import { router as portal_router } from "../handlers/portal.ts";
 
 export const base_router = HttpRouter.empty.pipe(
   HttpRouter.concat(meta_router),
@@ -24,8 +22,6 @@ export const base_router = HttpRouter.empty.pipe(
   HttpRouter.concat(artifacts_router),
   HttpRouter.concat(config_router),
   HttpRouter.concat(account_router),
-  HttpRouter.concat(ui_router),
-  HttpRouter.concat(portal_router),
 );
 
 export const compiled_app = Effect.runSync(HttpRouter.toHttpApp(base_router));

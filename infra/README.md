@@ -31,10 +31,8 @@ API evidence: installed `beta84` types
   `dist/ast_core/assets/*.js` chunks upload as additional modules,
   `.map` excluded by `defaultModuleRules`), `compatibility`
   `{ date: "2026-10-01", flags: ["nodejs_compat"] }`,
-  `assets` = absolute `web/dist` (prebuilt via `pnpm run build:web` from the root)
-  with `runWorkerFirst: true` (REQUIRED; worker-first auth/CSP; API/UI/metadata
-  never fall through; SPA fallback in `src/http.ts` via `ASSETS`),
-  `notFoundHandling: "none"`, `env` = canonical literals +
+  no static `assets` binding (API-only; unknown paths return JSON 404
+  from the Worker), `env` = canonical literals +
   `Config.Redacted` secrets + resources (below), exact HTTPS custom
   `domain` on EVERY stage (stage-specific `AST_CORE_ORIGIN` hostname),
   `workersDev: false` (no invented workers.dev preview URLs).
@@ -46,7 +44,7 @@ API evidence: installed `beta84` types
   `CORE_PUBLIC_BASE_URL=<canonical coreOrigin>`,
   `CORE_JWT_ISSUER=<canonical coreOrigin>` (same literal, so issuer
   matches the normalized issuer even for uppercase/trailing-slash
-  inputs), `CORE_SPA_APPROVE_PATH=/#/approve`,
+  inputs),
   `CORE_RELAY_ORIGIN=<canonical relayOrigin>`,
   `MAIL_PROVIDER=resend`, `MAIL_FROM=<required verified sender>`, plus secrets
   `CORE_MASTER_KEY`, `CORE_ADMIN_TOKEN`, `RESEND_API_KEY` via
@@ -84,7 +82,7 @@ pnpm install --frozen-lockfile
 cp -n .env.example .env     # local DATABASE_URL -> 127.0.0.1:55432 (see README quickstart)
 # docker: ast-core-dev-pg on 127.0.0.1:55432 (Postgres 18), must be running
 pnpm run db:setup            # applies db/migrations/*.sql (transactional + locked)
-pnpm run infra:check      # portal-first build + typecheck + tests + verify (see below)
+pnpm run infra:check      # api-only build + typecheck + tests + verify (see below)
 ```
 
 Why the build needs that local DB (distinct from deploy secrets): the
@@ -93,24 +91,18 @@ worker build runs the Reylo Vite plugin `sqlModule`, which
 `direct_url: ${DATABASE_URL}`, `env: [.env, .env.local]`). A fresh
 checkout has no `.reylo/` cache (gitignored), so without the
 schema-populated DB above the worker build fails; with explicit
-`DATABASE_URL` and clean outputs (`.reylo/`, `dist/ast_core/`,
-`web/dist/` removed) it re-analyzes and succeeds (exit 0). So
+`DATABASE_URL` and clean outputs (`.reylo/`, `dist/ast_core/` removed) it re-analyzes and succeeds (exit 0). So
 infra unit tests are DB-free, but `build` is NOT
 truly offline — it may touch that local DB. Never substitute production
 creds here: `AST_CORE_DATABASE_URL` (secret Hyperdrive deploy origin) is
 a different variable for a different purpose; the build only ever uses
 local/CI `DATABASE_URL`.
 
-`pnpm run build` = `build:web` + `build:worker` (portal first):
-- `build:web`: `pnpm --dir ../web run build` (portal Vite+ build,
-  emits `web/dist/index.html` + `web/dist/assets/*`).
+`pnpm run build` = `build:worker` (API-only):
 - `build:worker`: `pnpm --dir .. run build` (root `vp build`, emits the
   single-file worker bundle `dist/ast_core/index.js`; no `assets/`
-  chunks, no sourcemaps).
-  `wrangler.jsonc` `assets.directory` (`./web/dist`) is the static-asset
-  source the worker serves at runtime, so the portal builds first and a
-  fresh checkout never loads the worker build against a missing assets
-  dir. Root `pnpm run build` alone does NOT emit `web/dist`.
+  chunks, no sourcemaps). The separate web product (`web/`, own build)
+  is never built or deployed by this pipeline.
 `check`/`plan`/`deploy` all prebuild first, so a
 fresh clone never silently uses stale or missing artifacts.
 

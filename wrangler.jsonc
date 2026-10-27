@@ -28,9 +28,5 @@
       "binding": "CONFIG_BUCKET",
       "bucket_name": "ast-core-config"
     }
-  ],
-  "assets": {
-    "directory": "./web/dist",
-    "not_found_handling": "none"
-  }
+  ]
 }

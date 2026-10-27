@@ -32,6 +32,7 @@ export const R = {
   magic_request: reg({ method: "POST", path: "/v1/auth/magic/request", summary: "Request magic link", tags: ["auth"], auth: "none", request_schema: C.MagicRequest, response_schema: C.MagicRequestResp }),
   magic_status: reg({ method: "POST", path: "/v1/auth/magic/status", summary: "Poll login request", tags: ["auth"], auth: "none", request_schema: C.MagicStatusReq, response_schema: C.MagicStatusResp }),
   magic_consume: reg({ method: "POST", path: "/v1/auth/magic/consume", summary: "Approve from email", tags: ["auth"], auth: "none", request_schema: C.MagicConsumeReq, response_schema: C.MagicConsumeResp }),
+  magic_confirm: reg({ method: "GET", path: "/v1/auth/magic/confirm", summary: "Inspect magic link (never approves)", tags: ["auth"], auth: "none", response_schema: C.MagicConfirmResp }),
   magic_finalize: reg({ method: "POST", path: "/v1/auth/magic/finalize", summary: "Complete sign-in", tags: ["auth"], auth: "none", request_schema: C.MagicFinalizeReq, response_schema: C.MagicFinalizeResp }),
   totp_enroll: reg({ method: "POST", path: "/v1/auth/totp/enroll", summary: "Start TOTP enrollment", tags: ["auth"], auth: "session", response_schema: C.TotpEnrollResp }),
   totp_verify: reg({ method: "POST", path: "/v1/auth/totp/verify", summary: "Confirm TOTP enrollment", tags: ["auth"], auth: "session", request_schema: C.TotpVerifyReq, response_schema: C.TotpVerifyResp }),

@@ -32,7 +32,6 @@ import { build_core_worker_props } from "../src/worker.ts";
 const TEST_DIR = Path.dirname(file_url_to_path(import.meta.url));
 const CORE_ROOT = Path.resolve(TEST_DIR, "../..");
 const ENTRY_ABS = Path.join(CORE_ROOT, "dist/ast_core/index.js");
-const WEB_INDEX = Path.join(CORE_ROOT, "web/dist/index.html");
 const SQL_ROOT = Path.join(CORE_ROOT, "src/db/queries");
 
 const dummy_bucket = { __dummy: "bucket" } as never;
@@ -201,9 +200,9 @@ describe("native email sending domain (no root MX changes)", () => {
   });
 });
 
-describe("stage routes: exact custom domain on every stage, worker-first", () => {
+describe("stage routes: exact custom domain on every stage, api-only", () => {
   for (const stage of ["prod", "pr-42"]) {
-    it(`stage ${stage} attaches its own hostname, no workers.dev`, () => {
+    it(`stage ${stage} attaches its own hostname, no workers.dev, no static assets`, () => {
       const core_origin = normalize_origin(
         stage === "prod" ? "https://core.artisanstreet.dev" : "https://core-pr-42.example.dev",
         "AST_CORE_ORIGIN",
@@ -224,8 +223,7 @@ describe("stage routes: exact custom domain on every stage, worker-first", () =>
       expect(props.workersDev).toBe(false);
       expect(props.name).toBe(worker_name(stage));
       expect(props.bundle).toBe(false);
-      expect(props.assets.runWorkerFirst).toBe(true);
-      expect(props.assets.notFoundHandling).toBe("none");
+      expect("assets" in props).toBe(false);
     });
   }
 });
@@ -281,11 +279,9 @@ describe("prebuilt bundle seam (deploy exact collector, cloud-free)", () => {
   }, 30000);
 });
 
-describe("portal + SQL artifacts exist (Reylo .sql transforms already compiled in)", () => {
-  it("ships web/dist shell and Reylo query files", async () => {
+describe("SQL artifacts exist (Reylo .sql transforms already compiled in)", () => {
+  it("ships Reylo query files", async () => {
     const fs = await import("node:fs/promises");
-    const index = await fs.readFile(WEB_INDEX, "utf8");
-    expect(index).toContain('<div id="app"');
     const entries = await fs.readdir(SQL_ROOT, { recursive: true });
     const sqlFiles = (entries as string[]).filter((e) => e.endsWith(".sql"));
     expect(sqlFiles.length).toBeGreaterThan(0);

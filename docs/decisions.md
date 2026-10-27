@@ -106,18 +106,17 @@ Owner: Core. Coordinated via root; Relay/Rust contributors read
   per-account/per-IP/global; enrollment per-IP. Wrong/absent codes map to
   no target, so budgets never key on unknown enrollments/requests.
 
-## Portal handoff (2026-10-27)
+## Portal handoff (2026-10-27, API-only since 2026-10-27)
 
-- Email links (`/v1/auth/magic/confirm?token=`) redirect to the SPA
-  approval route when `CORE_SPA_APPROVE_PATH` is set, else serve the
-  minimal backend page. Flip the var when the portal build is confirmed;
-  backend behavior is tested both ways.
-- Worker hosts `web/dist` via Workers Assets; `web/` is portal-owned and
-  untouched by Core. CSP: SPA shell is strict self-based; backend
-  auth-confirm pages allow their own inline style/script only; credential
-  responses are no-store. Asset contract for the web author: `index.html`
-  entry, hashed static names, same-origin `/v1/` API, `?token=` approval
-  param driving consume/finalize.
+- Email links (`/v1/auth/magic/confirm?token=`) return read-only JSON
+  instructions and never consume (mail-scanner safe). Approval is explicit
+  `POST /v1/auth/magic/consume`; completion is `POST
+  /v1/auth/magic/finalize`. The former SPA redirect/backend-page behavior
+  is removed.
+- Worker binds no static assets and serves no HTML; `web/` is a separate
+  product on its own host and untouched by Core. Credential responses are
+  no-store with the shared API security headers. Web author contract:
+  same `/v1/` API, `?token=` approval param driving consume/finalize.
 - Local smoke needs no mail credentials (log mailer + mail sink in tests).
 
 ## Not built / not claimed

@@ -120,6 +120,9 @@ export const MagicConsumeResp = Schema.Struct({
   status: Schema.Literal("pending", "email_approved", "completed", "expired"),
   totpRequired: Schema.Boolean });
 
+export const MagicConfirmResp = Schema.Struct({
+  status: Schema.Literal("confirmation_required") });
+
 export const MagicFinalizeReq = Schema.Struct({
   requestId: LoginRequestId,
   requestSecret: Schema.String,

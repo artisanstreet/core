@@ -24,12 +24,9 @@ export function assert_valid_stage(stage: string): void {
 
 // Prebuilt bundle seam (existing Vite/Reylo build, NOT Alchemy rolldown).
 //
-// `npm run build` (core root, vite + @cloudflare/vite-plugin + reylo/vite)
+// `pnpm run build` (core root, vite + @cloudflare/vite-plugin + reylo/vite)
 // emits:
 //   dist/ast_core/index.js (+ dist/ast_core/assets/*.js chunks, .map)
-//   dist/ast_core/wrangler.json (generated, non-authoritative, ignored)
-// The portal SPA is built separately:
-//   web/dist/index.html + web/dist/assets/* (hashed)
 //
 // Alchemy MUST reuse these artifacts with bundle:false (Wrangler no_bundle
 // contract). Plain Alchemy rolldown of src/index.ts would NOT resolve the
@@ -38,7 +35,6 @@ export function assert_valid_stage(stage: string): void {
 // `--config infra/alchemy.run.ts` so cwd-relative resolution stays inside cwd
 // and state stores portable relative paths.
 export const WORKER_PREBUILT_ENTRY = "dist/ast_core/index.js" as const;
-export const WEB_DIST_DIR = "web/dist" as const;
 
 // Wrangler parity preserved for local/test only.
 export const WORKER_COMPATIBILITY_DATE = "2026-10-01" as const;
@@ -54,7 +50,6 @@ export const HYPERDRIVE_CACHING = { disabled: true } as const;
 
 // Fixed service env (persisted from wrangler.jsonc/docs).
 export const CORE_ENV_VALUE = "production" as const;
-export const CORE_SPA_APPROVE_PATH_VALUE = "/#/approve" as const;
 export const MAIL_PROVIDER_VALUE = "cloudflare" as const;
 
 // Native Cloudflare Email Service sender domain (no root MX changes).

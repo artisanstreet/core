@@ -13,11 +13,11 @@ Alchemy owns prod; Wrangler never deploys prod.
 See `infra/README.md` for the reproducible flow and `infra/.env.example`
 for all inputs. Summary:
 
-- Build both artifacts from a single `pnpm install --frozen-lockfile`
+- Build the API worker from a single `pnpm install --frozen-lockfile`
   (fresh-clone safe): `pnpm run infra:build` (root worker
-  `dist/ast_core/index.js` via Vite+/Reylo, and portal `web/dist`).
-  Root `pnpm run build` alone only emits the worker bundle; the portal
-  needs `pnpm run build:web`. Alchemy reuses these with `bundle: false`
+  `dist/ast_core/index.js` via Vite+/Reylo). The separate web product
+  (`web/`, own build) is never built or deployed by this pipeline.
+  Alchemy reuses the worker bundle with `bundle: false`
   (Wrangler `no_bundle` contract); plain Alchemy rolldown of
   `src/index.ts` would miss Reylo `.sql` transforms.
 - Deploy with the project-local binary (never a global install):
@@ -27,8 +27,7 @@ for all inputs. Summary:
   Direct equivalent from `infra/`:
   `pnpm exec alchemy deploy --config alchemy.run.ts --stage <stage>`.
   Worker `ast-core-<stage>` via REAL factory `buildCoreWorkerProps`
-  (async `main` + `env`, `runWorkerFirst: true`,
-  `notFoundHandling: "none"`), canonical literal origins
+  (async `main` + `env`, no static assets), canonical literal origins
   (`CORE_PUBLIC_BASE_URL`/`CORE_JWT_ISSUER` = normalized `AST_CORE_ORIGIN`,
   `CORE_RELAY_ORIGIN` = normalized relay; only secrets stay
   `Config.Redacted`), `MAIL_FROM` required (verified sender, no default),
@@ -110,8 +109,8 @@ pools it via Hyperdrive.
    in transactions under an advisory lock; concurrent migrators serialize).
 2. `pnpm run typecheck && pnpm run test` (needs the dev DB reachable for Reylo
    inference: default `postgres://core:core@127.0.0.1:55432/core`).
-3. `pnpm run infra:build && pnpm run infra:check` (offline; builds both
-   artifacts from the workspace lockfile, then typecheck/tests/verify), then
+3. `pnpm run infra:build && pnpm run infra:check` (offline; builds the API
+   worker from the workspace lockfile, then typecheck/tests/verify), then
    `pnpm run infra:plan --stage <stage>` / `pnpm run infra:deploy --stage <stage>`.
 4. Post-deploy smoke: `GET /v1/version`, `GET /.well-known/jwks.json`
    (after first grant issuance a key exists), `POST /v1/admin/janitor`

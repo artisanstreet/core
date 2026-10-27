@@ -8,6 +8,7 @@ import { R } from "../../contracts/registry.ts";
 import * as Auth from "../../services/auth.ts";
 import { client_ip, decode_request, read_json_body } from "../../http/request.ts";
 import { encode_ok, session_cookie_value } from "../../http/response.ts";
+import { CoreError } from "../../errors.ts";
 import { AppConfigTag } from "../../services/deps.ts";
 
 const finalize_cookie_max_age = 30 * 24 * 60 * 60;
@@ -41,6 +42,16 @@ const magic_consume_handler = Effect.gen(function* () {
     ip });
   return encode_ok(C.MagicConsumeResp, data);
 });
+const token_pattern = /^[A-Za-z0-9_-]{10,128}$/;
+const magic_confirm_handler = Effect.gen(function* () {
+  const req = yield* HttpServerRequest.HttpServerRequest;
+  const url = new URL(req.originalUrl);
+  const token = url.searchParams.get("token") ?? "";
+  if (!token_pattern.test(token)) {
+    return yield* Effect.fail(new CoreError("bad_request", "invalid link"));
+  }
+  return encode_ok(C.MagicConfirmResp, { status: "confirmation_required" });
+});
 const magic_finalize_handler = Effect.gen(function* () {
   const req = yield* HttpServerRequest.HttpServerRequest;
   const cfg = yield* AppConfigTag;
@@ -68,6 +79,10 @@ export const router = HttpRouter.empty.pipe(
   register_route(
     R.magic_request,
       magic_request_handler,
+  ),
+  register_route(
+    R.magic_confirm,
+      magic_confirm_handler,
   ),
   register_route(
     R.magic_status,

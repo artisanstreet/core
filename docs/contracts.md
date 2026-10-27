@@ -269,25 +269,20 @@ Config: versioned MCP/skill bundles
 deletion lifecycle. Full request/response/event schemas in Effect Schema with
 strict requests; OpenAPI export; fixtures under `fixtures/v1/`.
 
-### Sign-in UI entry (portal handoff)
+### Sign-in link entry (API-only)
 
-- Shipped email links are `GET /v1/auth/magic/confirm?token=…`. When
-  `CORE_SPA_APPROVE_PATH` is set (portal deployed, e.g. `/#/approve`), valid
-  links 302-redirect there with the token preserved (`Location` carries the
-  token; no-store; invalid tokens still 400 and never redirect). Without it,
-  Core serves a minimal backend approval page (safe fallback, tested).
-  Both entries drive the same consume/finalize API, so same-browser/new-tab
-  completion is identical.
-- The Worker hosts the portal build via Workers Assets (`web/dist`,
-  `not_found_handling: "none"`). API (`/v1/*`), UI (`/ui/*`), and metadata
-  (`/.well-known/*`) paths never fall through. Unknown app paths serve the
-  SPA shell (`index.html`) with `no-store` + strict CSP; hashed static
-  assets keep upstream cache headers. Without a deployed build, unknown
-  paths stay JSON 404.
-- Portal asset contract (for the web author via root): `web/dist/index.html`
-  entry; hashed static filenames; all API calls same-origin under `/v1/`;
-  approval route reads `?token=` and calls consume/finalize; CSP notes in
-  `docs/decisions.md`.
+- Shipped email links are `GET /v1/auth/magic/confirm?token=…`. The GET is
+  read-only: valid tokens return `{ status: "confirmation_required" }`;
+  invalid tokens are 400 JSON. The GET never consumes and never redirects
+  (mail scanners that merely fetch approve nothing). Approval is an
+  explicit `POST /v1/auth/magic/consume`; completion is `POST
+  /v1/auth/magic/finalize` with the originating request secret.
+- The Worker binds no static assets and serves no HTML. Every unknown,
+  root, asset, or legacy UI path returns JSON 404 (`not_found`); API
+  (`/v1/*`) and metadata (`/.well-known/*`) paths are the only surface.
+- The separate web product (`web/`, own build) lives on its own host and
+  calls the same consume/finalize API; it is never bundled or served by
+  `api.artisan.st`.
 
 ### Config sync (checksum-based invalidation)
 
