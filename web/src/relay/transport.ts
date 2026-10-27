@@ -2,6 +2,9 @@
 // that touches the vendored Relay link (`EditorLink` in production, fakes
 // in tests) — Noise, grants, and framing stay real on both sides.
 
+import type { Deferred } from "effect";
+import type { TunnelResponse } from "../forge/codec.ts";
+
 export interface RelayLinkLike {
   connect(): Promise<{ role: string; forgeOnline: boolean }>;
   open(channel: string): void;
@@ -30,3 +33,8 @@ export type ForgeSessionEvent =
   | { type: "channel-opened"; channel: string }
   | { type: "channel-closed"; channel: string; reason: string }
   | { type: "error"; code: string; message: string };
+
+/** One in-flight unary call: the response resolver both sides share. */
+export interface PendingGate {
+  gate: Deferred.Deferred<TunnelResponse, Error>;
+}

@@ -5,23 +5,24 @@
 // {"$event": {"stream": id, "envelope": {...}}} (chunked when oversized).
 // UNSUBSCRIBE ends one stream; closing the Relay channel cancels it.
 
-import { Deferred, Effect, Schema } from "effect";
+import { Deferred, Effect, Either, Match, Schema } from "effect";
 import { run_effect } from "../core/run-promise.ts";
 import type { SecureChannel } from "../../vendor/relay/client.ts";
 import {
-  decodeTunnelResponse,
   encodeTunnelRequest,
   newRequestId,
   throwIfTunnelError,
+  TunnelResponse,
   type TunnelRequest,
-  type TunnelResponse,
 } from "../forge/codec.ts";
-import { ChunkReassembly, isChunkFrame, TunnelChunk } from "../forge/chunk.ts";
+import { ChunkReassembly, type TunnelChunk } from "../forge/chunk.ts";
+import { decode_app_message, type AppMessage } from "../forge/app-message.ts";
 import { asLiveEnvelope, asStreamEvent, asStreamStart, type LiveEnvelope } from "../forge/stream-frames.ts";
 import { newChannelId } from "./cnf.ts";
-import { channel_url, default_link_factory, flush_outbound, initiate_secure, mint_channel_grant_effect, wait_open_effect } from "./channel-connect.ts";
+import { channel_url, default_link_factory, flush_outbound, initiate_secure, mint_channel_grant_effect, settle_pending, wait_open_effect } from "./channel-connect.ts";
 import { PacedSender } from "./paced-sender.ts";
 import type { ForgeSessionOptions } from "./session.ts";
+import type { PendingGate } from "./transport.ts";
 
 export interface ForgeStreamEvents {
   onEnvelope(env: LiveEnvelope): void;
@@ -35,14 +36,10 @@ export interface ForgeStreamOptions extends ForgeSessionOptions {
   events: ForgeStreamEvents;
 }
 
-interface StreamPending {
-  gate: Deferred.Deferred<TunnelResponse, Error>;
-}
-
 export class ForgeStream {
   private link: import("./transport.ts").RelayLinkLike | null = null;
   private secure: SecureChannel | null = null;
-  private readonly pending = new Map<string, StreamPending>();
+  private readonly pending = new Map<string, PendingGate>();
   private readonly reassembly = new Map<string, ChunkReassembly>();
   private closed = false;
   private streamId: string | null = null;
@@ -62,20 +59,15 @@ export class ForgeStream {
   async start(subscribePath: string): Promise<string> {
     if (this.closed) throw new Error("stream closed");
     const self = this;
-    return run_effect(
-      Effect.gen(function* () {
+    const start_program = Effect.gen(function* () {
         const { core, accountId, machineId } = self.opts;
         const minted = yield* mint_channel_grant_effect(core, machineId);
         const grant = minted.grant;
         self.grantExpiresAtMs = minted.grant_expires_at_ms;
-        const secure = yield* Effect.try({
-          try: () =>
-            initiate_secure(minted.cnf_sk, self.opts.forgeCnfX, grant.jwt, {
-              account: accountId,
-              machine: machineId,
-              channel: self.channel,
-            }),
-          catch: (e) => (e instanceof Error ? e : new Error("Channel setup failed.")),
+        const secure = yield* initiate_secure(minted.cnf_sk, self.opts.forgeCnfX, grant.jwt, {
+          account: accountId,
+          machine: machineId,
+          channel: self.channel,
         });
         self.secure = secure;
         const events = self.opts.events;
@@ -90,15 +82,23 @@ export class ForgeStream {
             },
             onData: (channel, _seq, body) => {
               if (channel !== self.channel) return;
-              try {
-                const app = secure.handleIncoming(body);
-                flush_outbound(secure, (out) => link.sendOpaque(channel, out));
-                flush_outbound(secure, (out) => link.sendOpaque(channel, out));
-                if (app) self.onAppBytes(app);
-              } catch (e) {
-                events.onError("channel_failed", e instanceof Error ? e.message : "Channel failed.");
-                self.close();
-              }
+              Either.match(
+                Either.try({
+                  try: () => secure.handleIncoming(body),
+                  catch: (e) => (e instanceof Error ? e : new Error("Channel failed.")),
+                }),
+                {
+                  onLeft: (e) => {
+                    events.onError("channel_failed", e.message);
+                    self.close();
+                  },
+                  onRight: (app) => {
+                    flush_outbound(secure, (out) => link.sendOpaque(channel, out));
+                    flush_outbound(secure, (out) => link.sendOpaque(channel, out));
+                    if (app) self.onAppBytes(app);
+                  },
+                },
+              );
             },
             onChannelClosed: (channel, reason) => {
               if (channel === self.channel) {
@@ -134,12 +134,16 @@ export class ForgeStream {
         );
         self.subscribeId = newRequestId();
         const res = yield* self.call_once_effect({ method: "SUBSCRIBE", path: subscribePath, id: self.subscribeId });
-        const started = asStreamStart(throwIfTunnelError(res).body);
+        const started_body = yield* Effect.try({
+          try: () => throwIfTunnelError(res).body,
+          catch: (e) => (e instanceof Error ? e : new Error("Forge did not open a stream.")),
+        });
+        const started = asStreamStart(started_body);
         if (!started) return yield* Effect.fail(new Error("Forge did not open a stream (no $stream start)."));
         self.streamId = started.$stream.stream;
         return self.streamId;
-      }),
-    );
+      });
+    return run_effect(start_program);
   }
 
   private readonly sender: PacedSender = new PacedSender(
@@ -152,56 +156,97 @@ export class ForgeStream {
     this.sender.onAck();
   }
 
-  private call_once_effect(req: { method: "SUBSCRIBE"; path: string; id: string }): Effect.Effect<TunnelResponse, Error> {
-    const full: TunnelRequest = { ...req };
-    encodeTunnelRequest(full);
+  private call_once_effect(req: { method: "SUBSCRIBE"; path: string; id: string }) {
     const self = this;
-    return Effect.gen(function* () {
-      const gate = yield* Deferred.make<TunnelResponse, Error>();
-      self.pending.set(full.id, { gate });
-      try {
-        const secure = self.secure;
-        if (!secure) return yield* Effect.fail(new Error("Not connected."));
-        yield* self.sender.send_effect(secure, encodeTunnelRequest(full));
-        return yield* Deferred.await(gate).pipe(
-          Effect.timeoutFail({
-            duration: "30 seconds",
-            onTimeout: () => new Error("Forge did not answer SUBSCRIBE."),
-          }),
-        );
-      } finally {
-        self.pending.delete(full.id);
-      }
-    });
+    return Effect.acquireUseRelease(
+      Effect.map(
+        Deferred.make<TunnelResponse, Error>(),
+        (gate) => {
+          const full: TunnelRequest = { ...req };
+          self.pending.set(full.id, { gate });
+          return { full, gate };
+        },
+      ),
+      ({ full, gate }) =>
+        Effect.gen(function* () {
+          const secure = self.secure;
+          if (!secure) return yield* Effect.fail(new Error("Not connected."));
+          const encoded = yield* Effect.try({
+            try: () => encodeTunnelRequest(full),
+            catch: (e) => (e instanceof Error ? e : new Error("SUBSCRIBE send failed.")),
+          });
+          yield* self.sender.send_effect(secure, encoded);
+          return yield* Deferred.await(gate).pipe(
+            Effect.timeoutFail({
+              duration: "30 seconds",
+              onTimeout: () => new Error("Forge did not answer SUBSCRIBE."),
+            }),
+          );
+        }),
+      ({ full }) =>
+        Effect.sync(() => {
+          self.pending.delete(full.id);
+        }),
+    );
   }
 
   private onAppBytes(app: Uint8Array): void {
-    let json: unknown;
-    try {
-      json = JSON.parse(new TextDecoder().decode(app));
-    } catch {
-      this.opts.events.onError("bad_frame", "Forge sent an unreadable stream frame.");
-      return;
+    const text = new TextDecoder().decode(app);
+    const message: AppMessage = Either.getOrElse(
+      Either.map(Schema.decodeUnknownEither(Schema.parseJson())(text), decode_app_message),
+      (): AppMessage => ({ _tag: "BadFrame" }),
+    );
+    return Match.value(message).pipe(
+      Match.tag("Chunk", ({ chunk }) => this.feedChunk(chunk)),
+      Match.tag("BadChunk", ({ transfer, reason }) => {
+        this.reassembly.delete(transfer);
+        this.opts.events.onError("bad_chunks", reason);
+      }),
+      Match.tag("Response", ({ response }) => this.onAppJson(response)),
+      Match.tag("BadFrame", () => {
+        this.opts.events.onError("bad_frame", "Forge sent an unreadable stream frame.");
+      }),
+      Match.exhaustive,
+    );
+  }
+
+  private feedChunk(chunk: TunnelChunk): void {
+    let asm = this.reassembly.get(chunk.transfer);
+    if (!asm) {
+      asm = new ChunkReassembly();
+      this.reassembly.set(chunk.transfer, asm);
     }
-    try {
-      if (isChunkFrame(json)) {
-        const chunk = Schema.decodeUnknownSync(TunnelChunk)(json);
-        let asm = this.reassembly.get(chunk.transfer);
-        if (!asm) {
-          asm = new ChunkReassembly();
-          this.reassembly.set(chunk.transfer, asm);
-        }
-        const out = asm.feed(chunk);
-        if (!out.done) return;
-        this.reassembly.delete(chunk.transfer);
-        this.onAppJson(JSON.parse(new TextDecoder().decode(out.bytes)));
-        return;
-      }
-      this.onAppJson(json);
-    } catch (e) {
-      this.reassembly.delete((json as { transfer?: string }).transfer ?? "");
-      this.opts.events.onError("bad_chunks", e instanceof Error ? e.message : "Chunked stream frame failed.");
-    }
+    Either.match(
+      Either.try({
+        try: () => asm.feed(chunk),
+        catch: (e) => (e instanceof Error ? e : new Error("Chunked stream frame failed.")),
+      }),
+      {
+        onLeft: (e) => {
+          this.reassembly.delete(chunk.transfer);
+          this.opts.events.onError("bad_chunks", e.message);
+        },
+        onRight: (out) => {
+          if (!out.done) return;
+          this.reassembly.delete(chunk.transfer);
+          this.onAppJsonBytes(out.bytes);
+        },
+      },
+    );
+  }
+
+  private onAppJsonBytes(raw: Uint8Array): void {
+    const text = new TextDecoder().decode(raw);
+    const message: AppMessage = Either.getOrElse(
+      Either.map(Schema.decodeUnknownEither(Schema.parseJson())(text), decode_app_message),
+      (): AppMessage => ({ _tag: "BadFrame" }),
+    );
+    return Match.value(message).pipe(
+      Match.tag("Response", ({ response }) => this.onAppJson(response)),
+      Match.orElse(() => {
+        this.opts.events.onError("bad_frame", "Forge sent an unreadable stream frame.");
+      }),
+    );
   }
 
   private onAppJson(json: unknown): void {
@@ -225,22 +270,11 @@ export class ForgeStream {
       }
       return;
     }
-    let res: TunnelResponse;
-    try {
-      res = decodeTunnelResponse(json);
-    } catch {
-      events.onError("bad_frame", "Forge sent an unreadable stream frame.");
-      return;
-    }
-    const p = res.id ? this.pending.get(res.id) : undefined;
-    if (!p) return;
-    this.pending.delete(res.id);
-    try {
-      const ok = throwIfTunnelError(res);
-      Deferred.unsafeDone(p.gate, Effect.succeed(ok));
-    } catch (e) {
-      Deferred.unsafeDone(p.gate, Effect.fail(e instanceof Error ? e : new Error("SUBSCRIBE failed.")));
-    }
+    const decoded = Schema.decodeUnknownEither(TunnelResponse)(json);
+    Either.match(decoded, {
+      onLeft: () => events.onError("bad_frame", "Forge sent an unreadable stream frame."),
+      onRight: (res) => settle_pending(this.pending, res, "SUBSCRIBE failed."),
+    });
   }
 
   /** UNSUBSCRIBE best-effort, then close the channel and destroy keys. */
@@ -261,11 +295,13 @@ export class ForgeStream {
     for (const p of this.pending.values()) Deferred.unsafeDone(p.gate, Effect.fail(new Error("Stream closed.")));
     this.pending.clear();
     this.reassembly.clear();
-    try {
-      this.link?.closeChannel(this.channel, "bye");
-    } catch {
-      // ignore
-    }
+    // Best-effort channel farewell: a gone socket must not fail close.
+    Either.getOrNull(
+      Either.try({
+        try: () => this.link?.closeChannel(this.channel, "bye"),
+        catch: () => null,
+      }),
+    );
     this.link?.close();
     this.link = null;
     this.secure?.destroy();

@@ -4,7 +4,7 @@
 // requests encode STRICT (unknown fields rejected), responses decode
 // forward-compatibly (unknown fields ignored). Relay sees opaque bodies.
 
-import { Schema } from "effect";
+import { Either, Schema } from "effect";
 
 export const TunnelMethod = Schema.Literal("GET", "POST", "PUT", "PATCH", "DELETE", "SUBSCRIBE", "UNSUBSCRIBE");
 export type TunnelMethod = typeof TunnelMethod.Type;
@@ -50,14 +50,10 @@ export const BYTES_ENVELOPE_KEY = "$bytes";
 /** A binary body inside request/response `body`: `{"$bytes": {...}}`. */
 export function asTunnelBytes(body: unknown): TunnelBytes | null {
   if (typeof body !== "object" || body === null) return null;
-  const b = body as Record<string, unknown>;
-  const keys = Object.keys(b);
+  const fields = body as Record<string, unknown>;
+  const keys = Object.keys(fields);
   if (keys.length !== 1 || keys[0] !== BYTES_ENVELOPE_KEY) return null;
-  try {
-    return Schema.decodeUnknownSync(TunnelBytes)(b[BYTES_ENVELOPE_KEY]);
-  } catch {
-    return null;
-  }
+  return Either.getOrNull(Schema.decodeUnknownEither(TunnelBytes)(fields[BYTES_ENVELOPE_KEY]));
 }
 
 const B64U_RE = /^[A-Za-z0-9_-]*$/;

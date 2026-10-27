@@ -6,7 +6,7 @@
 // UNSUBSCRIBE ends one stream without closing the channel. Receivers ignore
 // unknown envelope fields; Reset envelopes trigger re-subscribe.
 
-import { Schema } from "effect";
+import { Either, Schema } from "effect";
 
 export const StreamStart = Schema.Struct({
   $stream: Schema.Struct({ stream: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(128)) }),
@@ -25,21 +25,13 @@ export type StreamEvent = typeof StreamEvent.Type;
 export function asStreamStart(input: unknown): StreamStart | null {
   if (typeof input !== "object" || input === null) return null;
   if (!("$stream" in input)) return null;
-  try {
-    return Schema.decodeUnknownSync(StreamStart)(input);
-  } catch {
-    return null;
-  }
+  return Either.getOrNull(Schema.decodeUnknownEither(StreamStart)(input));
 }
 
 export function asStreamEvent(input: unknown): StreamEvent | null {
   if (typeof input !== "object" || input === null) return null;
   if (!("$event" in input)) return null;
-  try {
-    return Schema.decodeUnknownSync(StreamEvent)(input);
-  } catch {
-    return null;
-  }
+  return Either.getOrNull(Schema.decodeUnknownEither(StreamEvent)(input));
 }
 
 /** Minimal SSE envelope shape the live feed consumes (tolerant reads). */

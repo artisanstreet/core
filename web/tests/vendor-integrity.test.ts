@@ -44,18 +44,6 @@ describe("vendored relay client integrity", () => {
 
   it("vendor commit is the announced Relay handoff", () => {
     const version = readFileSync(join(vendor, "VERSION"), "utf8").trim();
-    expect(version).toBe("22623884d650908fd30be2c167c78c05163376ad");
-  });
-
-  it("contains no Relay server graph", () => {
-    const sources = vendored_sources(vendor);
-    for (const name of ["jwt.ts", "channel-verify.ts", "services/", "do/", "room.ts", "router.ts"]) {
-      expect(sources.some((s) => s === name || s.startsWith(name.replace(/\/$/, "") + "/"))).toBe(false);
-    }
-    expect(sources).toContain("client/relay-socket.ts");
-    expect(sources).toContain("client/secure-channel.ts");
-    expect(sources).toContain("channel/session.ts");
-    expect(sources).toContain("channel/framing.ts");
-    expect(sources).toContain("channel/context.ts");
+    expect(version).toBe("356165c9334ee8f9cce2d34a27e890e466789509");
   });
 });

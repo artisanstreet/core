@@ -23,47 +23,39 @@ export function decode_lenient<A, I>(schema: Schema.Schema<A, I>, input: unknown
 }
 
 /** Resolve a same-origin path against the page origin (browser) or a
- * throwaway base (Node tests). Platform `HttpClientRequest` requires an
- * absolute URL; the fetch seam only ever sees the resolved string, and
- * contract tests match on the path suffix. */
+ * throwaway base (Node tests). Platform requests need absolute URLs. */
 /* eslint-disable no-restricted-globals */
-function absolute_url(base: string, path: string): string {
-  const origin = typeof location !== "undefined" && location.origin ? location.origin : "http://localhost";
-  try {
-    return new URL(base + path, origin).toString();
-  } catch {
-    return base + path;
-  }
-}
+const absolute_url_effect = (base: string, path: string) =>
+  Effect.try({
+    try: () => {
+      const origin = typeof location !== "undefined" && location.origin ? location.origin : "http://localhost";
+      return new URL(base + path, origin).toString();
+    },
+    catch: () => new TransportFailure({ reason: "bad request url" }),
+  });
 /* eslint-enable no-restricted-globals */
 
 /** Run an HttpClient-requiring Effect with browser-cookie credentials. */
-function with_browser_http<A, E>(
+const with_browser_http = <A, E>(
   effect: Effect.Effect<A, E, HttpClient.HttpClient>,
   fetch_impl: FetchLike,
-): Effect.Effect<A, E> {
-  return effect.pipe(
+): Effect.Effect<A, E> =>
+  effect.pipe(
     Effect.provide(FetchHttpClient.layer),
     Effect.provideService(FetchHttpClient.Fetch, fetch_impl),
     Effect.provideService(FetchHttpClient.RequestInit, { credentials: "include" } as RequestInit),
   );
-}
 
-function to_transport(error: unknown): TransportFailure {
-  return new TransportFailure({ reason: error instanceof Error ? error.message : "fetch failed" });
-}
+const to_transport = (error: unknown): TransportFailure =>
+  new TransportFailure({ reason: error instanceof Error ? error.message : "fetch failed" });
 
-function read_json(res: HttpClientResponse.HttpClientResponse): Effect.Effect<unknown, DecodeFailure> {
-  return Effect.mapError(
+const read_json = (res: HttpClientResponse.HttpClientResponse) =>
+  Effect.mapError(
     res.json,
     () => new DecodeFailure({ reason: `unreadable body ${res.status}` }),
   );
-}
 
-function check_status(
-  status: number,
-  json: unknown,
-): Effect.Effect<unknown, ApiFailure | DecodeFailure> {
+const check_status = (status: number, json: unknown) => {
   if (status >= 200 && status < 300) return Effect.succeed(json);
   const shape = error_shape(json);
   if (shape.code === "bad_response") {
@@ -72,22 +64,23 @@ function check_status(
   return Effect.fail(
     new ApiFailure({ status, code: shape.code, message: shape.message, request_id: shape.requestId }),
   );
-}
+};
 
 /** Retry schedule for idempotent GETs: exponential backoff, 2 retries. */
 const get_retry_schedule = Schedule.exponential("200 millis").pipe(Schedule.intersect(Schedule.recurs(2)));
 
-export function api_get<A, I>(
+export const api_get = <A, I>(
   fetch_impl: FetchLike,
   base: string,
   path: string,
   response_schema: Schema.Schema<A, I>,
-): Effect.Effect<A, ApiFailure | TransportFailure | DecodeFailure> {
-  const program = Effect.gen(function* () {
+) =>
+  Effect.gen(function* () {
     const client = (yield* HttpClient.HttpClient).pipe(
       HttpClient.retryTransient({ schedule: get_retry_schedule, times: 2 }),
     );
-    const request = HttpClientRequest.setHeaders(HttpClientRequest.get(absolute_url(base, path)), { accept: "application/json" });
+    const url = yield* absolute_url_effect(base, path);
+    const request = HttpClientRequest.setHeaders(HttpClientRequest.get(url), { accept: "application/json" });
     // Without `filterStatus`, error channel carries transport
     // `RequestError` only — statuses are checked explicitly below.
     const res = yield* Effect.mapError(client.execute(request), to_transport);
@@ -97,9 +90,7 @@ export function api_get<A, I>(
       try: () => decode_lenient(response_schema, ok),
       catch: () => new DecodeFailure({ reason: "unreadable shape" }),
     });
-  });
-  return with_browser_http(program, fetch_impl);
-}
+  }).pipe((program) => with_browser_http(program, fetch_impl));
 
 /** Fetch seam + base for composed Effect grant flows (internal plumbing). */
 export interface HttpSeam {
@@ -108,13 +99,13 @@ export interface HttpSeam {
 }
 
 /** Internal Effect API for login-status polling; `CoreApi.loginStatus` is the Promise boundary over this. */
-export function login_status_effect(
+export const login_status_effect = (
   fetch_impl: FetchLike,
   base: string,
   request_id: string,
   request_secret: string,
-): Effect.Effect<typeof C.MagicStatusResp.Type, ApiFailure | TransportFailure | DecodeFailure> {
-  return api_post(
+) =>
+  api_post(
     fetch_impl,
     base,
     "/v1/auth/magic/status",
@@ -123,15 +114,14 @@ export function login_status_effect(
     C.MagicStatusResp,
     () => new ApiFailure({ status: 400, code: "bad_request", message: "bad request", request_id: "" }),
   );
-}
 
 /** Internal Effect API for editor grant issue; `CoreApi.issueGrant` is the Promise boundary over this. */
-export function issue_grant_effect(
+export const issue_grant_effect = (
   fetch_impl: FetchLike,
   base: string,
   body: typeof C.GrantIssueReq.Type,
-): Effect.Effect<typeof C.GrantIssueResp.Type, ApiFailure | TransportFailure | DecodeFailure> {
-  return api_post(
+) =>
+  api_post(
     fetch_impl,
     base,
     "/v1/grants/issue",
@@ -146,9 +136,8 @@ export function issue_grant_effect(
         request_id: "",
       }),
   );
-}
 
-export function api_post<RA, RI, A, I>(
+export const api_post = <RA, RI, A, I>(
   fetch_impl: FetchLike,
   base: string,
   path: string,
@@ -156,8 +145,8 @@ export function api_post<RA, RI, A, I>(
   request_body: RA | null,
   response_schema: Schema.Schema<A, I>,
   encode_error: (encode_err: unknown) => ApiFailure,
-): Effect.Effect<A, ApiFailure | TransportFailure | DecodeFailure> {
-  const program = Effect.gen(function* () {
+) =>
+  Effect.gen(function* () {
     // Single attempt: mutating POSTs are never retried.
     const client = yield* HttpClient.HttpClient;
     let encoded = "{}";
@@ -168,7 +157,8 @@ export function api_post<RA, RI, A, I>(
       });
       encoded = strict;
     }
-    let request = HttpClientRequest.setHeaders(HttpClientRequest.post(absolute_url(base, path)), {
+    const url = yield* absolute_url_effect(base, path);
+    let request = HttpClientRequest.setHeaders(HttpClientRequest.post(url), {
       accept: "application/json",
     });
     request = HttpClientRequest.setBody(request, HttpBody.text(encoded, "application/json"));
@@ -179,6 +169,4 @@ export function api_post<RA, RI, A, I>(
       try: () => decode_lenient(response_schema, ok),
       catch: () => new DecodeFailure({ reason: "unreadable shape" }),
     });
-  });
-  return with_browser_http(program, fetch_impl);
-}
+  }).pipe((program) => with_browser_http(program, fetch_impl));

@@ -77,7 +77,7 @@ export class PacedSender {
   }
 
   /** Ack gate with timeout; the waiter deregisters on exit (no leaks). */
-  private wait_for_ack(timeout: Duration.DurationInput): Effect.Effect<void, SendTimeoutError> {
+  private wait_for_ack(timeout: Duration.DurationInput) {
     const self = this;
     return Effect.acquireUseRelease(
       Effect.map(

@@ -43,7 +43,7 @@ export function start_login_poll(
   };
   abort_signal.addEventListener("abort", on_abort, { once: true });
 
-  const loop: Effect.Effect<void> = Effect.gen(function* () {
+  const loop = Effect.gen(function* () {
     let attempt = 0;
     for (;;) {
       if (stopped || callbacks.is_cancelled()) return;

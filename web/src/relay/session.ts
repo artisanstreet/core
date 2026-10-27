@@ -6,13 +6,12 @@
 // the page re-establishes (new grant, new channel, re-handshake) while the
 // browser retains the Core session.
 
-import { Deferred, Effect } from "effect";
+import { Deferred, Effect, Either, Match, Schema } from "effect";
 import { SendTimeoutError } from "../../vendor/relay/client.ts";
 import type { SecureChannel } from "../../vendor/relay/client.ts";
 import type { GrantMaterial } from "../../vendor/relay/client.ts";
 import type { CoreApi } from "../api.ts";
 import {
-  decodeTunnelResponse,
   encodeTunnelRequest,
   newRequestId,
   SINGLE_FRAME_BYTES,
@@ -20,14 +19,14 @@ import {
   type TunnelRequest,
   type TunnelResponse,
 } from "../forge/codec.ts";
-import { ChunkReassembly, chunkBytes, isChunkFrame, TunnelChunk } from "../forge/chunk.ts";
-import { Schema } from "effect";
+import { ChunkReassembly, chunkBytes, type TunnelChunk } from "../forge/chunk.ts";
+import { decode_app_message, type AppMessage } from "../forge/app-message.ts";
 import { newChannelId } from "./cnf.ts";
-import { channel_url, default_link_factory, flush_outbound, initiate_secure, mint_channel_grant_effect, wait_open_effect } from "./channel-connect.ts";
-export { grantJti } from "./cnf.ts";
+import { channel_url, default_link_factory, flush_outbound, initiate_secure, mint_channel_grant_effect, settle_pending, wait_open_effect } from "./channel-connect.ts";
+export { grant_jti } from "./cnf.ts";
 import { run_effect } from "../core/run-promise.ts";
 import { PacedSender } from "./paced-sender.ts";
-import type { ChannelEvents, ForgeSessionEvent, RelayLinkLike } from "./transport.ts";
+import type { ChannelEvents, ForgeSessionEvent, PendingGate, RelayLinkLike } from "./transport.ts";
 
 export type { ChannelEvents, ForgeSessionEvent, RelayLinkLike };
 export type SendStatus = "sent" | "dropped-window-full";
@@ -52,9 +51,6 @@ export interface ForgeSessionOptions {
   createLink?: (url: string, grant: GrantMaterial, events: ChannelEvents) => RelayLinkLike;
 }
 
-interface Pending {
-  gate: Deferred.Deferred<TunnelResponse, Error>;
-}
 
 class CallTimeoutError extends Error {
   constructor() {
@@ -66,7 +62,7 @@ class CallTimeoutError extends Error {
 export class ForgeSession {
   private link: RelayLinkLike | null = null;
   private secure: SecureChannel | null = null;
-  private readonly pending = new Map<string, Pending>();
+  private readonly pending = new Map<string, PendingGate>();
   private closed = false;
   readonly channel = newChannelId();
   /** Epoch ms when the current grant expires (0 until connected). */
@@ -85,20 +81,15 @@ export class ForgeSession {
   async connect(): Promise<{ forgeOnline: boolean }> {
     if (this.closed) throw new Error("session closed");
     const self = this;
-    return run_effect(
-      Effect.gen(function* () {
+    const connect_program = Effect.gen(function* () {
         const { core, accountId, machineId } = self.opts;
         const minted = yield* mint_channel_grant_effect(core, machineId);
         self.grantExpiresAtMs = minted.grant_expires_at_ms;
         const grant = minted.grant;
-        const secure = yield* Effect.try({
-          try: () =>
-            initiate_secure(minted.cnf_sk, self.opts.forgeCnfX, grant.jwt, {
-              account: accountId,
-              machine: machineId,
-              channel: self.channel,
-            }),
-          catch: (e) => (e instanceof Error ? e : new Error("Channel setup failed.")),
+        const secure = yield* initiate_secure(minted.cnf_sk, self.opts.forgeCnfX, grant.jwt, {
+          account: accountId,
+          machine: machineId,
+          channel: self.channel,
         });
         self.secure = secure;
         const events = self.opts.onEvent;
@@ -115,19 +106,27 @@ export class ForgeSession {
             },
             onData: (channel, _seq, body) => {
               if (channel !== self.channel) return;
-              try {
-                const app = secure.handleIncoming(body);
-                // Flush twice: the first pump may complete our handshake turn
-                // (m3), which synchronously queues our confirm — the second
-                // flush carries it. Without this the initiator's confirm
-                // sits unsent and the channel never opens.
-                flush_outbound(secure, (out) => link.sendOpaque(channel, out));
-                flush_outbound(secure, (out) => link.sendOpaque(channel, out));
-                if (app) self.onAppBytes(app);
-              } catch (e) {
-                events?.({ type: "error", code: "channel_failed", message: e instanceof Error ? e.message : "Channel failed." });
-                self.close();
-              }
+              Either.match(
+                Either.try({
+                  try: () => secure.handleIncoming(body),
+                  catch: (e) => (e instanceof Error ? e : new Error("Channel failed.")),
+                }),
+                {
+                  onLeft: (e) => {
+                    events?.({ type: "error", code: "channel_failed", message: e.message });
+                    self.close();
+                  },
+                  onRight: (app) => {
+                    // Flush twice: the first pump may complete our handshake turn
+                    // (m3), which synchronously queues our confirm — the second
+                    // flush carries it. Without this the initiator's confirm
+                    // sits unsent and the channel never opens.
+                    flush_outbound(secure, (out) => link.sendOpaque(channel, out));
+                    flush_outbound(secure, (out) => link.sendOpaque(channel, out));
+                    if (app) self.onAppBytes(app);
+                  },
+                },
+              );
             },
             onChannelClosed: (channel, reason) => {
               if (channel === self.channel) {
@@ -168,8 +167,8 @@ export class ForgeSession {
           30_000,
         );
         return { forgeOnline };
-      }),
-    );
+      });
+    return run_effect(connect_program);
   }
 
   /** Unary tunnel call. Large bodies chunk; large answers reassemble. */
@@ -182,8 +181,7 @@ export class ForgeSession {
     const full: TunnelRequest = { ...req, id: req.id ?? newRequestId() };
     const self = this;
     const as_error = (e: unknown) => (e instanceof Error ? e : new Error("Send failed."));
-    return run_effect(
-      Effect.gen(function* () {
+    const call_program = Effect.gen(function* () {
         const gate = yield* Deferred.make<TunnelResponse, Error>();
         self.pending.set(full.id, { gate });
         const texts = yield* Effect.try({
@@ -226,8 +224,8 @@ export class ForgeSession {
             self.reassembly.delete(full.id);
           }),
         ),
-      ),
-    );
+      );
+    return run_effect(call_program);
   }
 
   private readonly reassembly = new Map<string, ChunkReassembly>();
@@ -237,7 +235,7 @@ export class ForgeSession {
     () => this.closed,
   );
 
-  private is_channel_break(e: unknown): boolean {
+  private is_channel_break(e: unknown) {
     return (
       e instanceof SendTimeoutError ||
       (e instanceof Error && /closed|loss|channel|did not answer/i.test(e.message))
@@ -249,7 +247,7 @@ export class ForgeSession {
   }
 
   /** Request plaintexts in send order (single frame or chunk frames). */
-  private request_texts(full: TunnelRequest): string[] {
+  private request_texts(full: TunnelRequest) {
     const framed = encodeTunnelRequest(full);
     if (new TextEncoder().encode(framed).length <= SINGLE_FRAME_BYTES) return [framed];
     const raw = new TextEncoder().encode(framed);
@@ -257,66 +255,66 @@ export class ForgeSession {
   }
 
   private onAppBytes(app: Uint8Array): void {
-    let json: unknown;
-    try {
-      json = JSON.parse(new TextDecoder().decode(app));
-    } catch {
-      this.opts.onEvent?.({ type: "error", code: "bad_frame", message: "Forge answered with an unreadable frame." });
-      return;
+    const text = new TextDecoder().decode(app);
+    const message: AppMessage = Either.getOrElse(
+      Either.map(Schema.decodeUnknownEither(Schema.parseJson())(text), decode_app_message),
+      (): AppMessage => ({ _tag: "BadFrame" }),
+    );
+    return Match.value(message).pipe(
+      Match.tag("Chunk", ({ chunk }) => this.feedChunk(chunk)),
+      Match.tag("BadChunk", ({ transfer, reason }) => {
+        this.reassembly.delete(transfer);
+        this.opts.onEvent?.({ type: "error", code: "bad_chunks", message: reason });
+      }),
+      Match.tag("Response", ({ response }) => this.deliverResponse(response)),
+      Match.tag("BadFrame", () => {
+        this.opts.onEvent?.({ type: "error", code: "bad_frame", message: "Forge answered with an unreadable frame." });
+      }),
+      Match.exhaustive,
+    );
+  }
+
+  private feedChunk(chunk: TunnelChunk): void {
+    let asm = this.reassembly.get(chunk.transfer);
+    if (!asm) {
+      asm = new ChunkReassembly();
+      this.reassembly.set(chunk.transfer, asm);
     }
-    try {
-      if (isChunkFrame(json)) {
-        const chunk = Schema.decodeUnknownSync(TunnelChunk)(json);
-        let asm = this.reassembly.get(chunk.transfer);
-        if (!asm) {
-          asm = new ChunkReassembly();
-          this.reassembly.set(chunk.transfer, asm);
-        }
-        const res = asm.feed(chunk);
-        if (!res.done) return;
-        this.reassembly.delete(chunk.transfer);
-        this.onResponseBytes(res.bytes);
-        return;
-      }
-      this.onResponseJson(json);
-    } catch (e) {
-      this.reassembly.delete((json as { transfer?: string }).transfer ?? "");
-      this.opts.onEvent?.({
-        type: "error",
-        code: "bad_chunks",
-        message: e instanceof Error ? e.message : "Chunked transfer failed.",
-      });
-    }
+    Either.match(
+      Either.try({
+        try: () => asm.feed(chunk),
+        catch: (e) => (e instanceof Error ? e : new Error("Chunked transfer failed.")),
+      }),
+      {
+        onLeft: (e) => {
+          this.reassembly.delete(chunk.transfer);
+          this.opts.onEvent?.({ type: "error", code: "bad_chunks", message: e.message });
+        },
+        onRight: (res) => {
+          if (!res.done) return;
+          this.reassembly.delete(chunk.transfer);
+          this.onResponseBytes(res.bytes);
+        },
+      },
+    );
   }
 
   private onResponseBytes(raw: Uint8Array): void {
-    let json: unknown;
-    try {
-      json = JSON.parse(new TextDecoder().decode(raw));
-    } catch {
-      this.opts.onEvent?.({ type: "error", code: "bad_frame", message: "Reassembled an unreadable response." });
-      return;
-    }
-    this.onResponseJson(json);
+    const text = new TextDecoder().decode(raw);
+    const message: AppMessage = Either.getOrElse(
+      Either.map(Schema.decodeUnknownEither(Schema.parseJson())(text), decode_app_message),
+      (): AppMessage => ({ _tag: "BadFrame" }),
+    );
+    return Match.value(message).pipe(
+      Match.tag("Response", ({ response }) => this.deliverResponse(response)),
+      Match.orElse(() => {
+        this.opts.onEvent?.({ type: "error", code: "bad_frame", message: "Reassembled an unreadable response." });
+      }),
+    );
   }
 
-  private onResponseJson(json: unknown): void {
-    let res: TunnelResponse;
-    try {
-      res = decodeTunnelResponse(json);
-    } catch {
-      this.opts.onEvent?.({ type: "error", code: "bad_frame", message: "Forge answered with an unreadable frame." });
-      return;
-    }
-    const p = this.pending.get(res.id);
-    if (!p) return;
-    this.pending.delete(res.id);
-    try {
-      const ok = throwIfTunnelError(res);
-      Deferred.unsafeDone(p.gate, Effect.succeed(ok));
-    } catch (e) {
-      Deferred.unsafeDone(p.gate, Effect.fail(e instanceof Error ? e : new Error("Forge call failed.")));
-    }
+  private deliverResponse(response: TunnelResponse): void {
+    settle_pending(this.pending, response, "Forge call failed.");
   }
 
   private failPending(e: Error): void {
@@ -328,11 +326,13 @@ export class ForgeSession {
   close(): void {
     this.closed = true;
     this.failPending(new Error("Session closed."));
-    try {
-      this.link?.closeChannel(this.channel, "bye");
-    } catch {
-      // ignore
-    }
+    // Best-effort channel farewell: a gone socket must not fail close.
+    Either.getOrNull(
+      Either.try({
+        try: () => this.link?.closeChannel(this.channel, "bye"),
+        catch: () => null,
+      }),
+    );
     this.link?.close();
     this.link = null;
     this.secure?.destroy();

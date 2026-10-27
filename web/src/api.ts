@@ -18,7 +18,7 @@
 // Promise ONLY here — the single `Effect.runPromise` boundary for pages.
 // Product error formatting stays concise and field-level.
 
-import { Schema } from "effect";
+import { Either, Schema } from "effect";
 import { ArrayFormatter, isParseError } from "effect/ParseResult";
 import * as C from "../../src/contracts/v1.ts";
 import { ApiError, ApiFailure } from "./core/api-error.ts";
@@ -70,25 +70,23 @@ const FIELD_LABELS: Record<string, string> = {
  * generic prompt when the tree carries nothing mappable.
  */
 export function humanizeValidationError(error: unknown): string {
-  if (isParseError(error)) {
-    try {
-      const issues = ArrayFormatter.formatErrorSync(error) as Array<{ path: ReadonlyArray<PropertyKey>; message: string }>;
-      const first = issues[0];
-      if (first) {
-        const field = String(first.path[first.path.length - 1] ?? "");
-        const label = FIELD_LABELS[field] ?? (field ? field : null);
-        if (/email/i.test(field)) return "Enter a valid email address.";
-        if (/message/i.test(first.message) && /missing/i.test(first.message)) {
-          return label ? `Enter ${article(label)} ${label.toLowerCase()}.` : "A required field is missing.";
-        }
-        if (label) return `${label}: ${shorten(first.message)}`;
-        return shorten(first.message);
-      }
-    } catch {
-      // fall through to generic
-    }
+  if (!isParseError(error)) return "Some fields need attention before sending.";
+  const issues = Either.getOrNull(
+    Either.try({
+      try: () => ArrayFormatter.formatErrorSync(error) as Array<{ path: ReadonlyArray<PropertyKey>; message: string }>,
+      catch: () => null,
+    }),
+  );
+  const first = issues?.[0];
+  if (!first) return "Some fields need attention before sending.";
+  const field = String(first.path[first.path.length - 1] ?? "");
+  const label = FIELD_LABELS[field] ?? (field ? field : null);
+  if (/email/i.test(field)) return "Enter a valid email address.";
+  if (/message/i.test(first.message) && /missing/i.test(first.message)) {
+    return label ? `Enter ${article(label)} ${label.toLowerCase()}.` : "A required field is missing.";
   }
-  return "Some fields need attention before sending.";
+  if (label) return `${label}: ${shorten(first.message)}`;
+  return shorten(first.message);
 }
 
 function article(word: string): string {

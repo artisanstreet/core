@@ -17,13 +17,13 @@ export class PresenceFailure extends Data.TaggedError("PresenceFailure")<{
   readonly status?: number;
 }> {}
 
-function presence_program(
+const presence_program = (
   relay_http_url: string,
   account_id: string,
   machine_id: string,
   grant_jwt: string,
-): Effect.Effect<Presence, PresenceFailure, HttpClient.HttpClient> {
-  return Effect.gen(function* () {
+) =>
+  Effect.gen(function* () {
     // No tracer propagation: extra `b3`/`traceparent` headers fail
     // Relay's CORS preflight allowlist (Authorization, Content-Type only).
     const client = (yield* HttpClient.HttpClient).pipe(
@@ -54,7 +54,6 @@ function presence_program(
     }
     return { forgeOnline: json?.forge_online === true, clients: typeof json?.clients === "number" ? json.clients : 0 };
   });
-}
 
 /** Authenticated presence read (Bearer grant, same account+machine). */
 export async function fetchPresence(
@@ -75,11 +74,9 @@ export async function fetchPresence(
   });
 }
 
-export function fetch_presence_effect(
+export const fetch_presence_effect = (
   relay_http_url: string,
   account_id: string,
   machine_id: string,
   grant_jwt: string,
-): Effect.Effect<Presence, PresenceFailure, HttpClient.HttpClient> {
-  return presence_program(relay_http_url, account_id, machine_id, grant_jwt);
-}
+) => presence_program(relay_http_url, account_id, machine_id, grant_jwt);

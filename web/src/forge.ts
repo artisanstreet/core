@@ -47,3 +47,5 @@ export { TRANSCRIPT_BODY_CAP, transcriptText } from "./forge/transcript.ts";
 export type { StoredRef, TranscriptText } from "./forge/transcript.ts";
 export { StreamStart, StreamEvent, asStreamStart, asStreamEvent, asLiveEnvelope } from "./forge/stream-frames.ts";
 export type { LiveEnvelope } from "./forge/stream-frames.ts";
+export { decode_app_message } from "./forge/app-message.ts";
+export type { AppMessage } from "./forge/app-message.ts";
