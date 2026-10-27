@@ -5,6 +5,11 @@ dist/
 .env
 .env.local
 .env.*.local
+# Stage-specific deploy env files (secrets). Only *.example files are committed.
+.env.*
+!*.example
+infra/.env*
+!infra/.env.example
 .reylo/
 .wrangler/
 .alchemy/

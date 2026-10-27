@@ -7,11 +7,14 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "check": "npm run typecheck && npm run test",
+    "build:worker": "npm --prefix .. run build --",
+    "build:web": "npm --prefix ../web run build --",
+    "build": "npm run build:web -- && npm run build:worker --",
+    "check": "npm run build -- && npm run typecheck -- && npm run test -- && npm run verify:bundle --",
     "verify:bundle": "node ./scripts/verify-bundle.mjs",
-    "deploy": "alchemy deploy --config alchemy.run.ts",
-    "plan": "alchemy deploy --dry-run --config alchemy.run.ts",
-    "destroy": "alchemy destroy --config alchemy.run.ts"
+    "deploy": "npm run build -- && npm run verify:bundle -- && npx --no-install alchemy deploy --config alchemy.run.ts",
+    "plan": "npm run build -- && npm run verify:bundle -- && npx --no-install alchemy deploy --dry-run --config alchemy.run.ts",
+    "destroy": "npx --no-install alchemy destroy --config alchemy.run.ts"
   },
   "dependencies": {
     "@alchemy.run/cloudflare": "2.0.0-beta.84",
@@ -27,6 +30,6 @@
     "vitest": "5.0.5"
   },
   "engines": {
-    "node": ">=24"
+    "node": ">=24.11.1"
   }
 }

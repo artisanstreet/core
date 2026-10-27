@@ -48,6 +48,9 @@ export interface CoreWorkerPropsInput {
 // CORE_JWT_ISSUER from Relay's normalized issuer). Only secrets stay as
 // Config.Redacted (bind as secret_text).
 export function buildCoreWorkerProps(input: CoreWorkerPropsInput) {
+  if (!input.mailFrom.trim()) {
+    throw new Error("MAIL_FROM is required (verified Resend sender; no default)");
+  }
   const domainHost = hostnameFromOrigin(input.coreOrigin);
   return {
     name: workerName(input.stage),
@@ -96,9 +99,13 @@ export const makeCoreWorker = (deps: { bucket: BucketHandle; hyperdrive: Hyperdr
 
     const coreOriginRaw = yield* Config.String("AST_CORE_ORIGIN");
     const relayOriginRaw = yield* Config.String("AST_RELAY_ORIGIN");
-    const mailFrom = yield* Config.String("MAIL_FROM").pipe(
-      Config.withDefault("Ast <noreply@example.invalid>"),
-    );
+    // MAIL_FROM is REQUIRED: it must be a verified Resend sender. No
+    // example.invalid fallback — silently deploying broken auth email is
+    // worse than failing fast here.
+    const mailFromRaw = yield* Config.String("MAIL_FROM");
+    if (!mailFromRaw.trim()) {
+      throw new Error("MAIL_FROM is required (verified Resend sender; no default)");
+    }
     const coreOrigin = normalizeOrigin(coreOriginRaw, "AST_CORE_ORIGIN");
     const relayOrigin = normalizeOrigin(relayOriginRaw, "AST_RELAY_ORIGIN");
     assertOriginForStage(coreOrigin, "AST_CORE_ORIGIN", stage);
@@ -109,7 +116,7 @@ export const makeCoreWorker = (deps: { bucket: BucketHandle; hyperdrive: Hyperdr
       stage,
       coreOrigin,
       relayOrigin,
-      mailFrom,
+      mailFrom: mailFromRaw,
       bucket: deps.bucket,
       hyperdrive: deps.hyperdrive,
     });

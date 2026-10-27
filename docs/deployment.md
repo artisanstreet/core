@@ -5,31 +5,38 @@ from this repo; do not claim otherwise.
 
 Authoritative production path: **Alchemy** (`infra/`, stack `ast-core`,
 `Cloudflare.state()` account backend, stage from CLI).
-`wrangler.jsonc` remains for **local/test only** (`wrangler dev`,
-`--dry-run` template checks). Do not treat them as two competing
-production sources: Alchemy owns prod; Wrangler never deploys prod.
+`wrangler.jsonc` remains for **local dev and dry-run checks only**.
+Alchemy owns prod; Wrangler never deploys prod.
 
 ## Alchemy (authoritative prod)
 
-See `infra/README.md` for the reproducible flow. Summary:
+See `infra/README.md` for the reproducible flow and `infra/.env.example`
+for all inputs. Summary:
 
-- Prebuild first (core root): `npm ci && npm run build`
-  (`dist/ast_core/index.js` + `dist/ast_core/assets/*` via Vite/Reylo;
-  `web/dist` portal). Alchemy reuses these with `bundle: false`
+- Build both artifacts from their lockfiles (fresh-clone safe):
+  `npm run infra:build` (root worker `dist/ast_core/index.js` +
+  `dist/ast_core/assets/*` via Vite/Reylo, and portal `web/dist`).
+  Root `npm run build` alone only emits the worker bundle; the portal
+  needs `npm run build:web`. Alchemy reuses these with `bundle: false`
   (Wrangler `no_bundle` contract); plain Alchemy rolldown of
   `src/index.ts` would miss Reylo `.sql` transforms.
-- Deploy from `infra/` with the project-local binary
-  (`npm run deploy -- --stage <stage>`, never bare global `alchemy`):
+- Deploy with the project-local binary (never a global install):
+  `npm run infra:deploy -- --stage <stage>` (prebuilds + verifies, then
+  `npx --no-install alchemy deploy`). Preview with
+  `npm run infra:plan -- --stage <stage>`. Direct equivalent from `infra/`:
+  `npx --no-install alchemy deploy --config alchemy.run.ts --stage <stage>`.
   Worker `ast-core-<stage>` via REAL factory `buildCoreWorkerProps`
   (async `main` + `env`, `runWorkerFirst: true`,
   `notFoundHandling: "none"`), canonical literal origins
   (`CORE_PUBLIC_BASE_URL`/`CORE_JWT_ISSUER` = normalized `AST_CORE_ORIGIN`,
   `CORE_RELAY_ORIGIN` = normalized relay; only secrets stay
-  `Config.Redacted`), R2 `ast-core-config-<stage>`,
+  `Config.Redacted`), `MAIL_FROM` required (verified sender, no default),
+  R2 `ast-core-config-<stage>`,
   Hyperdrive `ast-core-db-<stage>` with `caching: { disabled: true }`
-  explicit, exact HTTPS custom domain on EVERY stage
+  explicit (the flag lives on the Alchemy resource, not in wrangler
+  config), exact HTTPS custom domain on EVERY stage
   (stage-specific `AST_CORE_ORIGIN`; `workersDev: false`).
-- Shared public inputs (both repos, same names):
+- Shared public inputs (same names in both repos):
   `AST_CORE_ORIGIN`, `AST_RELAY_ORIGIN` — exact https bare origins for
   ALL stages, distinct HOSTNAMES (`Core != Relay` by hostname, ports do
   not separate custom-domain ownership). **Stage-specific values only**:
@@ -38,55 +45,45 @@ See `infra/README.md` for the reproducible flow. Summary:
 - Secrets (operator-supplied, `Config.Redacted`, never logged/output):
   `AST_CORE_DATABASE_URL` (external Postgres direct URL; no hosting
   choice here), `CORE_MASTER_KEY` (32B base64url), `CORE_ADMIN_TOKEN`,
-  `RESEND_API_KEY`, plus resolved literal `MAIL_FROM`.
+  `RESEND_API_KEY`, plus required `MAIL_FROM`. Stage files
+  (`infra/.env.<stage>`, `.env.*`) are gitignored; only
+  `infra/.env.example` is committed.
 - State: `Cloudflare.state()` (account default `alchemy-state-store`).
   First `plan`/`dev`/`deploy` bootstraps the store Worker; `CI=true`
   missing-store fails (pre-provision via
-  `alchemy state bootstrap --backend cloudflare`). Never run
-  `plan`/`dev`/`deploy` for “verification” — they ensure cloud state.
-  Offline checks only: `npm run check`, `npm run verify:bundle`
-  (deploy-exact `readPrebuiltWorkerBundle` + entry import execution).
+  `npx --no-install alchemy state bootstrap --backend cloudflare --profile <name>`).
+  Never run `plan`/`dev`/`deploy` for “verification” — they ensure cloud
+  state. Offline checks only: `npm run infra:check`
+  (build + typecheck + tests + `verify:bundle`, deploy-exact
+  `readPrebuiltWorkerBundle` + entry import execution).
 - Outputs are public URLs/names/ids only; no secrets.
 
-Auth: `alchemy profile edit --add Cloudflare` (OAuth/token → default
-profile); CI uses `CLOUDFLARE_ACCOUNT_ID` + token. Relay coordinates via
-root only (distinct stack `ast-relay`, same input names, same backend).
+Auth: `npx --no-install alchemy profile edit --add Cloudflare`
+(OAuth/token → default profile); CI uses `CLOUDFLARE_ACCOUNT_ID` + token.
 
-## Wrangler one-time provisioning (local/test reference)
+## Wrangler (local dev and dry-run checks only)
 
-Kept coherent for local/test; not the prod path. If ever used directly:
+Wrangler never deploys production. Local flows only:
 
-1. Hyperdrive to the production PostgreSQL:
-   `wrangler hyperdrive create ast-core-db --connection-string='postgres://…' --caching-disabled`
-   then put the returned `id` in `wrangler.jsonc` (`hyperdrive[0].id`,
-   currently `replace-with-hyperdrive-id`). Postgres 14+ is fine; SQL is
-   plain (no exotic extensions).
-   Caching MUST stay disabled (`--caching-disabled`): Core is an authority
-   for sessions, machine enrollment/keys, vault assignments, and revocation
-   state, and Hyperdrive does not invalidate cached rows on writes — a
-   cached `revoked_at`/`revocations` read would keep honoring revoked
-   sessions, keys, and machines until TTL. Local dev never emulates this
-   (direct Postgres, no cache), so only production is at risk.
-   If the config already exists, disable caching in place (no re-create):
-   `wrangler hyperdrive update <id> --caching-disabled`.
-   Verify before every deploy (genuine external prerequisite alongside the
-   Hyperdrive id itself; production is NOT verified from this repo):
-   `wrangler hyperdrive get <id>` must show caching disabled.
-2. R2 bucket `ast-core-config` (or rename in `wrangler.jsonc`).
-3. Custom domain for `https://core.artisanstreet.dev` (or set
-   `CORE_PUBLIC_BASE_URL` / `CORE_JWT_ISSUER` to the real origin —
-   both must match the deployed origin or grants fail closed).
+- `npm run dev` (vite dev, port 8787) with `.env` / `.dev.vars` local vars.
+- `npx wrangler dev` for the local Worker runtime.
+- `npm run build && npx wrangler deploy --dry-run` as a local template
+  check (no cloud mutations).
 
-## Secrets (wrangler secret put; never commit)
+Production Hyperdrive/R2/domain/secrets are owned by Alchemy (see
+above): Hyperdrive caching stays disabled via the Alchemy resource
+(`caching: { disabled: true }`), R2 via `ast-core-config-<stage>`,
+domains via stage-specific `AST_CORE_ORIGIN`, secrets via
+`Config.Redacted` deploy inputs. There is no `wrangler hyperdrive
+create/update`, `wrangler secret put`, or `wrangler deploy` production
+path in this repo.
 
-- `CORE_MASTER_KEY`: 32 random bytes, base64url, no padding. Generates:
-  `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`.
-  Boot refuses the dev default (`AAA…`) in production.
-- `RESEND_API_KEY`: required when `MAIL_PROVIDER=resend` (the production
-  template value). The log mailer is refused in production by a boot guard.
-- `CORE_ADMIN_TOKEN`: bearer for `/v1/admin/*` (key rotation, janitor
-  trigger-as-HTTP). Without it those endpoints 404.
-- No `DATABASE_URL` in production: the Worker uses the Hyperdrive binding.
+## Database migrations (explicit, unchanged)
+
+`DATABASE_URL=<direct postgres url> npm run db:setup` (migrations run
+in transactions under an advisory lock; concurrent migrators serialize).
+Run against the direct Postgres origin before deploying the Worker that
+pools it via Hyperdrive.
 
 ## Hyperdrive + Postgres.js driver contract
 
@@ -113,8 +110,9 @@ Kept coherent for local/test; not the prod path. If ever used directly:
    in transactions under an advisory lock; concurrent migrators serialize).
 2. `npm run typecheck && npm test` (needs the dev DB reachable for Reylo
    inference: default `postgres://core:core@127.0.0.1:55432/core`).
-3. `npm run build && npx wrangler deploy --dry-run` (local template check
-   only), then Alchemy deploy per `infra/README.md`.
+3. `npm run infra:build && npm run infra:check` (offline; builds both
+   artifacts from lockfiles, then typecheck/tests/verify), then
+   `npm run infra:plan -- --stage <stage>` / `npm run infra:deploy -- --stage <stage>`.
 4. Post-deploy smoke: `GET /v1/version`, `GET /.well-known/jwks.json`
    (after first grant issuance a key exists), `POST /v1/admin/janitor`
    with `x-admin-token`.

@@ -10,9 +10,15 @@
     "test": "vitest run",
     "dev": "vite dev --port 8787",
     "build": "vite build",
+    "build:web": "npm --prefix web run build --",
     "contracts:emit": "EMIT_CONTRACTS=1 vitest run tests/emit.test.ts",
     "contracts:check": "vitest run tests/emit.test.ts",
-    "preview": "vite preview --port 8787"
+    "preview": "vite preview --port 8787",
+    "infra:build": "npm --prefix infra run build --",
+    "infra:check": "npm --prefix infra run check --",
+    "infra:plan": "npm --prefix infra run plan --",
+    "infra:deploy": "npm --prefix infra run deploy --",
+    "infra:verify": "npm --prefix infra run verify:bundle --"
   },
   "dependencies": {
     "@oslojs/otp": "1.1.0",
@@ -36,6 +42,6 @@
     "wrangler": "4.153.0"
   },
   "engines": {
-    "node": ">=24"
+    "node": ">=24.11.1"
   }
 }

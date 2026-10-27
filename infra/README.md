@@ -8,7 +8,7 @@ Pinned (verified 2026-10-27, `npm view alchemy dist-tags`):
 - `@alchemy.run/cloudflare@2.0.0-beta.84`
 - `@alchemy.run/domain@2.0.0-beta.84`, `@alchemy.run/frontend-frameworks@2.0.0-beta.84`
 - `effect@4.0.6`, `@effect/platform-node@4.0.6` (satisfies `^4.0.5` peers)
-- `typescript@7.1.0-beta` (aligns with service + Relay), Node >=24
+- `typescript@7.1.0-beta`, Node `>=24.11.1`
 
 API evidence: installed `beta84` types
 (`infra/node_modules/@alchemy.run/cloudflare/src/…`) + official docs
@@ -25,18 +25,18 @@ API evidence: installed `beta84` types
 - Worker `ast-core-<stage>` (async plain module via REAL factory
   `buildCoreWorkerProps` in `src/worker.ts`, used by both the deployed
   `Cloudflare.Worker` and tests — no duplicate test-only descriptors):
-  `main` = absolute `dist/ast_core/index.js` (prebuilt via `npm run build`
-  at the core root; Reylo `.sql` transforms already compiled in),
+  `main` = absolute `dist/ast_core/index.js` (prebuilt via root
+  `npm run build`; Reylo `.sql` transforms already compiled in),
   `bundle: false` (Wrangler `no_bundle` contract; sibling
   `dist/ast_core/assets/*.js` chunks upload as additional modules,
   `.map` excluded by `defaultModuleRules`), `compatibility`
-  `{ date: "2026-10-01", flags: ["nodejs_compat"] }` (wrangler parity),
-  `assets` = absolute `web/dist` with `runWorkerFirst: true` (REQUIRED;
-  worker-first auth/CSP; API/UI/metadata never fall through; SPA fallback
-  in `src/http.ts` via `ASSETS`), `notFoundHandling: "none"` (wrangler
-  parity), `env` = canonical literals + `Config.Redacted` secrets +
-  resources (below), exact HTTPS custom `domain` on EVERY stage
-  (stage-specific `AST_CORE_ORIGIN` hostname; Wrangler remains local dev),
+  `{ date: "2026-10-01", flags: ["nodejs_compat"] }`,
+  `assets` = absolute `web/dist` (prebuilt via `npm run build --prefix web`)
+  with `runWorkerFirst: true` (REQUIRED; worker-first auth/CSP; API/UI/metadata
+  never fall through; SPA fallback in `src/http.ts` via `ASSETS`),
+  `notFoundHandling: "none"`, `env` = canonical literals +
+  `Config.Redacted` secrets + resources (below), exact HTTPS custom
+  `domain` on EVERY stage (stage-specific `AST_CORE_ORIGIN` hostname),
   `workersDev: false` (no invented workers.dev preview URLs).
 - R2 `ast-core-config-<stage>` (`CONFIG_BUCKET` binding).
 - Hyperdrive `ast-core-db-<stage>` (`HYPERDRIVE` binding) with
@@ -45,20 +45,20 @@ API evidence: installed `beta84` types
 - Env (persisted schema, canonical literals): `CORE_ENV=production`,
   `CORE_PUBLIC_BASE_URL=<canonical coreOrigin>`,
   `CORE_JWT_ISSUER=<canonical coreOrigin>` (same literal, so issuer
-  matches Relay's normalized issuer even for uppercase/trailing-slash
+  matches the normalized issuer even for uppercase/trailing-slash
   inputs), `CORE_SPA_APPROVE_PATH=/#/approve`,
   `CORE_RELAY_ORIGIN=<canonical relayOrigin>`,
-  `MAIL_PROVIDER=resend`, `MAIL_FROM=<resolved literal>`, plus secrets
+  `MAIL_PROVIDER=resend`, `MAIL_FROM=<required verified sender>`, plus secrets
   `CORE_MASTER_KEY`, `CORE_ADMIN_TOKEN`, `RESEND_API_KEY` via
-  `Config.Redacted` ONLY (no `Config.String` bindings remain; bind as
-  `secret_text`). No generated/rotated keys. Single declaration:
-  bucket/hyperdrive yielded once in `alchemy.run.ts` and passed to
-  `makeCoreWorker({ bucket, hyperdrive })` (Worker never re-yields them).
-- Stack `ast-core` (Relay uses its own stack), stage from CLI,
+  `Config.Redacted` ONLY (bind as `secret_text`). No generated/rotated keys.
+  Single declaration: bucket/hyperdrive yielded once in `alchemy.run.ts`
+  and passed to `makeCoreWorker({ bucket, hyperdrive })`
+  (Worker never re-yields them).
+- Stack `ast-core`, stage from CLI,
   state `Cloudflare.state()` (account default `alchemy-state-store`,
   Cloudflare-backed remote). No sibling source imports.
 
-Shared public inputs (both repos, same names):
+Shared public inputs (same names in both repos):
 `AST_CORE_ORIGIN`, `AST_RELAY_ORIGIN`. Exact https bare origins for ALL
 deployed stages (no path/query, no wildcard, no credentials; https
 required even for preview — every stage attaches a custom domain).
@@ -66,36 +66,75 @@ required even for preview — every stage attaches a custom domain).
 Workers cannot share one custom-domain owner — the second attach would
 move ownership). Stage-specific values: never reuse prod domains for
 preview/dev stages; never demonstrate prod and preview with the same
-`.env` domains.
+`.env` domains. All inputs documented in `infra/.env.example`
+(stage files `infra/.env.<stage>` are gitignored).
 
 ## Reproducible flow (no global install)
 
-Bare `alchemy` is NOT installed by `npm ci`. From `infra/` use the
-project-local binary via npm scripts or `npx --no-install`:
+Bare `alchemy` is NOT installed by `npm ci`. Use the project-local binary
+via `npx --no-install` or the npm wrappers below.
+
+Fresh clone (builds BOTH artifacts from their lockfiles first):
 
 ```sh
 cd /home/sander/projects/artisanstreet/core/infra
-npm ci
-npm run check                 # typecheck + tests (offline, no creds)
-npm run verify:bundle         # deploy-exact prebuilt collector + import execution (offline)
+npm ci                                   # infra deps (isolated lockfile)
+npm run build                            # portal first, then worker (see below)
+npm run check                            # build + typecheck + tests + verify (needs build DB)
 ```
 
-Root convenience wrappers (if any) MUST keep a trailing `--` in the
-script definition so stage flags forward through nested npm:
-
-```json
-// root package.json (illustrative; owned by root, not this repo)
-{ "scripts": { "infra:deploy": "npm --prefix infra run deploy --" } }
-```
+Build-DB prerequisite (distinct from deploy secrets): the worker build
+runs the Reylo Vite plugin `sqlModule`, which `Session.analyze`s every
+`.sql` import against the schema (`.reylo.yaml`
+`direct_url: ${DATABASE_URL}`, `env: [.env, .env.local]`). A fresh
+checkout has no `.reylo/` cache (gitignored), so the build needs a
+schema-populated local/CI PostgreSQL + `DATABASE_URL` — the existing
+Core setup is reusable, no new hosting:
 
 ```sh
-# then this forwards --stage correctly (verified via --help, no cloud):
-npm run infra:deploy -- --stage prod
-# without the trailing `--` in the definition, npm swallows --stage and
-# the wrong default stage (live_$USER) would deploy — never rely on that.
+cd /home/sander/projects/artisanstreet/core
+cp .env.example .env        # DATABASE_URL=postgres://core:core@127.0.0.1:55432/core
+# docker: ast-core-dev-pg on 127.0.0.1:55432 (Postgres 18), see README quickstart
+npm ci && npm run db:setup  # applies db/migrations/*.sql (transactional + locked)
+cd web && npm ci && cd ..
+DATABASE_URL=postgres://core:core@127.0.0.1:55432/core npm run infra:build
 ```
 
-Benign forwarding check used here (no state bootstrap, help only):
+Verified with explicit `DATABASE_URL` and clean outputs (`.reylo/`,
+`dist/ast_core/`, `web/dist/` removed): worker build re-analyzes and
+succeeds (exit 0, `.reylo/queries` + `dist/` regenerated); portal build
+succeeds (exit 0). So `verify:bundle` and infra unit tests are DB-free,
+but `build` is NOT truly offline — it may touch that local DB. Never
+substitute production creds here: `AST_CORE_DATABASE_URL` (secret
+Hyperdrive deploy origin) is a different variable for a different
+purpose; the build only ever uses local/CI `DATABASE_URL`.
+
+`npm run build` = `build:web` + `build:worker` (portal first):
+- `build:web`: `npm --prefix ../web run build --` (portal `vite build`,
+  emits `web/dist/index.html` + `web/dist/assets/*`). Web has its own
+  lockfile (`web/package-lock.json`).
+- `build:worker`: `npm --prefix .. run build --` (root `vite build`,
+  emits `dist/ast_core/index.js` + `dist/ast_core/assets/*`).
+  `wrangler.jsonc` `assets.directory` (`./web/dist`) is the static-asset
+  source the worker serves at runtime, so the portal builds first and a
+  fresh checkout never loads the worker build against a missing assets
+  dir. Root `npm run build` alone does NOT emit `web/dist`.
+`check`/`plan`/`deploy` all prebuild first, then explicitly verify, so a
+fresh clone never silently uses stale or missing artifacts.
+
+Root wrappers (trailing `--` keeps stage flags forwarding through nested
+npm — without it, `npm run infra:deploy -- --stage prod` would swallow
+`--stage` and deploy the wrong default stage):
+
+```sh
+cd /home/sander/projects/artisanstreet/core
+npm run infra:build --    # -> npm --prefix infra run build --
+npm run infra:check --    # -> npm --prefix infra run check --
+npm run infra:plan -- --stage prod
+npm run infra:deploy -- --stage prod
+```
+
+Benign forwarding check (no state bootstrap, help only):
 
 ```sh
 npm run deploy -- --help
@@ -112,18 +151,18 @@ are functions (not substring matching). For `bundle: true` Workers the
 offline equivalent is `…/Sources/Rolldown.js` `WorkerBundle`
 (`Effect.gen` → `{ build, watch }`, options
 `{ id, main, compatibility: { date, flags }, entry: { kind: "external" }, stack: { name, stage }, extraOptions: undefined }`,
-same `NodeServices.layer`). Relay can reuse this pattern via root —
-no separate esbuild approximation, no cloud state.
+same `NodeServices.layer`). No separate esbuild approximation, no cloud state.
 
 Plan/deploy (need real Cloudflare + Postgres + secrets; DO NOT run
-without them — first `plan`/`dev` bootstraps account state, see below):
+without them — first `plan`/`dev` bootstraps account state, see below).
+`plan`/`deploy` prebuild + verify first:
 
 ```sh
 # prod (example; use stage-specific env files, never share domains)
 AST_CORE_ORIGIN=https://core.artisanstreet.dev \
 AST_RELAY_ORIGIN=https://relay.artisanstreet.dev \
 AST_CORE_DATABASE_URL='postgres://…' \
-CORE_MASTER_KEY='…' CORE_ADMIN_TOKEN='…' RESEND_API_KEY='…' MAIL_FROM='Ast <…>' \
+CORE_MASTER_KEY='…' CORE_ADMIN_TOKEN='…' RESEND_API_KEY='…' MAIL_FROM='Ast <ops@example.com>' \
 npm run deploy -- --stage prod --profile default
 
 # preview (different origins; same .env domains would move ownership)
@@ -136,25 +175,18 @@ npm run plan -- --stage prod
 # or: npx --no-install alchemy deploy --dry-run --config alchemy.run.ts --stage prod
 ```
 
-Build the artifacts first (core root, service toolchain unchanged):
-
-```sh
-cd /home/sander/projects/artisanstreet/core
-npm ci && npm run build          # dist/ast_core/index.js + web/dist
-```
-
 ## Auth / bootstrap / migration (accurate)
 
-- Auth: `alchemy profile edit --add Cloudflare` (OAuth or API token,
-  saved to `~/.alchemy/profiles.json`, default profile). No
-  `wrangler login` needed. CI uses `CLOUDFLARE_ACCOUNT_ID` +
-  `CLOUDFLARE_API_TOKEN` (or key+email). See `…/cloudflare/setup`.
+- Auth: `npx --no-install alchemy profile edit --add Cloudflare` (OAuth or
+  API token, saved to `~/.alchemy/profiles.json`, default profile).
+  CI uses `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN` (or key+email).
+  See `…/cloudflare/setup`.
 - State: `Cloudflare.state()` (recommended for CF-only infra). First
   `plan`/`dev`/`deploy` against an account with no store deploys the
   store Worker once (`alchemy-state-store` + Secrets Store entries;
   reused across stacks/stages). In CI (`CI=true`) a missing store fails
   instead — pre-provision with
-  `alchemy state bootstrap --backend cloudflare --profile <name>`.
+  `npx --no-install alchemy state bootstrap --backend cloudflare --profile <name>`.
   See `https://alchemy.run/state-store`. NEVER run `plan`/`dev`/`deploy`
   here for “verification” — they mutate/ensure cloud state.
 - Migration from wrangler: wrangler template used `ast-core` /
@@ -162,7 +194,7 @@ npm ci && npm run build          # dist/ast_core/index.js + web/dist
   names (`ast-core-prod`, …). Either adopt existing resources
   (`--adopt`, see `…/cli/adopting-resources`) or let Alchemy create
   stage-qualified ones and cut over DNS. Alchemy is authoritative for
-  prod; `wrangler.jsonc` remains for local/test only (see
+  prod; `wrangler.jsonc` remains for local dev/dry-run only (see
   `docs/deployment.md`). Generated `dist/ast_core/wrangler.json`
   (`no_bundle:true`) is non-authoritative and ignored for modules
   (`.json` not in `defaultModuleRules`).
@@ -174,6 +206,6 @@ npm ci && npm run build          # dist/ast_core/index.js + web/dist
 
 Cloudflare account + zone for the prod hostname, external Postgres
 14+ reachable for Hyperdrive (direct URL in `AST_CORE_DATABASE_URL`),
-Resend sender/key, 32-byte base64url `CORE_MASTER_KEY`,
-`CORE_ADMIN_TOKEN`, `MAIL_FROM`. No deploys were performed from this
-repo; do not claim otherwise.
+verified Resend sender/key (`MAIL_FROM` required, no default),
+32-byte base64url `CORE_MASTER_KEY`, `CORE_ADMIN_TOKEN`. No deploys were
+performed from this repo; do not claim otherwise.

@@ -100,6 +100,21 @@ describe("Worker env binds canonical literals (not raw Config values)", () => {
     expect(typeof props.env.CORE_ADMIN_TOKEN).not.toBe("string");
     expect(typeof props.env.RESEND_API_KEY).not.toBe("string");
   });
+
+  it("rejects empty MAIL_FROM (verified sender required, no default)", () => {
+    const coreOrigin = normalizeOrigin("https://core.artisanstreet.dev", "AST_CORE_ORIGIN");
+    const relayOrigin = normalizeOrigin("https://relay.artisanstreet.dev", "AST_RELAY_ORIGIN");
+    expect(() =>
+      buildCoreWorkerProps({
+        stage: "pr-42",
+        coreOrigin,
+        relayOrigin,
+        mailFrom: "   ",
+        bucket: dummyBucket,
+        hyperdrive: dummyHd,
+      }),
+    ).toThrow(/MAIL_FROM/);
+  });
 });
 
 describe("stage routes: exact custom domain on every stage, worker-first", () => {
