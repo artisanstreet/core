@@ -64,8 +64,10 @@ const send_with_native = (
   m: Mail,
 ) => {
   const program = Effect.gen(function* () {
-    const from = (cfg.env.MAIL_FROM ?? "").trim();
-    if (!from) return yield* Effect.fail(internal("mail delivery failed"));
+    const email = (cfg.env.MAIL_FROM ?? "").trim().toLowerCase();
+    if (!email) return yield* Effect.fail(internal("mail delivery failed"));
+    const name = (cfg.env.MAIL_FROM_NAME ?? "").trim();
+    const from = name ? { email, name } : email;
     yield* Effect.tryPromise({
       try: () => native.send({ from, to: m.to, subject: m.subject, text: m.text }),
       catch: (cause) => internal("mail delivery failed", { cause }),

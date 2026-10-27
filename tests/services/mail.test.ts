@@ -79,7 +79,8 @@ function cloudflare_config() {
     env: {
       ...base.env,
       MAIL_PROVIDER: "cloudflare",
-      MAIL_FROM: "Artisan Street <auth@mail.artisan.st>",
+      MAIL_FROM: "auth@mail.artisan.st",
+      MAIL_FROM_NAME: "Artisan Street",
       RESEND_API_KEY: undefined } as Record<string, string | undefined>,
     mailer: "cloudflare" as const,
     resend_api_key: undefined };
@@ -107,10 +108,42 @@ describe("mail native cloudflare binding", () => {
     await Effect.runPromise(program);
     expect(seen.length).toBe(1);
     expect(seen[0]).toEqual({
-      from: "Artisan Street <auth@mail.artisan.st>",
+      from: { email: "auth@mail.artisan.st", name: "Artisan Street" },
       to: "user@example.com",
       subject: "Sign in to Ast",
       text: "body http://x",
+    });
+  });
+
+  it("sends a bare address when no display name is configured", async () => {
+    const seen: Array<{ from: unknown; to: unknown; subject: unknown; text: unknown }> = [];
+    const native = {
+      send: async (msg: {
+        readonly from: unknown;
+        readonly to: unknown;
+        readonly subject: unknown;
+        readonly text: unknown;
+      }) => {
+        seen.push({ from: msg.from, to: msg.to, subject: msg.subject, text: msg.text });
+        return { messageId: "mid-2" };
+      } } as unknown as SendEmailBinding;
+    const cfg = cloudflare_config();
+    const bare_cfg = {
+      ...cfg,
+      env: { ...cfg.env, MAIL_FROM_NAME: undefined } as Record<string, string | undefined> };
+    const config_layer = Layer.succeed(AppConfigTag, bare_cfg);
+    const layers = mail_cloudflare_live(native).pipe(Layer.provide(config_layer));
+    const program = Effect.gen(function* () {
+      const mail = yield* MailTag;
+      yield* mail.send({ to: "user@example.com", subject: "s", text: "t", confirm_url: "http://x" });
+    }).pipe(Effect.provide(layers));
+    await Effect.runPromise(program);
+    expect(seen.length).toBe(1);
+    expect(seen[0]).toEqual({
+      from: "auth@mail.artisan.st",
+      to: "user@example.com",
+      subject: "s",
+      text: "t",
     });
   });
 
@@ -149,7 +182,8 @@ describe("mail native cloudflare binding", () => {
           CORE_JWT_ISSUER: "http://test.invalid",
           CORE_MASTER_KEY: MASTER_KEY,
           MAIL_PROVIDER: "cloudflare",
-          MAIL_FROM: "Artisan Street <auth@mail.artisan.st>" } },
+          MAIL_FROM: "auth@mail.artisan.st",
+          MAIL_FROM_NAME: "Artisan Street" } },
       mailer: "cloudflare" as const,
       r2: {
         put: (_key: string, _body: Uint8Array | string) => Promise.resolve(undefined),
@@ -177,7 +211,8 @@ describe("mail native cloudflare binding", () => {
       CORE_ENV: "production",
       CORE_MASTER_KEY: MASTER_KEY,
       MAIL_PROVIDER: "cloudflare",
-      MAIL_FROM: "Artisan Street <auth@mail.artisan.st>",
+      MAIL_FROM: "auth@mail.artisan.st",
+      MAIL_FROM_NAME: "Artisan Street",
     });
     expect(cfg.mailer).toBe("cloudflare");
     expect(cfg.resend_api_key).toBeUndefined();

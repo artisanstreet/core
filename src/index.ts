@@ -33,6 +33,7 @@ function string_vars(env: WorkerEnv): Record<string, string | undefined> {
     CORE_MASTER_KEY: pick(env.CORE_MASTER_KEY),
     MAIL_PROVIDER: pick(env.MAIL_PROVIDER),
     MAIL_FROM: pick(env.MAIL_FROM),
+    MAIL_FROM_NAME: pick(env.MAIL_FROM_NAME),
     CORE_SPA_APPROVE_PATH: pick(env.CORE_SPA_APPROVE_PATH),
     CORE_RELAY_ORIGIN: pick(env.CORE_RELAY_ORIGIN) };
 }
