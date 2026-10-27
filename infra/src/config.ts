@@ -1,4 +1,5 @@
 import * as Redacted from "effect/Redacted";
+import * as Result from "effect/Result";
 
 // Pure deploy-input helpers for ast-core Alchemy IaC.
 //
@@ -81,12 +82,11 @@ export function normalize_origin(raw: string | undefined, var_name: string): str
   const trimmed = (raw ?? "").trim().replace(/\/+$/, "");
   if (!trimmed) throw new Error(`${var_name} is required`);
   if (trimmed.includes("*")) throw new Error(`${var_name} must be a single exact origin (no wildcards)`);
-  let u: URL;
-  try {
-    u = new URL(trimmed);
-  } catch {
+  const parsed = Result.try(() => new URL(trimmed));
+  if (Result.isFailure(parsed)) {
     throw new Error(`${var_name} must be a valid absolute URL (got ${JSON.stringify(trimmed)})`);
   }
+  const u = parsed.success;
   if (u.username || u.password) throw new Error(`${var_name} must not embed credentials`);
   if (u.search || u.hash) throw new Error(`${var_name} must not include query or fragment`);
   if ((u.pathname !== "/" && u.pathname !== "") || trimmed.endsWith("/")) {
@@ -123,14 +123,14 @@ export function hostname_from_origin(origin: string): string {
 // hostname-scoped (not port): Core and Relay must have distinct hostnames,
 // otherwise the second custom-domain attach moves ownership away.
 export function assert_distinct_origins(core_origin: string, relay_origin: string): void {
-  let core_host: string;
-  let relay_host: string;
-  try {
-    core_host = new URL(core_origin).hostname.toLowerCase();
-    relay_host = new URL(relay_origin).hostname.toLowerCase();
-  } catch {
+  const parsed_hosts = Result.try(() => ({
+    core_host: new URL(core_origin).hostname.toLowerCase(),
+    relay_host: new URL(relay_origin).hostname.toLowerCase(),
+  }));
+  if (Result.isFailure(parsed_hosts)) {
     throw new Error("AST_CORE_ORIGIN and AST_RELAY_ORIGIN must be valid absolute URLs");
   }
+  const { core_host, relay_host } = parsed_hosts.success;
   if (!core_host || !relay_host) {
     throw new Error("AST_CORE_ORIGIN and AST_RELAY_ORIGIN must include hostnames");
   }
@@ -154,12 +154,11 @@ export interface ParsedPostgresOrigin {
 }
 
 export function parse_postgres_url(url_string: string): ParsedPostgresOrigin {
-  let u: URL;
-  try {
-    u = new URL(url_string);
-  } catch {
+  const parsed_url = Result.try(() => new URL(url_string));
+  if (Result.isFailure(parsed_url)) {
     throw new Error("invalid Postgres origin URL (unparseable)");
   }
+  const u = parsed_url.success;
   const proto = u.protocol.replace(/:$/, "");
   if (proto !== "postgres" && proto !== "postgresql") {
     throw new Error("invalid Postgres origin URL (scheme must be postgres or postgresql)");
@@ -168,13 +167,11 @@ export function parse_postgres_url(url_string: string): ParsedPostgresOrigin {
   if (u.username === "") throw new Error("invalid Postgres origin URL (missing user)");
   // Password may be empty for local dev URLs, but prod secrets must carry one.
   // Do not enforce here; Cloudflare will reject empty at provision time.
-  const raw_password = (() => {
-    try {
-      return decodeURIComponent(u.password);
-    } catch {
-      throw new Error("invalid Postgres origin URL (bad password encoding)");
-    }
-  })();
+  const decoded_password = Result.try(() => decodeURIComponent(u.password));
+  if (Result.isFailure(decoded_password)) {
+    throw new Error("invalid Postgres origin URL (bad password encoding)");
+  }
+  const raw_password = decoded_password.success;
   const db = decodeURIComponent(u.pathname.replace(/^\//, ""));
   if (!db) throw new Error("invalid Postgres origin URL (missing database)");
   if (u.search || u.hash) throw new Error("invalid Postgres origin URL (must not include query or fragment)");

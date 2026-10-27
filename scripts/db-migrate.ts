@@ -9,6 +9,7 @@ import { readdir, readFile as read_file } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath as file_url_to_path } from "node:url";
 import postgres from "postgres";
+import { Either } from "effect";
 
 const root = path.dirname(path.dirname(file_url_to_path(import.meta.url)));
 const migrations_dir = path.join(root, "db", "migrations");
@@ -16,19 +17,22 @@ const helpers_dir = path.join(root, "db", "migrate-helpers");
 
 // Minimal .env loader (config, not SQL): KEY=VALUE lines, no interpolation.
 for (const name of [".env.local", ".env"]) {
-  try {
-    const text = await read_file(path.join(root, name), "utf8");
-    for (const line of text.split("\n")) {
-      const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
-      if (m && process.env[m[1]] === undefined) {
-        let v = m[2].trim();
-        if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
-          v = v.slice(1, -1);
-        }
-        process.env[m[1]] = v;
+  const loaded = await read_file(path.join(root, name), "utf8").then(
+    (text) => Either.right(text),
+    () => Either.left(null as const),
+  );
+  if (Either.isLeft(loaded)) continue;
+  const text = loaded.right;
+  for (const line of text.split("\n")) {
+    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+    if (m && process.env[m[1]] === undefined) {
+      let v = m[2].trim();
+      if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+        v = v.slice(1, -1);
       }
+      process.env[m[1]] = v;
     }
-  } catch { /* optional */ }
+  }
 }
 const url = process.env.DATABASE_URL;
 if (!url) {
