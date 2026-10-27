@@ -1,5 +1,6 @@
 import { PGlite } from "@electric-sql/pglite";
 import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { decodeBase32 } from "@oslojs/encoding";
 import { generateHOTP, generateTOTP } from "@oslojs/otp";
 import { Cause, Effect, Layer } from "effect";
@@ -35,7 +36,7 @@ export async function setupRig(opts: {
   assets?: { fetch(request: Request): Promise<Response> };
 } = {}): Promise<TestRig> {
   const db = new PGlite();
-  await db.exec(await readFile(new URL("../../db/schema.sql", import.meta.url), "utf8"));
+  await db.exec(await readFile(fileURLToPath(new URL("../../db/schema.sql", import.meta.url).href), "utf8"));
   const mail: SentMail[] = [];
   const store = new Map<string, Uint8Array>();
   let nowMs = Date.now();
