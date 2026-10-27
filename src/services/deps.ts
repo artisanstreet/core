@@ -4,13 +4,15 @@ import type { MasterKey } from "../crypto.ts";
 import { load_master_key } from "../crypto.ts";
 import { internal, type CoreError } from "../errors.ts";
 
+export type MailerKind = "log" | "resend" | "cloudflare";
+
 export interface AppConfig {
   readonly env: Record<string, string | undefined>;
   readonly core_env: string;
   readonly public_base_url: string;
   readonly jwt_issuer: string;
   readonly master_key: MasterKey;
-  readonly mailer: "log" | "resend";
+  readonly mailer: MailerKind;
   readonly resend_api_key?: string;
   readonly admin_token?: string;
   readonly now: () => number;
@@ -24,7 +26,9 @@ export function config_from_env(
 ): AppConfig {
   const core_env = (env.CORE_ENV ?? "dev").toLowerCase();
   const mailer = (env.MAIL_PROVIDER ?? "log").toLowerCase();
-  if (mailer !== "log" && mailer !== "resend") throw new Error("MAIL_PROVIDER must be log|resend");
+  if (mailer !== "log" && mailer !== "resend" && mailer !== "cloudflare") {
+    throw new Error("MAIL_PROVIDER must be log|resend|cloudflare");
+  }
   if (core_env === "production" && mailer === "log") {
     throw new Error("MAIL_PROVIDER=log is refused in production");
   }

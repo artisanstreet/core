@@ -3,7 +3,8 @@ import type { Db, R2Like } from "../db.ts";
 import type { AppEnv } from "../db.ts";
 import { config_from_env } from "../services/deps.ts";
 import { AppConfigTag, DbTag, TxTag, type TxRunner } from "../services/deps.ts";
-import { MailTag, MailLive, type Mail } from "../services/mail.ts";
+import { MailTag, MailLive, mail_cloudflare_live, type Mail, type SendEmailBinding } from "../services/mail.ts";
+import { internal } from "../errors.ts";
 import { FetchHttpClient } from "@effect/platform";
 import { StorageTag } from "../services/storage.ts";
 import { AssetsTag } from "./assets.ts";
@@ -12,8 +13,9 @@ import { KeyCacheLive, type KeyCacheTag } from "../services/grants.ts";
 export interface RequestContext {
   readonly db: Db;
   readonly env: AppEnv;
-  readonly mailer: "log" | "resend";
+  readonly mailer: "log" | "resend" | "cloudflare";
   readonly resend_api_key?: string;
+  readonly send_email?: SendEmailBinding;
   readonly r2: R2Like;
   readonly tx_runner: TxRunner;
   readonly mail_sink?: (m: { to: string; subject: string; text: string; confirm_url: string }) => void;
@@ -41,6 +43,16 @@ export function make_service_layers(ctx: RequestContext): Layer.Layer<ServiceEnv
     const mem_layer = Layer.succeed(MailTag, {
       send: (m: Mail) => Effect.sync(() => void sink(m)) });
     return Layer.mergeAll(db_layer, config_layer, tx_layer, storage_layer, assets_layer, mem_layer, key_cache_layer);
+  }
+  if (cfg.mailer === "cloudflare") {
+    if (!ctx.send_email) {
+      const missing_binding = Layer.succeed(MailTag, {
+        send: (_m: Mail) => Effect.fail(internal("mail delivery failed")) });
+      return Layer.mergeAll(db_layer, config_layer, tx_layer, storage_layer, assets_layer, missing_binding, key_cache_layer);
+    }
+    const native = ctx.send_email;
+    const mail_layer = mail_cloudflare_live(native).pipe(Layer.provide(config_layer));
+    return Layer.mergeAll(db_layer, config_layer, tx_layer, storage_layer, assets_layer, mail_layer, key_cache_layer);
   }
   const http_layer = FetchHttpClient.layer;
   const mail_layer = MailLive.pipe(Layer.provide(Layer.mergeAll(config_layer, http_layer)));

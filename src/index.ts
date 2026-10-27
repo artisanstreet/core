@@ -4,6 +4,7 @@ import { create_app, type RequestContext } from "./http.ts";
 import type { Db, R2Like } from "./db.ts";
 import { prepare_db, type UnsafeLike } from "./db/prepared.ts";
 import { config_from_env, DbTag } from "./services/deps.ts";
+import type { SendEmailBinding } from "./services/mail.ts";
 import { CoreError, internal } from "./errors.ts";
 import { make_service_layers } from "./http/context.ts";
 import { http_effect } from "./http/app.ts";
@@ -16,6 +17,7 @@ interface WorkerEnv {
     get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
   };
   readonly ASSETS?: { fetch(request: Request): Promise<Response> };
+  readonly EMAIL?: SendEmailBinding;
   readonly DATABASE_URL?: string;
   readonly RESEND_API_KEY?: string;
   readonly CORE_ADMIN_TOKEN?: string;
@@ -90,8 +92,13 @@ function request_layers_from_client(
   const ctx: RequestContext = {
     db,
     env: { vars, hyperdrive_connection_string: env.HYPERDRIVE?.connectionString, admin_token: env.CORE_ADMIN_TOKEN },
-    mailer: (vars.MAIL_PROVIDER ?? "log") === "resend" ? "resend" : "log",
+    mailer: (vars.MAIL_PROVIDER ?? "log").toLowerCase() === "resend"
+      ? "resend"
+      : (vars.MAIL_PROVIDER ?? "log").toLowerCase() === "cloudflare"
+        ? "cloudflare"
+        : "log",
     resend_api_key: env.RESEND_API_KEY,
+    ...(env.EMAIL ? { send_email: env.EMAIL } : {}),
     r2: bucket ? r2_adapter(bucket) : memory_r2(),
     assets: env.ASSETS,
     tx_runner: tx_runner };
