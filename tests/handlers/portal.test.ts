@@ -24,9 +24,26 @@ describe("portal confirm entry", () => {
 
     const page = await api(rig.app, "GET", `/v1/auth/magic/confirm?token=${token}`);
     expect(page.status).toBe(200);
-    expect(page.text).toContain("Approve this request");
-    expect(page.headers.get("content-security-policy")).toContain("script-src 'unsafe-inline'");
+    expect(page.text).toContain("Approve this sign-in");
+    expect(page.text).not.toContain("<form");
+    expect(page.text).not.toContain("<script");
+    expect(page.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
     expect(page.headers.get("cache-control")).toContain("no-store");
+
+    // The link GET never consumes: a fresh request stays pending after GET.
+    const fresh = await api(rig.app, "POST", "/v1/auth/magic/request", { body: { email: "getcheck@example.com" } });
+    const { requestId: fresh_id, requestSecret: fresh_secret } = fresh.json as { requestId: string; requestSecret: string };
+    const fresh_token = rig.tokenForEmail("getcheck@example.com");
+    const peek = await api(rig.app, "GET", `/v1/auth/magic/confirm?token=${fresh_token}`);
+    expect(peek.status).toBe(200);
+    const pending = await api(rig.app, "POST", "/v1/auth/magic/status", { body: { requestId: fresh_id, requestSecret: fresh_secret } });
+    expect((pending.json as { status: string }).status).toBe("pending");
+    // No form endpoints exist: the removed emergency surface stays gone.
+    const gone = await api(rig.app, "POST", "/ui/magic/consume", {
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      rawBody: new URLSearchParams({ token: fresh_token }).toString(),
+    });
+    expect(gone.status).toBe(404);
 
     rig.setVar("CORE_SPA_APPROVE_PATH", "/#/approve");
     const redir = await api(rig.app, "GET", `/v1/auth/magic/confirm?token=${token}`);
@@ -83,8 +100,10 @@ describe("portal asset hosting", () => {
     const nope = await api(rig.app, "GET", "/v1/nope");
     expect(nope.status).toBe(404);
     expect((nope.json as { error: { code: string } }).error.code).toBe("not_found");
+    // Legacy UI entries reuse the canonical SPA when it is deployed.
     const ui = await api(rig.app, "GET", "/ui/signin");
-    expect(ui.status).toBe(200);
+    expect(ui.status).toBe(302);
+    expect(ui.headers.get("location")).toBe("/#/signin");
   });
 
   it("shell serves html mime on the final response; file-like misses stay JSON", async () => {
@@ -125,10 +144,18 @@ describe("portal asset hosting", () => {
     expect((nav.json as { error: { code: string } }).error.code).toBe("not_found");
   });
 
-  it("without assets, unknown paths stay JSON 404", async () => {
+  it("without assets, unknown paths stay JSON 404 and legacy UI explains unavailability", async () => {
     const rig = await setupRig();
     const r = await api(rig.app, "GET", "/dash/projects");
     expect(r.status).toBe(404);
     expect((r.json as { error: { code: string } }).error.code).toBe("not_found");
+    const ui = await api(rig.app, "GET", "/ui/signin");
+    expect(ui.status).toBe(503);
+    expect(ui.headers.get("content-type")).toContain("text/html");
+    expect(ui.text).toContain("unavailable");
+    expect(ui.text).not.toContain("<form");
+    expect(ui.text).not.toContain("<script");
+    const claim = await api(rig.app, "GET", "/ui/claim");
+    expect(claim.status).toBe(503);
   });
 });

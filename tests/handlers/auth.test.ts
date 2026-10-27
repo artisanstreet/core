@@ -12,7 +12,7 @@ describe("magic link sign-in", () => {
     // Mail-scanner behavior: plain GETs only.
     const page = await api(rig.app, "GET", `/v1/auth/magic/confirm?token=${token}`);
     expect(page.status).toBe(200);
-    expect(page.text).toContain("Approve this request");
+    expect(page.text).toContain("Approve this sign-in");
     const st1 = await api(rig.app, "POST", "/v1/auth/magic/status", { body: { requestId, requestSecret } });
     expect((st1.json as { status: string }).status).toBe("pending");
 
