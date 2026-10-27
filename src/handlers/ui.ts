@@ -36,51 +36,55 @@ const shell_is_deployed = (
 
 const default_approve_path = "/#/approve";
 
+const ui_signin_handler = Effect.gen(function* () {
+  const assets = yield* AssetsTag;
+  const req = yield* HttpServerRequest.HttpServerRequest;
+  const url = new URL(req.originalUrl);
+  if (yield* shell_is_deployed(assets.fetch, url)) {
+    return spa_redirect("/#/signin");
+  }
+  return html_page(unavailablePage(), 503);
+});
+const ui_claim_handler = Effect.gen(function* () {
+  const assets = yield* AssetsTag;
+  const req = yield* HttpServerRequest.HttpServerRequest;
+  const url = new URL(req.originalUrl);
+  if (yield* shell_is_deployed(assets.fetch, url)) {
+    return spa_redirect("/#/machines");
+  }
+  return html_page(unavailablePage(), 503);
+});
+const magic_confirm_handler = Effect.gen(function* () {
+  const req = yield* HttpServerRequest.HttpServerRequest;
+  const cfg = yield* AppConfigTag;
+  const url = new URL(req.originalUrl);
+  const token = url.searchParams.get("token") ?? "";
+  if (!/^[A-Za-z0-9_-]{10,128}$/.test(token)) {
+    return html_page("<p>Invalid link.</p>", 400);
+  }
+  const assets = yield* AssetsTag;
+  // Shipped email links enter the canonical SPA approve flow. An
+  // explicitly configured approve path wins; otherwise the default
+  // fragment is used when the portal shell is deployed. The GET itself
+  // never consumes: approval happens only via the POST consume API.
+  const spa = cfg.env.CORE_SPA_APPROVE_PATH ?? default_approve_path;
+  if (cfg.env.CORE_SPA_APPROVE_PATH || (yield* shell_is_deployed(assets.fetch, url))) {
+    return spa_redirect(`${spa}?token=${token}`);
+  }
+  return html_page(confirmPage());
+});
+
 export const router = HttpRouter.empty.pipe(
   HttpRouter.get(
     "/ui/signin",
-    Effect.gen(function* () {
-      const assets = yield* AssetsTag;
-      const req = yield* HttpServerRequest.HttpServerRequest;
-      const url = new URL(req.originalUrl);
-      if (yield* shell_is_deployed(assets.fetch, url)) {
-        return spa_redirect("/#/signin");
-      }
-      return html_page(unavailablePage(), 503);
-    }),
+    ui_signin_handler,
   ),
   HttpRouter.get(
     "/ui/claim",
-    Effect.gen(function* () {
-      const assets = yield* AssetsTag;
-      const req = yield* HttpServerRequest.HttpServerRequest;
-      const url = new URL(req.originalUrl);
-      if (yield* shell_is_deployed(assets.fetch, url)) {
-        return spa_redirect("/#/machines");
-      }
-      return html_page(unavailablePage(), 503);
-    }),
+    ui_claim_handler,
   ),
   HttpRouter.get(
     "/v1/auth/magic/confirm",
-    Effect.gen(function* () {
-      const req = yield* HttpServerRequest.HttpServerRequest;
-      const cfg = yield* AppConfigTag;
-      const url = new URL(req.originalUrl);
-      const token = url.searchParams.get("token") ?? "";
-      if (!/^[A-Za-z0-9_-]{10,128}$/.test(token)) {
-        return html_page("<p>Invalid link.</p>", 400);
-      }
-      const assets = yield* AssetsTag;
-      // Shipped email links enter the canonical SPA approve flow. An
-      // explicitly configured approve path wins; otherwise the default
-      // fragment is used when the portal shell is deployed. The GET itself
-      // never consumes: approval happens only via the POST consume API.
-      const spa = cfg.env.CORE_SPA_APPROVE_PATH ?? default_approve_path;
-      if (cfg.env.CORE_SPA_APPROVE_PATH || (yield* shell_is_deployed(assets.fetch, url))) {
-        return spa_redirect(`${spa}?token=${token}`);
-      }
-      return html_page(confirmPage());
-    }),
+    magic_confirm_handler,
   ),
 );

@@ -214,36 +214,37 @@ export const finalizeMagicLink = (opts: {
     const token = newSessionToken();
     const tokenHash = yield* hashSecret(token);
     const expiresAt = new Date(nowMs + SESSION_TTL_SECONDS * 1000).toISOString();
+    const finalize_tx = Effect.gen(function* () {
+      const { db: tx_db } = yield* DbTag;
+      const completed = yield* dbRun(() => markLoginCompleted.run(tx_db, { id: row.id }));
+      if (!completed) return yield* Effect.fail(forbidden("already completed or expired"));
+      const s = yield* dbRun(() =>
+        insertSession.run(tx_db, {
+          id: newId("sess"),
+          accountId: account!.id,
+          tokenHash,
+          deviceName: (opts.deviceName ?? "").slice(0, 120),
+          ip: opts.ip ?? null,
+          userAgent: (opts.userAgent ?? "").slice(0, 300),
+          totpVerifiedAt: totpVerified ? new Date(nowMs).toISOString() : null,
+          expiresAt,
+        }),
+      );
+      if (!s) return yield* Effect.fail(internal("database unavailable"));
+      yield* dbRun(() =>
+        insertActivity.run(tx_db, {
+          id: newId("evt"),
+          accountId: account!.id,
+          machineId: null,
+          kind: "login.completed",
+          detail: "{}",
+          ip: opts.ip ?? null,
+        }),
+      );
+      return s;
+    });
     const sess = yield* tx.transaction(
-      Effect.gen(function* () {
-        const { db: tx_db } = yield* DbTag;
-        const completed = yield* dbRun(() => markLoginCompleted.run(tx_db, { id: row.id }));
-        if (!completed) return yield* Effect.fail(forbidden("already completed or expired"));
-        const s = yield* dbRun(() =>
-          insertSession.run(tx_db, {
-            id: newId("sess"),
-            accountId: account!.id,
-            tokenHash,
-            deviceName: (opts.deviceName ?? "").slice(0, 120),
-            ip: opts.ip ?? null,
-            userAgent: (opts.userAgent ?? "").slice(0, 300),
-            totpVerifiedAt: totpVerified ? new Date(nowMs).toISOString() : null,
-            expiresAt,
-          }),
-        );
-        if (!s) return yield* Effect.fail(internal("database unavailable"));
-        yield* dbRun(() =>
-          insertActivity.run(tx_db, {
-            id: newId("evt"),
-            accountId: account!.id,
-            machineId: null,
-            kind: "login.completed",
-            detail: "{}",
-            ip: opts.ip ?? null,
-          }),
-        );
-        return s;
-      }),
+      finalize_tx,
     );
     return {
       sessionId: sess.id,

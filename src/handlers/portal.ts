@@ -66,58 +66,60 @@ const serve_shell = (
     return res;
   });
 
+const portal_fallback_handler = Effect.gen(function* () {
+  const req = yield* HttpServerRequest.HttpServerRequest;
+  const cfg = yield* AppConfigTag;
+  const assets = yield* AssetsTag;
+  const request_id = yield* current_request_id;
+  const url = new URL(req.originalUrl);
+  const p = url.pathname;
+  if (p.startsWith("/v1/") || p.startsWith("/.well-known/") || p.startsWith("/ui/")) {
+    return HttpServerResponse.unsafeJson(
+      { error: { code: "not_found", message: "not found", requestId: request_id } },
+      { status: 404 },
+    );
+  }
+  const original = req.source as unknown as Request;
+  if (p === "/" || p === "/index.html") {
+    return yield* serve_shell(assets.fetch, url, cfg.env.CORE_RELAY_ORIGIN).pipe(
+      Effect.catchAll((e) =>
+        Effect.succeed(
+          HttpServerResponse.unsafeJson(
+            { error: { code: e.code, message: e.message, requestId: request_id } },
+            { status: e.status },
+          ),
+        ),
+      ),
+    );
+  }
+  const direct = yield* fetch_asset(assets.fetch, original).pipe(
+    Effect.catchAll(() => Effect.succeed(new Response("not found", { status: 404 }))),
+  );
+  if (direct.status !== 404) {
+    return HttpServerResponse.fromWeb(direct);
+  }
+  const last_segment = p.split("/").pop() ?? "";
+  if (last_segment.includes(".")) {
+    return HttpServerResponse.unsafeJson(
+      { error: { code: "not_found", message: "not found", requestId: request_id } },
+      { status: 404 },
+    );
+  }
+  return yield* serve_shell(assets.fetch, url, cfg.env.CORE_RELAY_ORIGIN).pipe(
+    Effect.catchAll((e) =>
+      Effect.succeed(
+        HttpServerResponse.unsafeJson(
+          { error: { code: e.code, message: e.message, requestId: request_id } },
+          { status: e.status },
+        ),
+      ),
+    ),
+  );
+});
+
 export const router = HttpRouter.empty.pipe(
   HttpRouter.get(
     "*",
-      Effect.gen(function* () {
-        const req = yield* HttpServerRequest.HttpServerRequest;
-        const cfg = yield* AppConfigTag;
-        const assets = yield* AssetsTag;
-        const request_id = yield* current_request_id;
-        const url = new URL(req.originalUrl);
-        const p = url.pathname;
-        if (p.startsWith("/v1/") || p.startsWith("/.well-known/") || p.startsWith("/ui/")) {
-          return HttpServerResponse.unsafeJson(
-            { error: { code: "not_found", message: "not found", requestId: request_id } },
-            { status: 404 },
-          );
-        }
-        const original = req.source as unknown as Request;
-        if (p === "/" || p === "/index.html") {
-          return yield* serve_shell(assets.fetch, url, cfg.env.CORE_RELAY_ORIGIN).pipe(
-            Effect.catchAll((e) =>
-              Effect.succeed(
-                HttpServerResponse.unsafeJson(
-                  { error: { code: e.code, message: e.message, requestId: request_id } },
-                  { status: e.status },
-                ),
-              ),
-            ),
-          );
-        }
-        const direct = yield* fetch_asset(assets.fetch, original).pipe(
-          Effect.catchAll(() => Effect.succeed(new Response("not found", { status: 404 }))),
-        );
-        if (direct.status !== 404) {
-          return HttpServerResponse.fromWeb(direct);
-        }
-        const last_segment = p.split("/").pop() ?? "";
-        if (last_segment.includes(".")) {
-          return HttpServerResponse.unsafeJson(
-            { error: { code: "not_found", message: "not found", requestId: request_id } },
-            { status: 404 },
-          );
-        }
-        return yield* serve_shell(assets.fetch, url, cfg.env.CORE_RELAY_ORIGIN).pipe(
-          Effect.catchAll((e) =>
-            Effect.succeed(
-              HttpServerResponse.unsafeJson(
-                { error: { code: e.code, message: e.message, requestId: request_id } },
-                { status: e.status },
-              ),
-            ),
-          ),
-        );
-      }),
+      portal_fallback_handler,
   ),
 );

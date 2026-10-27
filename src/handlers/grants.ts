@@ -18,64 +18,68 @@ function get_header(req: HttpServerRequest.HttpServerRequest, name: string): str
   return Option.isSome(v) ? v.value : undefined;
 }
 
+const grant_issue_handler = Effect.gen(function* () {
+  const req = yield* HttpServerRequest.HttpServerRequest;
+  if ((get_header(req, "x-ast-machine") ?? "").trim()) {
+    const { principal, publicKeyX, rawBody } = yield* proof_for_machine;
+    yield* require_json_content_type;
+    const parsed = yield* parse_json_text(rawBody);
+    const input = yield* decode_request(C.GrantIssueReq, parsed);
+    const issued = yield* Grants.issueGrant({
+      accountId: principal.accountId,
+      audience: input.audience,
+      scope: [...input.scope],
+      ttlSeconds: input.ttlSeconds,
+      role: "forge",
+      mid: input.targetMachineId ?? principal.machineId,
+      cnf: { kty: "OKP", crv: "Ed25519", x: publicKeyX } });
+    return encode_ok(C.GrantIssueResp, { token: issued.token, expiresAt: issued.expiresAt });
+  }
+  const s = yield* session_for_mutation;
+  const { json } = yield* read_json_body;
+  const input = yield* decode_request(C.GrantIssueReq, json);
+  if (!input.targetMachineId) return yield* Effect.fail(new CoreError("bad_request", "targetMachineId is required"));
+  if (!input.cnf) return yield* Effect.fail(new CoreError("bad_request", "cnf is required"));
+  const issued = yield* Grants.issueGrant({
+    accountId: s.accountId,
+    audience: input.audience,
+    scope: [...input.scope],
+    ttlSeconds: input.ttlSeconds,
+    role: "client",
+    mid: input.targetMachineId,
+    cnf: input.cnf });
+  return encode_ok(C.GrantIssueResp, { token: issued.token, expiresAt: issued.expiresAt });
+});
+const key_rotate_handler = Effect.gen(function* () {
+  const req = yield* HttpServerRequest.HttpServerRequest;
+  const cfg = yield* AppConfigTag;
+  if (!cfg.adminToken || !constantTimeEqual(get_header(req, "x-admin-token") ?? "", cfg.adminToken)) {
+    return yield* Effect.fail(notFound("not found"));
+  }
+  const data = yield* Grants.rotateKeys;
+  return encode_ok(R.keyRotate.responseSchema, data);
+});
+const janitor_run_handler = Effect.gen(function* () {
+  const req = yield* HttpServerRequest.HttpServerRequest;
+  const cfg = yield* AppConfigTag;
+  if (!cfg.adminToken || !constantTimeEqual(get_header(req, "x-admin-token") ?? "", cfg.adminToken)) {
+    return yield* Effect.fail(notFound("not found"));
+  }
+  const data = yield* janitor(cfg.now());
+  return encode_ok(R.janitorRun.responseSchema, data);
+});
+
 export const router = HttpRouter.empty.pipe(
   register_route(
     R.grantIssue,
-      Effect.gen(function* () {
-        const req = yield* HttpServerRequest.HttpServerRequest;
-        if ((get_header(req, "x-ast-machine") ?? "").trim()) {
-          const { principal, publicKeyX, rawBody } = yield* proof_for_machine;
-          yield* require_json_content_type;
-          const parsed = yield* parse_json_text(rawBody);
-          const input = yield* decode_request(C.GrantIssueReq, parsed);
-          const issued = yield* Grants.issueGrant({
-            accountId: principal.accountId,
-            audience: input.audience,
-            scope: [...input.scope],
-            ttlSeconds: input.ttlSeconds,
-            role: "forge",
-            mid: input.targetMachineId ?? principal.machineId,
-            cnf: { kty: "OKP", crv: "Ed25519", x: publicKeyX } });
-          return encode_ok(C.GrantIssueResp, { token: issued.token, expiresAt: issued.expiresAt });
-        }
-        const s = yield* session_for_mutation;
-        const { json } = yield* read_json_body;
-        const input = yield* decode_request(C.GrantIssueReq, json);
-        if (!input.targetMachineId) return yield* Effect.fail(new CoreError("bad_request", "targetMachineId is required"));
-        if (!input.cnf) return yield* Effect.fail(new CoreError("bad_request", "cnf is required"));
-        const issued = yield* Grants.issueGrant({
-          accountId: s.accountId,
-          audience: input.audience,
-          scope: [...input.scope],
-          ttlSeconds: input.ttlSeconds,
-          role: "client",
-          mid: input.targetMachineId,
-          cnf: input.cnf });
-        return encode_ok(C.GrantIssueResp, { token: issued.token, expiresAt: issued.expiresAt });
-      }),
+      grant_issue_handler,
   ),
   register_route(
     R.keyRotate,
-      Effect.gen(function* () {
-        const req = yield* HttpServerRequest.HttpServerRequest;
-        const cfg = yield* AppConfigTag;
-        if (!cfg.adminToken || !constantTimeEqual(get_header(req, "x-admin-token") ?? "", cfg.adminToken)) {
-          return yield* Effect.fail(notFound("not found"));
-        }
-        const data = yield* Grants.rotateKeys;
-        return encode_ok(R.keyRotate.responseSchema, data);
-      }),
+      key_rotate_handler,
   ),
   register_route(
     R.janitorRun,
-      Effect.gen(function* () {
-        const req = yield* HttpServerRequest.HttpServerRequest;
-        const cfg = yield* AppConfigTag;
-        if (!cfg.adminToken || !constantTimeEqual(get_header(req, "x-admin-token") ?? "", cfg.adminToken)) {
-          return yield* Effect.fail(notFound("not found"));
-        }
-        const data = yield* janitor(cfg.now());
-        return encode_ok(R.janitorRun.responseSchema, data);
-      }),
+      janitor_run_handler,
   ),
 );

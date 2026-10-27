@@ -35,13 +35,14 @@ const send_with_client = (
       HttpClientRequest.setHeader("Authorization", `Bearer ${cfg.resendApiKey}`),
       HttpClientRequest.setBody(HttpBody.unsafeJson({ from, to: [m.to], subject: m.subject, text: m.text })),
     );
-    const res = yield* Effect.gen(function* () {
+    const execute_resend = Effect.gen(function* () {
       const r = yield* client.execute(req).pipe(Effect.mapError(() => internal("mail delivery failed")));
       if (r.status === 429 || r.status >= 500) {
         return yield* Effect.fail(internal("mail delivery failed"));
       }
       return r;
-    }).pipe(
+    });
+    const res = yield* execute_resend.pipe(
       Effect.retry(resend_retry_schedule),
     );
     if (res.status !== 200 && res.status !== 202) {
@@ -49,13 +50,15 @@ const send_with_client = (
     }
   });
 
+const mail_live_effect = Effect.gen(function* () {
+  const cfg: AppConfig = yield* AppConfigTag;
+  const client = yield* HttpClient.HttpClient;
+  return { send: (m: Mail) => send_with_client(cfg, client, m) };
+});
+
 export const MailLive = Layer.effect(
   MailTag,
-  Effect.gen(function* () {
-    const cfg: AppConfig = yield* AppConfigTag;
-    const client = yield* HttpClient.HttpClient;
-    return { send: (m: Mail) => send_with_client(cfg, client, m) };
-  }),
+  mail_live_effect,
 );
 
 export function memoryMailBox() {
