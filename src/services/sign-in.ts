@@ -12,6 +12,7 @@ import insert_account from "../db/queries/accounts/insert-account.sql"
 import get_account_by_email from "../db/queries/accounts/get-account-by-email.sql"
 import get_account_contact from "../db/queries/accounts/get-account-contact.sql"
 import lock_account from "../db/queries/accounts/lock-account.sql"
+import fill_account_avatar from "../db/queries/accounts/fill-account-avatar.sql"
 import insert_sign_in_method from "../db/queries/sign-in/insert-sign-in-method.sql"
 import list_sign_in_methods_by_account from "../db/queries/sign-in/list-sign-in-methods-by-account.sql"
 import get_account_by_sign_in from "../db/queries/sign-in/get-account-by-sign-in.sql"
@@ -170,6 +171,13 @@ const settle = (flow_id: string, settled: SettledProfile) =>
     if (!row) return yield* Effect.fail(unauthorized("invalid or expired sign-in"));
   });
 
+const adopt_avatar = (account_id: string, profile: OauthProfile) =>
+  Effect.gen(function* () {
+    const { db } = yield* DbTag;
+    if (profile.avatar_url === null) return;
+    yield* db_run(() => fill_account_avatar.run(db, { id: account_id, avatar_url: profile.avatar_url }));
+  });
+
 export const oauth_callback = (opts: {
   flow_id: string;
   flow_secret: string;
@@ -206,6 +214,7 @@ export const oauth_callback = (opts: {
       );
       if (!added) return yield* Effect.fail(conflict(`a different ${provider} account is already linked`));
       yield* record(account_id, "sign_in.added", { detail: { kind: provider }, ip: opts.requester.ip });
+      yield* adopt_avatar(account_id, profile);
       return CallbackOutcome.Linked({ provider });
     }
 
@@ -213,6 +222,7 @@ export const oauth_callback = (opts: {
       yield* settle(flow.id, { status: "completed", account_id: null, profile: null });
       return yield* Effect.fail(gone("account is deleted"));
     }
+    if (owner) yield* adopt_avatar(owner.id, profile);
     if (owner && owner.totp_enrolled_at != null) {
       yield* settle(flow.id, { status: "awaiting_second_factor", account_id: owner.id, profile });
       return CallbackOutcome.SecondFactorRequired();
@@ -302,7 +312,11 @@ export const oauth_signup = (opts: {
       if (by_subject) return yield* Effect.fail(conflict("provider account already linked"));
       const account_id = new_id("acct");
       yield* db_run(() =>
-        insert_account.run(db, { id: account_id, email, display_name: opts.display_name.trim().slice(0, 120) }),
+        insert_account.run(db, {
+          id: account_id,
+          email,
+          display_name: opts.display_name.trim().slice(0, 120),
+          avatar_url: taken.avatar_url }),
       );
       yield* db_run(() => insert_sign_in_method.run(db, { account_id, kind: flow.provider, subject }));
       return account_id;

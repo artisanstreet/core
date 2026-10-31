@@ -38,6 +38,7 @@ export interface SessionPrincipal {
   readonly account_id: string;
   readonly email: string;
   readonly display_name: string;
+  readonly avatar_url: string | null;
   readonly totp_enrolled: boolean;
   readonly totp_verified_at: string | null;
   readonly token_hash: string;
@@ -90,7 +91,8 @@ export const request_magic_link = (opts: {
             insert_account.run(tx_db, {
               id: account_id,
               email,
-              display_name: (opts.display_name ?? "").slice(0, 120) }),
+              display_name: (opts.display_name ?? "").slice(0, 120),
+              avatar_url: null }),
           );
           yield* db_run(() => insert_sign_in_method.run(tx_db, { account_id, kind: "email", subject: email }));
         }),
@@ -371,6 +373,7 @@ export const require_session = (raw_token: string) =>
       account_id: row.account_id,
       email: row.email,
       display_name: row.display_name,
+      avatar_url: row.avatar_url,
       totp_enrolled: row.totp_enrolled_at != null,
       totp_verified_at: row.totp_verified_at,
       token_hash };

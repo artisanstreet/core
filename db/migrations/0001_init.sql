@@ -13,6 +13,7 @@ create table if not exists accounts (
   id text primary key,
   email text not null unique,
   display_name text not null default '',
+  avatar_url text,
   totp_secret_enc bytea,
   totp_pending_secret_enc bytea,
   totp_enrolled_at timestamptz,

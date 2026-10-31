@@ -177,6 +177,7 @@ export const MeResp = Schema.Struct({
   account_id: AccountId,
   email: Email,
   display_name: Schema.String,
+  avatar_url: Schema.NullOr(Schema.String),
   totp_enrolled: Schema.Boolean,
   machines: Schema.Array(MeMachine),
   provider_connections: Schema.Array(MeProvider),

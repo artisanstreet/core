@@ -2538,6 +2538,7 @@
                     "account_id",
                     "email",
                     "display_name",
+                    "avatar_url",
                     "totp_enrolled",
                     "machines",
                     "provider_connections",
@@ -2556,6 +2557,16 @@
                     },
                     "display_name": {
                       "type": "string"
+                    },
+                    "avatar_url": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     "totp_enrolled": {
                       "type": "boolean"

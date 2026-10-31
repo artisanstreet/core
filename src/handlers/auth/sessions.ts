@@ -26,6 +26,7 @@ const me_handler = Effect.gen(function* () {
     account_id: s.account_id,
     email: s.email,
     display_name: s.display_name,
+    avatar_url: s.avatar_url,
     totp_enrolled: s.totp_enrolled,
     machines: machines.machines.map((m) => ({
       id: m.id,

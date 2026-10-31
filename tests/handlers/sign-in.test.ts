@@ -59,7 +59,7 @@ describe("OAuth sign-up", () => {
     expect(done.status).toBe(200);
     const cookie = cookie_of(done.headers);
     const me = await api(rig.app, "GET", "/v1/me", { headers: { cookie } });
-    expect(me.json).toMatchObject({ email: "ada@example.com", display_name: "Ada" });
+    expect(me.json).toMatchObject({ email: "ada@example.com", display_name: "Ada", avatar_url: "https://avatars.test/ada.png" });
     expect(await methods(rig, cookie)).toEqual(["google"]);
 
     const again = await api(rig.app, "POST", "/v1/auth/oauth/signup", {
@@ -134,6 +134,8 @@ describe("linking and removing sign-in methods", () => {
     const linked = await callback(rig, fake, await start(rig, "github", account), github);
     expect(linked.json).toEqual({ outcome: "linked", provider: "github" });
     expect(await methods(rig, account.cookie)).toEqual(["email", "github"]);
+    const me = await api(rig.app, "GET", "/v1/me", { headers: { cookie: account.cookie } });
+    expect(me.json).toMatchObject({ avatar_url: "https://avatars.test/ada.png" });
 
     const signed_in = await callback(rig, fake, await start(rig, "github"), github);
     expect(signed_in.json).toMatchObject({ outcome: "signed_in", account_id: account.account_id });
