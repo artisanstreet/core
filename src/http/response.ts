@@ -8,6 +8,7 @@ import * as Url from "@effect/platform/Url";
 import { CoreError } from "../errors.ts";
 import * as C from "../contracts/v1.ts";
 import { AppConfigTag } from "../services/deps.ts";
+import { serialize_session_cookie } from "./session-cookie.ts";
 
 export const max_body_bytes = 1 << 20;
 
@@ -126,24 +127,25 @@ export const preflight_response: Effect.Effect<
     HttpServerResponse.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS"),
     HttpServerResponse.setHeader(
       "Access-Control-Allow-Headers",
-      "Content-Type, Authorization, X-AST-Machine, X-AST-Timestamp, X-AST-Nonce, X-Admin-Token, If-None-Match",
+      "Content-Type, Authorization, X-AST-Account, X-AST-Machine, X-AST-Timestamp, X-AST-Nonce, X-Admin-Token, If-None-Match",
     ),
     HttpServerResponse.setHeader("Access-Control-Max-Age", "600"),
   );
 });
 
 export function session_cookie_value(
-  token: string | null,
+  tokens: ReadonlyArray<string>,
   max_age: number,
   secure: boolean,
   domain: string | null,
 ): string {
-  return `ast_session=${token ? encodeURIComponent(token) : ""}; Path=/;${domain ? ` Domain=${domain};` : ""} HttpOnly; SameSite=Lax; Max-Age=${max_age}${secure ? "; Secure" : ""}`;
+  const live = tokens.length > 0;
+  return `ast_session=${live ? serialize_session_cookie(tokens) : ""}; Path=/;${domain ? ` Domain=${domain};` : ""} HttpOnly; SameSite=Lax; Max-Age=${live ? max_age : 0}${secure ? "; Secure" : ""}`;
 }
 
 export const with_session_cookie = (
   response: HttpServerResponse.HttpServerResponse,
-  token: string | null,
+  tokens: ReadonlyArray<string>,
   max_age: number,
 ) =>
   Effect.gen(function* () {
@@ -152,7 +154,7 @@ export const with_session_cookie = (
     return response.pipe(
       HttpServerResponse.setHeader(
         "Set-Cookie",
-        session_cookie_value(token, max_age, secure, cfg.session_cookie_domain),
+        session_cookie_value(tokens, max_age, secure, cfg.session_cookie_domain),
       ),
     );
   });

@@ -6,7 +6,7 @@ import { register_route } from "../../http/register.ts";
 import * as C from "../../contracts/v1.ts";
 import { R } from "../../contracts/registry.ts";
 import * as SignIn from "../../services/sign-in.ts";
-import { client_ip, decode_request, read_json_body } from "../../http/request.ts";
+import { client_ip, cookie_after_sign_in, decode_request, read_json_body } from "../../http/request.ts";
 import { encode_ok, with_session_cookie } from "../../http/response.ts";
 
 const session_cookie_max_age = 30 * 24 * 60 * 60;
@@ -19,7 +19,10 @@ const requester = Effect.gen(function* () {
 });
 
 const with_session = (response: HttpServerResponse.HttpServerResponse, session: SignIn.OpenedSession) =>
-  with_session_cookie(response, session.raw_token, session_cookie_max_age);
+  Effect.gen(function* () {
+    const tokens = yield* cookie_after_sign_in({ token: session.raw_token, account_id: session.account_id });
+    return yield* with_session_cookie(response, tokens, session_cookie_max_age);
+  });
 
 const session_fields = (session: SignIn.OpenedSession) => ({
   session_id: session.session_id,

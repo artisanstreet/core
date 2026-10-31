@@ -7,6 +7,13 @@ import { AppConfigTag } from "../services/deps.ts";
 import * as Auth from "../services/auth.ts";
 import * as Machines from "../services/machines.ts";
 import { max_body_bytes } from "./response.ts";
+import {
+  parse_session_cookie,
+  pick_session,
+  tokens_after_sign_in,
+  tokens_without_account,
+  type Held,
+} from "./session-cookie.ts";
 
 function get_header(req: HttpServerRequest.HttpServerRequest, name: string): string | undefined {
   const v = Headers.get(req.headers, name);
@@ -80,32 +87,69 @@ export const require_json_content_type = Effect.gen(function* () {
 export interface SessionVia {
   readonly principal: Auth.SessionPrincipal;
   readonly via: "bearer" | "cookie";
+  readonly token: string;
 }
 
-function extract_token(req: HttpServerRequest.HttpServerRequest): { token: string | null; via: "bearer" | "cookie" } {
-  const auth = get_header(req, "authorization") ?? "";
-  const m = /^Bearer\s+(.+)$/.exec(auth);
-  if (m?.[1]?.trim()) return { token: m[1].trim(), via: "bearer" };
-  const from_cookies = (req.cookies as Record<string, string | undefined>)["ast_session"];
-  if (!from_cookies) return { token: null, via: "cookie" };
-  const decoded = Either.getOrNull(Either.try(() => decodeURIComponent(from_cookies)));
-  return decoded === null ? { token: null, via: "cookie" } : { token: decoded, via: "cookie" };
+export interface HeldSession extends Held {
+  readonly principal: Auth.SessionPrincipal;
 }
+
+const bearer_of = (req: HttpServerRequest.HttpServerRequest): Option.Option<string> =>
+  Option.fromNullable(/^Bearer\s+(.+)$/.exec(get_header(req, "authorization") ?? "")?.[1]?.trim()).pipe(
+    Option.filter((token) => token !== ""),
+  );
+
+const held_one = (token: string) =>
+  Auth.require_session(token).pipe(
+    Effect.map((principal): Option.Option<HeldSession> =>
+      Option.some({ token, account_id: principal.account_id, principal }),
+    ),
+    Effect.catchIf(
+      (error) => error instanceof CoreError && error.code === "unauthorized",
+      () => Effect.succeed(Option.none<HeldSession>()),
+    ),
+  );
+
+export const held_sessions = Effect.gen(function* () {
+  const req = yield* HttpServerRequest.HttpServerRequest;
+  const tokens = parse_session_cookie((req.cookies as Record<string, string | undefined>)["ast_session"]);
+  const held = yield* Effect.forEach(tokens, held_one);
+  return held.flatMap((entry) => Option.toArray(entry));
+});
+
+export const selected_account = Effect.map(HttpServerRequest.HttpServerRequest, (req) =>
+  Option.fromNullable(get_header(req, "x-ast-account")).pipe(Option.filter((value) => value !== "")),
+);
+
+const cookie_session = Effect.gen(function* () {
+  const held = yield* held_sessions;
+  const selected = yield* selected_account;
+  const found = yield* Option.match(pick_session(held, selected), {
+    onNone: () => Effect.fail(unauthorized("authentication required")),
+    onSome: (entry) => Effect.succeed(entry),
+  });
+  const session: SessionVia = { principal: found.principal, via: "cookie", token: found.token };
+  return session;
+});
 
 export const session_of = Effect.gen(function* () {
   const req = yield* HttpServerRequest.HttpServerRequest;
-  const { token, via } = extract_token(req);
-  if (!token) return yield* Effect.fail(unauthorized("authentication required"));
-  const principal = yield* Auth.require_session(token);
-  return { principal, via };
+  return yield* Option.match(bearer_of(req), {
+    onNone: () => cookie_session,
+    onSome: (token) =>
+      Auth.require_session(token).pipe(
+        Effect.map((principal): SessionVia => ({ principal, via: "bearer", token })),
+      ),
+  });
 });
 
-export const current_token = Effect.gen(function* () {
-  const req = yield* HttpServerRequest.HttpServerRequest;
-  const { token } = extract_token(req);
-  if (!token) return yield* Effect.fail(unauthorized("authentication required"));
-  return token;
-});
+export const current_token = Effect.map(session_of, (session) => session.token);
+
+export const cookie_after_sign_in = (signed_in: Held) =>
+  Effect.map(held_sessions, (held) => tokens_after_sign_in(held, signed_in));
+
+export const cookie_without_account = (account_id: string) =>
+  Effect.map(held_sessions, (held) => tokens_without_account(held, account_id));
 
 const parse_url = (raw: string) => Url.fromString(raw).pipe(Either.mapLeft(() => forbidden("bad origin")));
 

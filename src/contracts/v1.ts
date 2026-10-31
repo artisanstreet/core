@@ -173,6 +173,14 @@ export const MeProvider = Schema.Struct({
   label: Schema.String,
   revoked_at: Schema.NullOr(Rfc3339),
   assigned_machine_ids: Schema.Array(MachineId) });
+export const SignedInAccount = Schema.Struct({
+  account_id: AccountId,
+  email: Email,
+  display_name: Schema.String,
+  avatar_url: Schema.NullOr(Schema.String) });
+
+export const SignedInAccountsResp = Schema.Struct({ accounts: Schema.Array(SignedInAccount) });
+
 export const MeResp = Schema.Struct({
   account_id: AccountId,
   email: Email,

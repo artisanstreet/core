@@ -6,7 +6,7 @@ import * as HttpServerRequest from "@effect/platform/HttpServerRequest";
 import * as C from "../../contracts/v1.ts";
 import { R } from "../../contracts/registry.ts";
 import * as Auth from "../../services/auth.ts";
-import { client_ip, decode_request, read_json_body } from "../../http/request.ts";
+import { client_ip, cookie_after_sign_in, decode_request, read_json_body } from "../../http/request.ts";
 import { encode_ok, with_session_cookie } from "../../http/response.ts";
 import { CoreError } from "../../errors.ts";
 
@@ -66,7 +66,8 @@ const magic_finalize_handler = Effect.gen(function* () {
     ip,
     user_agent: typeof ua === "string" ? ua : null });
   const { raw_token, ...rest } = r;
-  return yield* with_session_cookie(encode_ok(C.MagicFinalizeResp, rest), raw_token, finalize_cookie_max_age);
+  const tokens = yield* cookie_after_sign_in({ token: raw_token, account_id: rest.account_id });
+  return yield* with_session_cookie(encode_ok(C.MagicFinalizeResp, rest), tokens, finalize_cookie_max_age);
 });
 
 export const router = HttpRouter.empty.pipe(

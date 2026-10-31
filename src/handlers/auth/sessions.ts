@@ -8,7 +8,9 @@ import * as Auth from "../../services/auth.ts";
 import * as Machines from "../../services/machines.ts";
 import * as Vault from "../../services/vault.ts";
 import { editor_config_version } from "../../products/editor/me.ts";
-import { current_token, session_for_mutation, session_of } from "../../http/request.ts";
+import { cookie_without_account, held_sessions, session_for_mutation, session_of } from "../../http/request.ts";
+
+const session_cookie_max_age = 30 * 24 * 60 * 60;
 import { encode_ok, with_session_cookie } from "../../http/response.ts";
 
 const me_handler = Effect.gen(function* () {
@@ -51,14 +53,28 @@ const logout_handler = Effect.gen(function* () {
   if (sess.via === "cookie") {
     yield* session_for_mutation;
   }
-  const token = yield* current_token;
-  yield* Auth.revoke_current_session(token);
-  return yield* with_session_cookie(encode_ok(R.logout.response_schema, { revoked: true }), null, 0);
+  yield* Auth.revoke_current_session(sess.token);
+  const tokens = yield* cookie_without_account(sess.principal.account_id);
+  return yield* with_session_cookie(encode_ok(R.logout.response_schema, { revoked: true }), tokens, session_cookie_max_age);
 });
 const sessions_revoke_all_handler = Effect.gen(function* () {
   const s = yield* session_for_mutation;
   yield* Auth.revoke_all_sessions(s.account_id);
-  return yield* with_session_cookie(encode_ok(R.sessions_revoke_all.response_schema, { revoked: true }), null, 0);
+  const tokens = yield* cookie_without_account(s.account_id);
+  return yield* with_session_cookie(
+    encode_ok(R.sessions_revoke_all.response_schema, { revoked: true }),
+    tokens,
+    session_cookie_max_age,
+  );
+});
+const signed_in_accounts_handler = Effect.gen(function* () {
+  const held = yield* held_sessions;
+  return encode_ok(C.SignedInAccountsResp, {
+    accounts: held.map(({ principal }) => ({
+      account_id: principal.account_id,
+      email: principal.email,
+      display_name: principal.display_name,
+      avatar_url: principal.avatar_url })) });
 });
 
 export const router = HttpRouter.empty.pipe(
@@ -77,5 +93,9 @@ export const router = HttpRouter.empty.pipe(
   register_route(
     R.sessions_revoke_all,
       sessions_revoke_all_handler,
+  ),
+  register_route(
+    R.signed_in_accounts,
+      signed_in_accounts_handler,
   ),
 );

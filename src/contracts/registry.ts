@@ -44,6 +44,7 @@ export const R = {
   me: reg({ method: "GET", path: "/v1/me", summary: "Account, machines, providers, config", tags: ["auth"], auth: "session", response_schema: C.MeResp }),
   sessions: reg({ method: "GET", path: "/v1/sessions", summary: "List sessions", tags: ["auth"], auth: "session", response_schema: C.SessionListResp }),
   logout: reg({ method: "POST", path: "/v1/sessions/current/revoke", summary: "Revoke current session", tags: ["auth"], auth: "session", response_schema: Schema.Struct({ revoked: Schema.Boolean }) }),
+  signed_in_accounts: reg({ method: "GET", path: "/v1/sessions/accounts", summary: "List the accounts signed in on this browser", tags: ["auth"], auth: "none", response_schema: C.SignedInAccountsResp }),
   sessions_revoke_all: reg({ method: "POST", path: "/v1/sessions/revoke-all", summary: "Revoke all sessions", tags: ["auth"], auth: "session", response_schema: Schema.Struct({ revoked: Schema.Boolean }) }),
   enroll_start: reg({ method: "POST", path: "/v1/machines/enrollments", summary: "Start Forge enrollment", tags: ["machines"], auth: "none", request_schema: C.EnrollmentStartReq, response_schema: C.EnrollmentStartResp }),
   enroll_claim: reg({ method: "POST", path: "/v1/machines/enrollments/claim", summary: "Claim enrollment into account", tags: ["machines"], auth: "session", request_schema: C.EnrollmentClaimReq, response_schema: C.EnrollmentClaimResp }),
