@@ -35,7 +35,11 @@ function string_vars(env: WorkerEnv): Record<string, string | undefined> {
     MAIL_FROM_NAME: pick(env.MAIL_FROM_NAME),
     CORE_RELAY_ORIGIN: pick(env.CORE_RELAY_ORIGIN),
     AUTH_PUBLIC_BASE_URL: pick(env.AUTH_PUBLIC_BASE_URL),
-    DASHBOARD_PUBLIC_BASE_URL: pick(env.DASHBOARD_PUBLIC_BASE_URL) };
+    DASHBOARD_PUBLIC_BASE_URL: pick(env.DASHBOARD_PUBLIC_BASE_URL),
+    GOOGLE_CLIENT_ID: pick(env.GOOGLE_CLIENT_ID),
+    GOOGLE_CLIENT_SECRET: pick(env.GOOGLE_CLIENT_SECRET),
+    GITHUB_CLIENT_ID: pick(env.GITHUB_CLIENT_ID),
+    GITHUB_CLIENT_SECRET: pick(env.GITHUB_CLIENT_SECRET) };
 }
 
 function r2_adapter(bucket: NonNullable<WorkerEnv["CONFIG_BUCKET"]>): R2Like {
