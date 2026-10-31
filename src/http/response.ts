@@ -132,6 +132,27 @@ export const preflight_response: Effect.Effect<
   );
 });
 
-export function session_cookie_value(token: string | null, max_age: number, secure: boolean): string {
-  return `ast_session=${token ? encodeURIComponent(token) : ""}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${max_age}${secure ? "; Secure" : ""}`;
+export function session_cookie_value(
+  token: string | null,
+  max_age: number,
+  secure: boolean,
+  domain: string | null,
+): string {
+  return `ast_session=${token ? encodeURIComponent(token) : ""}; Path=/;${domain ? ` Domain=${domain};` : ""} HttpOnly; SameSite=Lax; Max-Age=${max_age}${secure ? "; Secure" : ""}`;
 }
+
+export const with_session_cookie = (
+  response: HttpServerResponse.HttpServerResponse,
+  token: string | null,
+  max_age: number,
+) =>
+  Effect.gen(function* () {
+    const cfg = yield* AppConfigTag;
+    const secure = cfg.public_base_url.startsWith("https://");
+    return response.pipe(
+      HttpServerResponse.setHeader(
+        "Set-Cookie",
+        session_cookie_value(token, max_age, secure, cfg.session_cookie_domain),
+      ),
+    );
+  });

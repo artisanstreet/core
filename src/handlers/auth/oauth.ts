@@ -7,8 +7,7 @@ import * as C from "../../contracts/v1.ts";
 import { R } from "../../contracts/registry.ts";
 import * as SignIn from "../../services/sign-in.ts";
 import { client_ip, decode_request, read_json_body } from "../../http/request.ts";
-import { encode_ok, session_cookie_value } from "../../http/response.ts";
-import { AppConfigTag } from "../../services/deps.ts";
+import { encode_ok, with_session_cookie } from "../../http/response.ts";
 
 const session_cookie_max_age = 30 * 24 * 60 * 60;
 
@@ -19,14 +18,8 @@ const requester = Effect.gen(function* () {
   return { ip, user_agent: typeof ua === "string" ? ua : null } satisfies SignIn.Requester;
 });
 
-const with_session_cookie = (response: HttpServerResponse.HttpServerResponse, session: SignIn.OpenedSession) =>
-  Effect.gen(function* () {
-    const cfg = yield* AppConfigTag;
-    const secure = cfg.public_base_url.startsWith("https://");
-    return response.pipe(
-      HttpServerResponse.setHeader("Set-Cookie", session_cookie_value(session.raw_token, session_cookie_max_age, secure)),
-    );
-  });
+const with_session = (response: HttpServerResponse.HttpServerResponse, session: SignIn.OpenedSession) =>
+  with_session_cookie(response, session.raw_token, session_cookie_max_age);
 
 const session_fields = (session: SignIn.OpenedSession) => ({
   session_id: session.session_id,
@@ -53,7 +46,7 @@ const oauth_callback_handler = Effect.gen(function* () {
     requester: yield* requester });
   return yield* SignIn.CallbackOutcome.$match(outcome, {
     SignedIn: ({ session }) =>
-      with_session_cookie(encode_ok(C.OauthCallbackResp, { outcome: "signed_in", ...session_fields(session) }), session),
+      with_session(encode_ok(C.OauthCallbackResp, { outcome: "signed_in", ...session_fields(session) }), session),
     SecondFactorRequired: () => Effect.succeed(encode_ok(C.OauthCallbackResp, { outcome: "second_factor_required" })),
     SignupRequired: ({ email, display_name, avatar_url }) =>
       Effect.succeed(encode_ok(C.OauthCallbackResp, { outcome: "signup_required", email, display_name, avatar_url })),
@@ -72,7 +65,7 @@ const oauth_second_factor_handler = Effect.gen(function* () {
     totp_code: input.totpCode,
     recovery_code: input.recoveryCode,
     requester: yield* requester });
-  return yield* with_session_cookie(encode_ok(C.MagicFinalizeResp, session_fields(session)), session);
+  return yield* with_session(encode_ok(C.MagicFinalizeResp, session_fields(session)), session);
 });
 
 const oauth_signup_handler = Effect.gen(function* () {
@@ -83,7 +76,7 @@ const oauth_signup_handler = Effect.gen(function* () {
     flow_secret: input.flowSecret,
     display_name: input.displayName,
     requester: yield* requester });
-  return yield* with_session_cookie(encode_ok(C.MagicFinalizeResp, session_fields(session)), session);
+  return yield* with_session(encode_ok(C.MagicFinalizeResp, session_fields(session)), session);
 });
 
 export const router = HttpRouter.empty.pipe(

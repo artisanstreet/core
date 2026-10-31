@@ -67,6 +67,21 @@ describe("OAuth sign-up", () => {
     expect(again.status).toBe(401);
   });
 
+  it("scopes the session cookie to the parent domain when one is configured", async () => {
+    const fake = fake_provider();
+    const rig = await setup_rig({
+      oauth: fake.client,
+      vars: {
+        AUTH_PUBLIC_BASE_URL: "https://auth.artisan.test",
+        DASHBOARD_PUBLIC_BASE_URL: "https://dashboard.artisan.test",
+        SESSION_COOKIE_DOMAIN: "artisan.test" } });
+    const flow = await start(rig, "github");
+    await callback(rig, fake, flow, provider_profile());
+    const done = await api(rig.app, "POST", "/v1/auth/oauth/signup", {
+      body: { flowId: flow.flow_id, flowSecret: flow.flow_secret, displayName: "Ada" } });
+    expect(done.headers.get("set-cookie")).toContain("; Domain=artisan.test;");
+  });
+
   it("signs straight back in on the next visit", async () => {
     const { rig, fake } = await oauth_rig();
     const first = await start(rig, "google");

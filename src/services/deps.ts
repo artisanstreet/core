@@ -14,6 +14,7 @@ export interface AppConfig {
   readonly auth_public_base_url: string | null;
   readonly dashboard_public_base_url: string | null;
   readonly allowed_browser_origins: ReadonlyArray<string>;
+  readonly session_cookie_domain: string | null;
   readonly master_key: MasterKey;
   readonly mailer: MailerKind;
   readonly resend_api_key?: string;
@@ -55,6 +56,22 @@ export const normalize_browser_origin = (raw: string, var_name: string, core_env
     (parsed.protocol === "http:" && (parsed.port === "" || parsed.port === "80"));
   const port_part = is_default_port ? "" : `:${parsed.port}`;
   return `${parsed.protocol}//${host}${port_part}`;
+};
+
+export const parse_cookie_domain = (raw: string | null, browser_origins: ReadonlyArray<string | null>): string | null => {
+  if (!raw) return null;
+  const domain = raw.toLowerCase().replace(/^\./, "");
+  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(domain)) {
+    throw new Error("SESSION_COOKIE_DOMAIN must be a bare domain like artisan.st");
+  }
+  const outside = browser_origins
+    .filter((origin): origin is string => origin !== null)
+    .map((origin) => new URL(origin).hostname)
+    .filter((host) => host !== domain && !host.endsWith(`.${domain}`));
+  if (outside.length > 0) {
+    throw new Error(`SESSION_COOKIE_DOMAIN ${domain} does not cover ${outside.join(", ")}`);
+  }
+  return domain;
 };
 
 const canonical_origin_of = (normalized_bare: string): string => new URL(normalized_bare).origin;
@@ -106,6 +123,10 @@ export function config_from_env(
     auth_public_base_url,
     dashboard_public_base_url,
     allowed_browser_origins,
+    session_cookie_domain: parse_cookie_domain(trim_or_null(env.SESSION_COOKIE_DOMAIN), [
+      auth_public_base_url,
+      dashboard_public_base_url,
+    ]),
     master_key: load_master_key(env),
     mailer,
     resend_api_key: env.RESEND_API_KEY,

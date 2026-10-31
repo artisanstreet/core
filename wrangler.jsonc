@@ -10,6 +10,7 @@
     "CORE_JWT_ISSUER": "https://api.artisan.st",
     "AUTH_PUBLIC_BASE_URL": "https://auth.artisan.st",
     "DASHBOARD_PUBLIC_BASE_URL": "https://dashboard.artisan.st",
+    "SESSION_COOKIE_DOMAIN": "artisan.st",
     "MAIL_PROVIDER": "resend"
   },
   "hyperdrive": [

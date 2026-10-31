@@ -36,6 +36,7 @@ function string_vars(env: WorkerEnv): Record<string, string | undefined> {
     CORE_RELAY_ORIGIN: pick(env.CORE_RELAY_ORIGIN),
     AUTH_PUBLIC_BASE_URL: pick(env.AUTH_PUBLIC_BASE_URL),
     DASHBOARD_PUBLIC_BASE_URL: pick(env.DASHBOARD_PUBLIC_BASE_URL),
+    SESSION_COOKIE_DOMAIN: pick(env.SESSION_COOKIE_DOMAIN),
     GOOGLE_CLIENT_ID: pick(env.GOOGLE_CLIENT_ID),
     GOOGLE_CLIENT_SECRET: pick(env.GOOGLE_CLIENT_SECRET),
     GITHUB_CLIENT_ID: pick(env.GITHUB_CLIENT_ID),

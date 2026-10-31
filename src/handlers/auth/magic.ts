@@ -7,9 +7,8 @@ import * as C from "../../contracts/v1.ts";
 import { R } from "../../contracts/registry.ts";
 import * as Auth from "../../services/auth.ts";
 import { client_ip, decode_request, read_json_body } from "../../http/request.ts";
-import { encode_ok, session_cookie_value } from "../../http/response.ts";
+import { encode_ok, with_session_cookie } from "../../http/response.ts";
 import { CoreError } from "../../errors.ts";
-import { AppConfigTag } from "../../services/deps.ts";
 
 const finalize_cookie_max_age = 30 * 24 * 60 * 60;
 
@@ -54,7 +53,6 @@ const magic_confirm_handler = Effect.gen(function* () {
 });
 const magic_finalize_handler = Effect.gen(function* () {
   const req = yield* HttpServerRequest.HttpServerRequest;
-  const cfg = yield* AppConfigTag;
   const { json } = yield* read_json_body;
   const input = yield* decode_request(C.MagicFinalizeReq, json);
   const ip = yield* client_ip;
@@ -67,12 +65,8 @@ const magic_finalize_handler = Effect.gen(function* () {
     device_name: undefined,
     ip,
     user_agent: typeof ua === "string" ? ua : null });
-  const secure = cfg.public_base_url.startsWith("https://");
   const { raw_token, ...rest } = r;
-  const ok = encode_ok(C.MagicFinalizeResp, rest);
-  return ok.pipe(
-    HttpServerResponse.setHeader("Set-Cookie", session_cookie_value(raw_token, finalize_cookie_max_age, secure)),
-  );
+  return yield* with_session_cookie(encode_ok(C.MagicFinalizeResp, rest), raw_token, finalize_cookie_max_age);
 });
 
 export const router = HttpRouter.empty.pipe(
