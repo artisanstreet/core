@@ -34,5 +34,7 @@ Do not edit `../editor` or `../relay`. Do not undo user changes elsewhere.
   (SHA-256, random), `@noble/ciphers` (AES-GCM), `@scure/base` (base64url),
   `@oslojs/otp` (TOTP). No homemade crypto, no fake
   OAuth, no invented provider APIs (API-key vault + opaque engine
-  artifacts from the harness's own local login).
+  artifacts from the harness's own local login). The only OAuth Core runs
+  is Google/GitHub account sign-in, linked to AST accounts as sign-in
+  methods.
 - Tests must be behavioral (HTTP + real PGlite DB), not mirrors of constants.

@@ -40,10 +40,28 @@ Owner: Core. Coordinated via root; Relay/Rust contributors read
 
 ## Auth model (as built)
 
-- Magic links only (no passwords/passkeys/social). Request secret (held by
-  the originating session) completes login; the emailed token only marks
-  approval. GET never consumes. Cross-browser flow requires explicit
-  original-session approval with safe binding.
+- Every person is an AST account (`accounts`); how they get in is a separate
+  set of sign-in methods (`sign_in_methods`: `email`, `google`, `github`),
+  Better Auth style. There are no passwords. An account created through
+  Google or GitHub is an ordinary account whose only method is that
+  provider; signing up through a provider only prefills the account form
+  (verified email, name, avatar). OAuth rows match on the provider's stable
+  user id, never on email. Every live account keeps at least one method;
+  removing a method needs TOTP when enrolled.
+- Email links: request secret (held by the originating session) completes
+  login; the emailed token only marks approval. GET never consumes.
+  Cross-browser flow requires explicit original-session approval with safe
+  binding. Signing up by email creates the `email` method. An account with
+  email sign-in off gets a notice instead of a link, with an identical
+  response (no enumeration), and finalize re-checks the method.
+- Google/GitHub sign-in (authorization code + PKCE): `oauth_flows` holds the
+  state and a browser-held flow secret as hashes and the verifier
+  encrypted. The callback claims the flow before talking to the provider,
+  so a flow completes once and only in the browser that started it.
+  Outcomes: signed in, second factor required, signup required (prefill),
+  linked, linked elsewhere, email taken (an existing account with that
+  email is never linked silently; the person links from settings),
+  no verified email. Providers without client credentials answer 503.
 - TOTP optional with recovery codes. Pending vs active secret columns:
   enrollment stages pending (refused while active; replacing MFA goes
   through disable with a live code). Email alone never bypasses TOTP;
@@ -69,7 +87,8 @@ Owner: Core. Coordinated via root; Relay/Rust contributors read
 ## Vault (two stores, no fake OAuth)
 
 - `provider_connections`: API keys ONLY (anthropic/openai/openrouter/
-  google). Core performs no OAuth anywhere. Encrypted at rest, released
+  google). The only OAuth Core performs is Google/GitHub account sign-in;
+  it never runs OAuth against AI providers. Encrypted at rest, released
   solely to assigned live machines of the same account.
 - `engine_artifacts`: opaque envelopes from the harness's OWN local login
   (claude/codex/opencode subscription or key flows — the only OAuth that

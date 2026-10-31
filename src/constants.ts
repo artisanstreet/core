@@ -5,6 +5,7 @@ export const GRANT_MAX_TTL_SECONDS = 300;
 export const MAGIC_LINK_TTL_SECONDS = 15 * 60;
 export const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 export const ENROLLMENT_TTL_SECONDS = 10 * 60;
+export const OAUTH_FLOW_TTL_SECONDS = 10 * 60;
 export const RATE_WINDOW_SECONDS = 60 * 60;
 
 export function is_production(env: Record<string, string | undefined>): boolean {

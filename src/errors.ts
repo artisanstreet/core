@@ -9,6 +9,7 @@ export type ErrorCode =
   | "rate_limited"
   | "payload_too_large"
   | "gone"
+  | "unavailable"
   | "internal";
 
 const status_for_code = Match.type<ErrorCode>().pipe(
@@ -20,6 +21,7 @@ const status_for_code = Match.type<ErrorCode>().pipe(
   Match.when("rate_limited", () => 429 as const),
   Match.when("payload_too_large", () => 413 as const),
   Match.when("gone", () => 410 as const),
+  Match.when("unavailable", () => 503 as const),
   Match.when("internal", () => 500 as const),
   Match.exhaustive,
 );
@@ -42,4 +44,5 @@ export const conflict = (m = "conflict", options?: { cause?: unknown }) => new C
 export const gone = (m = "gone", options?: { cause?: unknown }) => new CoreError("gone", m, options);
 export const rate_limited = (m = "rate limited") => new CoreError("rate_limited", m);
 export const payload_too_large = (m = "body too large") => new CoreError("payload_too_large", m);
+export const unavailable = (m = "unavailable", options?: { cause?: unknown }) => new CoreError("unavailable", m, options);
 export const internal = (m = "internal error", options?: { cause?: unknown }) => new CoreError("internal", m, options);

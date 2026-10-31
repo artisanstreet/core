@@ -30,6 +30,8 @@ import insert_recovery_code from "../db/queries/recovery/insert-recovery-code.sq
 import count_active_recovery_codes from "../db/queries/recovery/count-active-recovery-codes.sql"
 import consume_recovery_code from "../db/queries/recovery/consume-recovery-code.sql"
 import purge_recovery_codes from "../db/queries/deletion/purge-recovery-codes.sql"
+import insert_sign_in_method from "../db/queries/sign-in/insert-sign-in-method.sql"
+import get_sign_in_method from "../db/queries/sign-in/get-sign-in-method.sql"
 
 export interface SessionPrincipal {
   readonly session_id: string;
@@ -77,18 +79,27 @@ export const request_magic_link = (opts: {
     if (opts.ip) yield* check_budget(`login:ip:${opts.ip}`, RATE_WINDOW_SECONDS, 20, now_ms);
     yield* check_budget("login:global", RATE_WINDOW_SECONDS, 200, now_ms);
 
-    let account = yield* db_run(() => get_account_by_email.run(db, { email }));
-    if (!account) {
-      yield* db_run(() =>
-        insert_account.run(db, {
-          id: new_id("acct"),
-          email,
-          display_name: (opts.display_name ?? "").slice(0, 120) }),
+    const existing = yield* db_run(() => get_account_by_email.run(db, { email }));
+    if (!existing) {
+      const tx = yield* TxTag;
+      const account_id = new_id("acct");
+      yield* tx.transaction(
+        Effect.gen(function* () {
+          const { db: tx_db } = yield* DbTag;
+          yield* db_run(() =>
+            insert_account.run(tx_db, {
+              id: account_id,
+              email,
+              display_name: (opts.display_name ?? "").slice(0, 120) }),
+          );
+          yield* db_run(() => insert_sign_in_method.run(tx_db, { account_id, kind: "email", subject: email }));
+        }),
       );
-      account = yield* db_run(() => get_account_by_email.run(db, { email }));
     }
+    const account = existing ?? (yield* db_run(() => get_account_by_email.run(db, { email })));
     if (!account) return yield* Effect.fail(bad_request("could not load account"));
     if (account.deleted_at) return yield* Effect.fail(gone("account is deleted"));
+    const email_method = yield* db_run(() => get_sign_in_method.run(db, { account_id: account.id, kind: "email" }));
 
     const request_secret = base64url_encode(random_bytes(32));
     const email_token = base64url_encode(random_bytes(32));
@@ -110,13 +121,24 @@ export const request_magic_link = (opts: {
     const confirm_url = cfg.auth_public_base_url
       ? `${approve_base}/approve?token=${email_token}`
       : `${approve_base}/v1/auth/magic/confirm?token=${email_token}`;
-    yield* mailer.send({
-      to: email,
-      subject: "Sign in to Ast",
-      text:
-        `Approve this sign-in request (expires in 15 minutes):\n${confirm_url}\n\n` +
-        `If you did not request this, ignore this message.`,
-      confirm_url });
+    yield* mailer.send(
+      email_method
+        ? {
+            to: email,
+            subject: "Sign in to Ast",
+            text:
+              `Approve this sign-in request (expires in 15 minutes):\n${confirm_url}\n\n` +
+              `If you did not request this, ignore this message.`,
+            confirm_url }
+        : {
+            to: email,
+            subject: "Sign in to Ast",
+            text:
+              `Someone asked to sign in to your account with an email link, but email sign-in is off.\n` +
+              `Sign in with the provider you linked instead: ${approve_base}\n\n` +
+              `If you did not request this, ignore this message.`,
+            confirm_url: approve_base },
+    );
     yield* record(account.id, "login.requested", { ip: opts.ip ?? null });
     return { request_id: request_id, request_secret: request_secret, expires_at: expires_at };
   });
@@ -200,49 +222,73 @@ export const finalize_magic_link = (opts: {
       if (!ok) return yield* Effect.fail(forbidden("second factor required"));
       totp_verified = true;
     }
-    // Atomic single-use: completion, session, and audit commit together, so
-    // a crash cannot burn the request while stranding the login. Exactly one
-    // finalize wins the markLoginCompleted race; losers see no row.
-    const tx = yield* TxTag;
-    const token = new_session_token();
-    const token_hash = yield* hash_secret(token);
-    const expires_at = new Date(now_ms + SESSION_TTL_SECONDS * 1000).toISOString();
-    const finalize_tx = Effect.gen(function* () {
+    const email_method = yield* db_run(() => get_sign_in_method.run(db, { account_id: account.id, kind: "email" }));
+    if (!email_method) return yield* Effect.fail(forbidden("email sign-in is off"));
+
+    const gate = Effect.gen(function* () {
       const { db: tx_db } = yield* DbTag;
       const completed = yield* db_run(() => mark_login_completed.run(tx_db, { id: row.id }));
       if (!completed) return yield* Effect.fail(forbidden("already completed or expired"));
-      const s = yield* db_run(() =>
-        insert_session.run(tx_db, {
-          id: new_id("sess"),
-          account_id: account!.id,
-          token_hash: token_hash,
-          device_name: (opts.device_name ?? "").slice(0, 120),
-          ip: opts.ip ?? null,
-          user_agent: (opts.user_agent ?? "").slice(0, 300),
-          totp_verified_at: totp_verified ? new Date(now_ms).toISOString() : null,
-          expires_at: expires_at }),
-      );
-      if (!s) return yield* Effect.fail(internal("database unavailable"));
-      yield* db_run(() =>
-        insert_activity.run(tx_db, {
-          id: new_id("evt"),
-          account_id: account!.id,
-          machine_id: null,
-          kind: "login.completed",
-          detail: "{}",
-          ip: opts.ip ?? null }),
-      );
-      return s;
+      return account.id;
     });
-    const sess = yield* tx.transaction(
-      finalize_tx,
+    return yield* open_session(gate, {
+      totp_verified,
+      device_name: opts.device_name,
+      ip: opts.ip ?? null,
+      user_agent: opts.user_agent ?? null,
+      event: "login.completed" });
+  });
+
+export interface SessionOpening {
+  readonly totp_verified: boolean;
+  readonly device_name?: string;
+  readonly ip: string | null;
+  readonly user_agent: string | null;
+  readonly event: string;
+}
+
+export const open_session = <E>(gate: Effect.Effect<string, E | CoreError, DbTag>, opening: SessionOpening) =>
+  Effect.gen(function* () {
+    const cfg = yield* AppConfigTag;
+    const tx = yield* TxTag;
+    const now_ms = cfg.now();
+    const token = new_session_token();
+    const token_hash = yield* hash_secret(token);
+    const expires_at = new Date(now_ms + SESSION_TTL_SECONDS * 1000).toISOString();
+    const opened = yield* tx.transaction(
+      Effect.gen(function* () {
+        const account_id = yield* gate;
+        const { db: tx_db } = yield* DbTag;
+        const session = yield* db_run(() =>
+          insert_session.run(tx_db, {
+            id: new_id("sess"),
+            account_id,
+            token_hash,
+            device_name: (opening.device_name ?? "").slice(0, 120),
+            ip: opening.ip,
+            user_agent: (opening.user_agent ?? "").slice(0, 300),
+            totp_verified_at: opening.totp_verified ? new Date(now_ms).toISOString() : null,
+            expires_at }),
+        );
+        if (!session) return yield* Effect.fail(internal("database unavailable"));
+        yield* db_run(() =>
+          insert_activity.run(tx_db, {
+            id: new_id("evt"),
+            account_id,
+            machine_id: null,
+            kind: opening.event,
+            detail: "{}",
+            ip: opening.ip }),
+        );
+        return { session_id: session.id, account_id };
+      }),
     );
     return {
-      session_id: sess.id,
+      session_id: opened.session_id,
       raw_token: token,
-      account_id: account.id,
-      expires_at: expires_at,
-      totp_verified: totp_verified };
+      account_id: opened.account_id,
+      expires_at,
+      totp_verified: opening.totp_verified };
   });
 
 // Match a 6-digit code against explicit time-steps around now (±2 steps

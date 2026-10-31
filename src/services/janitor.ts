@@ -7,6 +7,7 @@ import prune_nonces from "../db/queries/nonces/prune-nonces.sql";
 import prune_sessions from "../db/queries/sessions/prune-sessions.sql";
 import prune_rate_counters from "../db/queries/rate/prune-rate-counters.sql";
 import prune_totp_steps from "../db/queries/totp/prune-totp-steps.sql";
+import prune_oauth_flows from "../db/queries/oauth/prune-oauth-flows.sql";
 
 // Scheduled maintenance: expire stale requests, drop used nonces and old
 // counters, purge accounts past their deletion grace period.
@@ -21,6 +22,7 @@ export const janitor = (now_ms: number) =>
     const sessions = yield* db_run(() => prune_sessions.run(db, { before: day_ago }));
     const counters = yield* db_run(() => prune_rate_counters.run(db, { before: day_ago }));
     const steps = yield* db_run(() => prune_totp_steps.run(db, { before: day_ago }));
+    const oauth_flows = yield* db_run(() => prune_oauth_flows.run(db, { before: day_ago }));
     const { purged } = yield* purge_due_accounts(now);
     return {
       expired_logins: logins.length,
@@ -29,5 +31,6 @@ export const janitor = (now_ms: number) =>
       pruned_sessions: sessions.length,
       pruned_counters: counters.length,
       pruned_totp_steps: steps.length,
+      pruned_oauth_flows: oauth_flows.length,
       purged_accounts: purged };
   });

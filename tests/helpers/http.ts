@@ -12,6 +12,7 @@ import { make_service_layers } from "../../src/http/context.ts";
 import type { Db } from "../../src/db.ts";
 import { DbTag } from "../../src/services/deps.ts";
 import { CoreError, internal } from "../../src/errors.ts";
+import type { OauthClient } from "../../src/services/oauth.ts";
 
 const MASTER_KEY = "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI"; // 32x 0x42, TEST ONLY
 
@@ -36,6 +37,7 @@ export interface TestRig {
 
 export async function setup_rig(opts: {
   vars?: Record<string, string | undefined>;
+  oauth?: OauthClient;
 } = {}): Promise<TestRig> {
   const db = new PGlite();
   await db.exec(await read_file(file_url_to_path(new URL("../../db/schema.sql", import.meta.url).href), "utf8"));
@@ -78,7 +80,8 @@ export async function setup_rig(opts: {
             catch: (cause) => (cause instanceof CoreError ? cause : internal("database unavailable", { cause })) }),
         ) },
     mail_sink: (m) => void mail.push(m),
-    now: () => now_ms };
+    now: () => now_ms,
+    oauth: opts.oauth };
   return {
     app: create_app(ctx),
     db,

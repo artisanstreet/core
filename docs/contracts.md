@@ -284,6 +284,26 @@ strict requests; OpenAPI export; fixtures under `fixtures/v1/`.
   calls the same consume/finalize API; it is never bundled or served by
   `api.artisan.st`.
 
+### Sign-in methods and Google/GitHub sign-in
+
+- An AST account always exists on its own; `email`, `google` and `github`
+  are sign-in methods linked to it. `GET /v1/account/sign-in-methods`
+  lists them; `POST /v1/account/sign-in-methods/email` turns email links
+  on; `POST /v1/account/sign-in-methods/:kind/remove` (`totpCode` when
+  enrolled) refuses to remove the last one (409).
+- Provider sign-in: `POST /v1/auth/oauth/start { provider }` (or
+  `POST /v1/account/sign-in-methods/link { provider }` with a session)
+  returns `flow_id`, `flow_secret`, `authorize_url`. The browser keeps the
+  flow secret, follows `authorize_url`, and the provider returns to
+  `<auth origin>/oauth/callback?code&state`, which posts
+  `POST /v1/auth/oauth/callback { flowId, flowSecret, state, code }`.
+- The callback answers one `outcome`: `signed_in` (session cookie set),
+  `second_factor_required` (then `POST /v1/auth/oauth/second-factor`),
+  `signup_required` with `email`, `display_name`, `avatar_url` to prefill
+  (then `POST /v1/auth/oauth/signup { displayName }`), `linked`,
+  `linked_elsewhere`, `email_taken`, `no_verified_email`. A provider
+  without client credentials answers 503 `unavailable`.
+
 ### Config sync (checksum-based invalidation)
 
 - `GET /v1/config/bundles/latest` and `GET /v1/config/bundles/:version/manifest`

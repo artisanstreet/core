@@ -29,6 +29,7 @@ export const SessionId = Schema.String.pipe(Schema.pattern(id_pattern("sess")));
 export const MachineId = Schema.String.pipe(Schema.pattern(id_pattern("mch")));
 export const EnrollmentId = Schema.String.pipe(Schema.pattern(id_pattern("enr")));
 export const LoginRequestId = Schema.String.pipe(Schema.pattern(id_pattern("logreq")));
+export const OauthFlowId = Schema.String.pipe(Schema.pattern(id_pattern("oflow")));
 export const ConnectionId = Schema.String.pipe(Schema.pattern(id_pattern("conn")));
 export const ArtifactId = Schema.String.pipe(Schema.pattern(id_pattern("art")));
 export const BundleId = Schema.String.pipe(Schema.pattern(id_pattern("bundle")));
@@ -455,6 +456,55 @@ export const DeletionStatusResp = Schema.Struct({
   requested_at: Schema.NullOr(Rfc3339),
   purge_after: Schema.NullOr(Rfc3339),
   completed_at: Schema.NullOr(Rfc3339) });
+
+export const SignInKind = Schema.Literal("email", "google", "github");
+export const OauthProvider = Schema.Literal("google", "github");
+
+export const OauthStartReq = Schema.Struct({ provider: OauthProvider });
+export const OauthStartResp = Schema.Struct({
+  flow_id: OauthFlowId,
+  flow_secret: Base64url,
+  authorize_url: Schema.String,
+  expires_at: Rfc3339 });
+
+export const OauthCallbackReq = Schema.Struct({
+  flowId: OauthFlowId,
+  flowSecret: Base64url,
+  state: Base64url,
+  code: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(2048)) });
+export const OauthCallbackResp = Schema.Union(
+  Schema.Struct({
+    outcome: Schema.Literal("signed_in"),
+    session_id: SessionId,
+    account_id: AccountId,
+    expires_at: Rfc3339,
+    totp_verified: Schema.Boolean }),
+  Schema.Struct({ outcome: Schema.Literal("second_factor_required") }),
+  Schema.Struct({
+    outcome: Schema.Literal("signup_required"),
+    email: Email,
+    display_name: Schema.String,
+    avatar_url: Schema.NullOr(Schema.String) }),
+  Schema.Struct({ outcome: Schema.Literal("linked"), provider: OauthProvider }),
+  Schema.Struct({ outcome: Schema.Literal("linked_elsewhere") }),
+  Schema.Struct({ outcome: Schema.Literal("email_taken"), email: Email }),
+  Schema.Struct({ outcome: Schema.Literal("no_verified_email") }),
+);
+
+export const OauthSecondFactorReq = Schema.Struct({
+  flowId: OauthFlowId,
+  flowSecret: Base64url,
+  totpCode: Schema.optional(Schema.String),
+  recoveryCode: Schema.optional(Schema.String) });
+
+export const OauthSignupReq = Schema.Struct({
+  flowId: OauthFlowId,
+  flowSecret: Base64url,
+  displayName: Schema.String.pipe(Schema.maxLength(120)) });
+
+export const SignInMethod = Schema.Struct({ kind: SignInKind, created_at: Rfc3339 });
+export const SignInMethodsResp = Schema.Struct({ email: Email, methods: Schema.Array(SignInMethod) });
+export const SignInMethodRemoveReq = Schema.Struct({ totpCode: Schema.optional(Schema.String) });
 
 export const VersionResp = Schema.Struct({
   api: Schema.String,
