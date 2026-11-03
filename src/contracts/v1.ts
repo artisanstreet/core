@@ -153,7 +153,12 @@ export const TotpDisableResp = Schema.Struct({ disabled: Schema.Boolean });
 
 export const SessionInfo = Schema.Struct({
   id: SessionId,
+  is_current: Schema.Boolean,
   device_name: Schema.String,
+  browser: Schema.NullOr(Schema.String),
+  device: Schema.NullOr(Schema.String),
+  country_code: Schema.NullOr(Schema.String),
+  last_seen_at: Schema.NullOr(Rfc3339),
   totp_verified_at: Schema.NullOr(Rfc3339),
   created_at: Rfc3339,
   expires_at: Rfc3339,
@@ -180,6 +185,12 @@ export const SignedInAccount = Schema.Struct({
   avatar_url: Schema.NullOr(Schema.String) });
 
 export const SignedInAccountsResp = Schema.Struct({ accounts: Schema.Array(SignedInAccount) });
+
+export const ProfileResp = Schema.Struct({ display_name: Schema.String, username: Schema.NullOr(Schema.String), avatar_url: Schema.NullOr(Schema.String), phone: Schema.NullOr(Schema.String) });
+export const ProfilePhoneReq = Schema.Struct({ phone: Schema.NullOr(Schema.String.pipe(Schema.pattern(/^\+[1-9][0-9]{7,14}$/))) });
+export const ProfileNameReq = Schema.Struct({ displayName: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(120)) });
+export const ProfileUsernameReq = Schema.Struct({ username: Schema.String.pipe(Schema.pattern(/^[a-z0-9][a-z0-9_-]{0,31}$/)) });
+export const ProfileAvatarReq = Schema.Struct({ avatar: Schema.String.pipe(Schema.maxLength(350000)) });
 
 export const MeResp = Schema.Struct({
   account_id: AccountId,

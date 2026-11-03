@@ -45,7 +45,7 @@ const me_handler = Effect.gen(function* () {
 });
 const sessions_handler = Effect.gen(function* () {
   const { principal: s } = yield* session_of;
-  const data = yield* Auth.list_sessions(s.account_id, 50);
+  const data = yield* Auth.list_sessions(s.account_id, s.session_id, 50);
   return encode_ok(C.SessionListResp, data);
 });
 const logout_handler = Effect.gen(function* () {
@@ -66,6 +66,18 @@ const sessions_revoke_all_handler = Effect.gen(function* () {
     tokens,
     session_cookie_max_age,
   );
+});
+const session_revoke_handler = Effect.gen(function* () {
+  const s = yield* session_for_mutation;
+  const params = yield* HttpRouter.RouteContext.pipe(Effect.map((ctx) => ctx.params));
+  const data = yield* Auth.revoke_session_by_id(s.account_id, s.session_id, params["id"] ?? "");
+  return encode_ok(R.session_revoke.response_schema, data);
+});
+const account_disable_handler = Effect.gen(function* () {
+  const s = yield* session_for_mutation;
+  const tokens = yield* cookie_without_account(s.account_id);
+  yield* Auth.disable_account_until_sign_in(s.account_id, s.session_id);
+  return yield* with_session_cookie(encode_ok(R.account_disable.response_schema, { disabled: true }), tokens, session_cookie_max_age);
 });
 const signed_in_accounts_handler = Effect.gen(function* () {
   const held = yield* held_sessions;
@@ -94,6 +106,8 @@ export const router = HttpRouter.empty.pipe(
     R.sessions_revoke_all,
       sessions_revoke_all_handler,
   ),
+  register_route(R.session_revoke, session_revoke_handler),
+  register_route(R.account_disable, account_disable_handler),
   register_route(
     R.signed_in_accounts,
       signed_in_accounts_handler,

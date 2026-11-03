@@ -2,7 +2,7 @@ import { Effect, Either } from "effect";
 import { createTOTPKeyURI as create_totp_key_uri, verifyHOTP as verify_hotp } from "@oslojs/otp";
 import { base64url_encode, decrypt_with_key, encrypt_with_key, random_bytes, sha256_hex } from "../crypto.ts";
 import { MAGIC_LINK_TTL_SECONDS, RATE_WINDOW_SECONDS, SESSION_TTL_SECONDS } from "../constants.ts";
-import { CoreError, bad_request, conflict, forbidden, gone, internal, unauthorized } from "../errors.ts";
+import { CoreError, bad_request, conflict, forbidden, gone, internal, not_found, unauthorized } from "../errors.ts";
 import { new_id } from "../ids.ts";
 import { AppConfigTag, DbTag, TxTag, db_run } from "./deps.ts";
 import { check_budget } from "./ratelimit.ts";
@@ -11,6 +11,10 @@ import { MailTag } from "./mail.ts";
 import insert_account from "../db/queries/accounts/insert-account.sql"
 import get_account_by_id from "../db/queries/accounts/get-account-by-id.sql"
 import get_account_by_email from "../db/queries/accounts/get-account-by-email.sql"
+import disable_account from "../db/queries/accounts/disable-account.sql"
+import enable_account from "../db/queries/accounts/enable-account.sql"
+import clear_deletion from "../db/queries/accounts/clear-deletion.sql"
+import cancel_on_sign_in from "../db/queries/deletion/cancel-on-sign-in.sql"
 import stage_totp_secret from "../db/queries/accounts/stage-totp-secret.sql"
 import promote_totp from "../db/queries/accounts/promote-totp.sql"
 import clear_totp from "../db/queries/accounts/clear-totp.sql"
@@ -32,6 +36,9 @@ import consume_recovery_code from "../db/queries/recovery/consume-recovery-code.
 import purge_recovery_codes from "../db/queries/deletion/purge-recovery-codes.sql"
 import insert_sign_in_method from "../db/queries/sign-in/insert-sign-in-method.sql"
 import get_sign_in_method from "../db/queries/sign-in/get-sign-in-method.sql"
+import touch_session from "../db/queries/sessions/touch-session.sql"
+import revoke_other_session from "../db/queries/sessions/revoke-other-session.sql"
+import { browser_of, country_code_of, device_of } from "./session-device.ts";
 
 export interface SessionPrincipal {
   readonly session_id: string;
@@ -261,6 +268,13 @@ export const open_session = <E>(gate: Effect.Effect<string, E | CoreError, DbTag
       Effect.gen(function* () {
         const account_id = yield* gate;
         const { db: tx_db } = yield* DbTag;
+        const enabled = yield* db_run(() => enable_account.run(tx_db, { id: account_id }));
+        if (!enabled) return yield* Effect.fail(gone("account is deleted"));
+        const cancelled = yield* db_run(() => cancel_on_sign_in.run(tx_db, { account_id, now: new Date(now_ms).toISOString() }));
+        if (cancelled) {
+          yield* db_run(() => clear_deletion.run(tx_db, { id: account_id }));
+          yield* db_run(() => insert_activity.run(tx_db, { id: new_id("evt"), account_id, machine_id: null, kind: "account.deletion_cancelled", detail: "{}", ip: opening.ip }));
+        }
         const session = yield* db_run(() =>
           insert_session.run(tx_db, {
             id: new_id("sess"),
@@ -365,7 +379,7 @@ export const require_session = (raw_token: string) =>
     const cfg = yield* AppConfigTag;
     const token_hash = yield* hash_secret(raw_token);
     const row = yield* db_run(() => get_session_with_account_by_token_hash.run(db, { token_hash: token_hash }));
-    if (!row || row.revoked_at || Date.parse(row.expires_at) <= cfg.now() || row.deleted_at) {
+    if (!row || row.revoked_at || Date.parse(row.expires_at) <= cfg.now() || row.deleted_at || row.disabled_at) {
       return yield* Effect.fail(unauthorized("invalid session"));
     }
     const principal: SessionPrincipal = {
@@ -387,6 +401,30 @@ export const revoke_current_session = (raw_token: string) =>
     yield* db_run(() => revoke_session.run(db, { token_hash: token_hash }));
   });
 
+export const revoke_session_by_id = (account_id: string, current_session_id: string, id: string) =>
+  Effect.gen(function* () {
+    const { db } = yield* DbTag;
+    const revoked = yield* db_run(() => revoke_other_session.run(db, { account_id, current_session_id, id }));
+    if (!revoked) return yield* Effect.fail(not_found("session not found"));
+    yield* record(account_id, "session.revoked", {});
+    return { revoked: true };
+  });
+
+export const touch_current_session = (session_id: string, raw_country: string | undefined) =>
+  Effect.gen(function* () {
+    const { db } = yield* DbTag;
+    const cfg = yield* AppConfigTag;
+    const now = cfg.now();
+    const country_code = country_code_of(raw_country);
+    yield* db_run(() => touch_session.run(db, {
+      id: session_id,
+      seen_at: new Date(now).toISOString(),
+      cutoff: new Date(now - 300_000).toISOString(),
+      country_code: country_code ?? "",
+      country_missing: country_code !== null,
+    }));
+  });
+
 export const revoke_all_sessions = (account_id: string) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
@@ -394,14 +432,31 @@ export const revoke_all_sessions = (account_id: string) =>
     yield* record(account_id, "sessions.revoked_all", {});
   });
 
-export const list_sessions = (account_id: string, limit: number) =>
+export const disable_account_until_sign_in = (account_id: string, session_id: string) =>
+  Effect.gen(function* () {
+    const tx = yield* TxTag;
+    yield* tx.transaction(Effect.gen(function* () {
+      const { db } = yield* DbTag;
+      const disabled = yield* db_run(() => disable_account.run(db, { id: account_id, session_id }));
+      if (!disabled) return yield* Effect.fail(unauthorized("invalid session"));
+      yield* db_run(() => revoke_sessions_by_account.run(db, { account_id }));
+      yield* record(account_id, "account.disabled", {});
+    }));
+  });
+
+export const list_sessions = (account_id: string, current_session_id: string, limit: number) =>
   Effect.gen(function* () {
     const { db } = yield* DbTag;
-    const rows = yield* db_run(() => list_sessions_by_account.run(db, { account_id: account_id, limit }));
+    const rows = yield* db_run(() => list_sessions_by_account.run(db, { account_id, current_session_id, limit }));
     return {
       sessions: rows.map((r) => ({
         id: r.id,
+        is_current: r.id === current_session_id,
         device_name: r.device_name,
+        browser: browser_of(r.user_agent),
+        device: device_of(r.user_agent),
+        country_code: r.country_code,
+        last_seen_at: r.last_seen_at,
         totp_verified_at: r.totp_verified_at,
         created_at: r.created_at,
         expires_at: r.expires_at,

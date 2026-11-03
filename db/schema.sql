@@ -15,15 +15,20 @@ create table if not exists accounts (
   id text primary key,
   email text not null unique,
   display_name text not null default '',
+  username text,
+  phone text,
   avatar_url text,
   totp_secret_enc bytea,
   totp_pending_secret_enc bytea,
   totp_enrolled_at timestamptz,
   created_at timestamptz not null default now(),
   deletion_requested_at timestamptz,
+  disabled_at timestamptz,
   deleted_at timestamptz,
   check (email <> '')
 );
+
+create unique index if not exists accounts_username_unique on accounts (username);
 
 create table if not exists sign_in_methods (
   account_id text not null references accounts (id) on delete cascade,
@@ -82,6 +87,8 @@ create table if not exists sessions (
   device_name text not null default '',
   ip text,
   user_agent text,
+  country_code text,
+  last_seen_at timestamptz,
   totp_verified_at timestamptz,
   created_at timestamptz not null default now(),
   expires_at timestamptz not null,
