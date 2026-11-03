@@ -134,13 +134,15 @@ const cookie_session = Effect.gen(function* () {
 
 export const session_of = Effect.gen(function* () {
   const req = yield* HttpServerRequest.HttpServerRequest;
-  return yield* Option.match(bearer_of(req), {
+  const session = yield* Option.match(bearer_of(req), {
     onNone: () => cookie_session,
     onSome: (token) =>
       Auth.require_session(token).pipe(
         Effect.map((principal): SessionVia => ({ principal, via: "bearer", token })),
       ),
   });
+  yield* Auth.touch_current_session(session.principal.session_id, get_header(req, "cf-ipcountry"));
+  return session;
 });
 
 export const current_token = Effect.map(session_of, (session) => session.token);

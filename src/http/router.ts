@@ -4,6 +4,7 @@ import { router as meta_router } from "../handlers/meta.ts";
 import { router as magic_router } from "../handlers/auth/magic.ts";
 import { router as oauth_router } from "../handlers/auth/oauth.ts";
 import { router as sign_in_router } from "../handlers/sign-in.ts";
+import { router as profile_router } from "../handlers/profile.ts";
 import { router as totp_router } from "../handlers/auth/totp.ts";
 import { router as sessions_router } from "../handlers/auth/sessions.ts";
 import { router as machines_router } from "../handlers/machines.ts";
@@ -26,6 +27,7 @@ export const base_router = HttpRouter.empty.pipe(
   HttpRouter.concat(config_router),
   HttpRouter.concat(account_router),
   HttpRouter.concat(sign_in_router),
+  HttpRouter.concat(profile_router),
 );
 
 export const compiled_app = Effect.runSync(HttpRouter.toHttpApp(base_router));

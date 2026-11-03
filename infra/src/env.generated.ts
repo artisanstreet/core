@@ -52,6 +52,10 @@ export const config = Config.all({
    * Legacy resend secret (dev compat); cloudflare mailer needs none.
    */
   "RESEND_API_KEY": redactErrors(Config.option(Config.map(Config.String("RESEND_API_KEY"), Redacted.make)), "RESEND_API_KEY"),
+  "GOOGLE_CLIENT_ID": Config.option(Config.String("GOOGLE_CLIENT_ID")),
+  "GOOGLE_CLIENT_SECRET": redactErrors(Config.option(Config.map(Config.String("GOOGLE_CLIENT_SECRET"), Redacted.make)), "GOOGLE_CLIENT_SECRET"),
+  "GITHUB_CLIENT_ID": Config.option(Config.String("GITHUB_CLIENT_ID")),
+  "GITHUB_CLIENT_SECRET": redactErrors(Config.option(Config.map(Config.String("GITHUB_CLIENT_SECRET"), Redacted.make)), "GITHUB_CLIENT_SECRET"),
 })
 
 /** Loads environment values when executed, converting config failures to defects. */

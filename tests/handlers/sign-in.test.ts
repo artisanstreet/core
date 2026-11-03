@@ -195,7 +195,7 @@ describe("linking and removing sign-in methods", () => {
 describe("second factor", () => {
   it("a provider sign-in never skips TOTP", async () => {
     const { rig, fake } = await oauth_rig();
-    const T0 = Date.UTC(2026, 9, 31, 12, 0, 0);
+    const T0 = Math.floor(rig.now() / 30_000) * 30_000;
     rig.set_now(T0);
     const account = await signup(rig, "tess@example.com");
     const en = await api(rig.app, "POST", "/v1/auth/totp/enroll", { headers: browser(account) });

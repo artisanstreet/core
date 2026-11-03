@@ -212,7 +212,7 @@ export const authenticate_machine_proof = (opts: {
       public_key_x = row.public_key_x;
     } else if (opts.subject_id.startsWith("mch_")) {
       const row = yield* db_run(() => get_machine_by_id.run(db, { id: opts.subject_id }));
-      if (!row || row.revoked_at) return yield* Effect.fail(unauthorized("unknown subject"));
+      if (!row || row.revoked_at || row.disabled_at) return yield* Effect.fail(unauthorized("unknown subject"));
       public_key_x = row.public_key_x;
       account_id = row.account_id;
       machine_id = row.id;

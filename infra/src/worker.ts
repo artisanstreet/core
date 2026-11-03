@@ -13,36 +13,27 @@ import { config as deploy_config } from "./env.generated.ts";
 type BucketHandle = Effect.Success<typeof ConfigBucket>;
 type HyperdriveHandle = Effect.Success<typeof CoreHyperdrive>;
 type EmailHandle = Effect.Success<ReturnType<typeof Cloudflare.Email.SendEmail>>;
-
-// Absolute artifact paths (cwd-independent). Canonical CLI cwd is the core
-// repo root (`--config infra/alchemy.run.ts`); absolute paths keep
-// `npm run deploy` (cwd=infra) and core-root invocations identical, and
-// Alchemy stores them as portable relative paths when inside cwd.
 const CORE_ROOT = Path.resolve(Path.dirname(file_url_to_path(import.meta.url)), "../..");
 export const WORKER_ENTRY_ABS = Path.join(CORE_ROOT, WORKER_PREBUILT_ENTRY);
 
 export interface CoreWorkerPropsInput {
   readonly stage: string;
-  /** Canonical normalized origins (already validated). Bound as literals. */
   readonly core_origin: string;
   readonly relay_origin: string;
   readonly auth_origin: string;
   readonly dashboard_origin: string;
   readonly mail_from: string;
   readonly mail_from_name: string;
-  /** Loaded Redacted secrets. Bound as secret_text (never plain strings). */
   readonly master_key: Redacted.Redacted<string>;
   readonly admin_token: Redacted.Redacted<string>;
+  readonly google_client_id?: string;
+  readonly google_client_secret?: Redacted.Redacted<string>;
+  readonly github_client_id?: string;
+  readonly github_client_secret?: Redacted.Redacted<string>;
   readonly email: EmailHandle;
   readonly bucket: BucketHandle;
   readonly hyperdrive: HyperdriveHandle;
 }
-
-// REAL props factory used by the deployed Worker AND tests (no mirrors).
-// Public origins are canonical literals so deploy-time and runtime agree
-// (raw Config values with trailing slash/uppercase would otherwise diverge
-// CORE_JWT_ISSUER from Relay's normalized issuer). Secrets arrive as loaded
-// Redacted values and bind as secret_text.
 export function build_core_worker_props(input: CoreWorkerPropsInput) {
   if (assert_valid_mail_from(input.mail_from) !== MAIL_SENDER_EMAIL.toLowerCase()) {
     throw new Error("MAIL_FROM must be the verified Cloudflare sender");
@@ -54,8 +45,6 @@ export function build_core_worker_props(input: CoreWorkerPropsInput) {
   assert_all_origins_distinct(input.core_origin, input.relay_origin, input.auth_origin, input.dashboard_origin);
   return {
     name: worker_name(input.stage),
-    // Prebuilt ESM from `pnpm run build` (core root). No re-bundling:
-    // Reylo .sql transforms are already compiled in.
     main: WORKER_ENTRY_ABS,
     bundle: false as const,
     compatibility: {
@@ -73,20 +62,14 @@ export function build_core_worker_props(input: CoreWorkerPropsInput) {
       MAIL_FROM_NAME: input.mail_from_name,
       CORE_MASTER_KEY: input.master_key,
       CORE_ADMIN_TOKEN: input.admin_token,
+      ...(input.google_client_id && input.google_client_secret ? { GOOGLE_CLIENT_ID: input.google_client_id, GOOGLE_CLIENT_SECRET: input.google_client_secret } : {}),
+      ...(input.github_client_id && input.github_client_secret ? { GITHUB_CLIENT_ID: input.github_client_id, GITHUB_CLIENT_SECRET: input.github_client_secret } : {}),
       EMAIL: input.email,
       CONFIG_BUCKET: input.bucket,
       HYPERDRIVE: input.hyperdrive },
-    // Exact HTTPS custom domain for EVERY deployed stage (stage-specific
-    // AST_CORE_ORIGIN). A supplied origin that is never attached is an
-    // unusable stage (issuer/redirects point nowhere). Wrangler remains
-    // the local-dev path; no invented workers.dev preview URLs.
     domain: domain_host,
     workersDev: false as const };
 }
-
-// Async/plain-module Worker (Alchemy v2 async Workers: main + env).
-// Handles are passed in from the composition root (single declaration);
-// this factory never re-yields ConfigBucket/CoreHyperdrive.
 export const make_core_worker = (deps: { bucket: BucketHandle; hyperdrive: HyperdriveHandle }) => {
   const program = Effect.gen(function* () {
     const { stage } = yield* Alchemy.Stack;
@@ -96,9 +79,6 @@ export const make_core_worker = (deps: { bucket: BucketHandle; hyperdrive: Hyper
     const relay_origin_raw = deploy_env.AST_RELAY_ORIGIN;
     const auth_origin_raw = deploy_env.AST_AUTH_ORIGIN;
     const dashboard_origin_raw = deploy_env.AST_DASHBOARD_ORIGIN;
-    // MAIL_FROM is REQUIRED: it must be a verified Cloudflare sender on the
-    // onboarded sending subdomain. No example.invalid fallback — silently
-    // deploying broken auth email is worse than failing fast here.
     const mail_from_raw = deploy_env.MAIL_FROM;
     const mail_from_name_opt = deploy_env.MAIL_FROM_NAME;
     const mail_from_name_trimmed = (Option.getOrUndefined(mail_from_name_opt) ?? "").trim();
@@ -126,6 +106,10 @@ export const make_core_worker = (deps: { bucket: BucketHandle; hyperdrive: Hyper
       mail_from_name: mail_from_name_raw,
       master_key: deploy_env.CORE_MASTER_KEY,
       admin_token: deploy_env.CORE_ADMIN_TOKEN,
+      google_client_id: Option.getOrUndefined(deploy_env.GOOGLE_CLIENT_ID),
+      google_client_secret: Option.getOrUndefined(deploy_env.GOOGLE_CLIENT_SECRET),
+      github_client_id: Option.getOrUndefined(deploy_env.GITHUB_CLIENT_ID),
+      github_client_secret: Option.getOrUndefined(deploy_env.GITHUB_CLIENT_SECRET),
       email,
       bucket: deps.bucket,
       hyperdrive: deps.hyperdrive });

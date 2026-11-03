@@ -19,6 +19,7 @@ import purge_recovery_codes from "../db/queries/deletion/purge-recovery-codes.sq
 import purge_deletion_request from "../db/queries/deletion/purge-deletion-request.sql"
 import delete_account from "../db/queries/accounts/delete-account.sql"
 import request_deletion from "../db/queries/accounts/request-deletion.sql"
+import clear_deletion from "../db/queries/accounts/clear-deletion.sql"
 
 const GRACE_DAYS = 30;
 
@@ -52,6 +53,7 @@ export const cancel_account_deletion = (account_id: string) =>
     const { db } = yield* DbTag;
     const row = yield* db_run(() => cancel_deletion_request.run(db, { account_id: account_id }));
     if (!row) return yield* Effect.fail(gone("no pending deletion request"));
+    yield* db_run(() => clear_deletion.run(db, { id: account_id }));
     yield* record(account_id, "account.deletion_cancelled", {});
     return { status: row.status };
   });

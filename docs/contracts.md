@@ -46,6 +46,10 @@ and pairing lifecycle below are normative for v1.
   "request_id": "…" } }`, HTTP status mirrors `code` class. `message` never
   carries secrets, tokens, or hashes.
 
+## Account profile contact
+
+`GET /v1/account/profile` includes a nullable `phone` contact number. `POST /v1/account/profile/phone` accepts `{ "phone": "+14155552671" }` to save an international number, or `{ "phone": null }` to remove it. Numbers are unverified and are not used for sign-in or SMS delivery. The account is derived from the authenticated session.
+
 ## 2. Machine public key format (normative)
 
 - Ed25519. Transmitted **only** as JWK:
@@ -254,6 +258,8 @@ to the exact account/key. Codes are single-use, short TTL, rate-limited.
 Auth/sessions: `POST /v1/auth/magic/request`, `GET /v1/auth/magic/confirm`,
 `POST /v1/auth/magic/consume|approve|finalize`, `GET /v1/auth/status`,
 TOTP `…/totp/{enroll|verify|disable}`, recovery codes, `…/sessions/*`.
+`GET /v1/sessions` marks the requesting session with `is_current` and returns it first. It includes best-effort browser and device labels, the country code from Cloudflare's IP geolocation, and a last-active timestamp updated at most every five minutes. Missing details are null; country is approximate.
+`POST /v1/sessions/:id/revoke` revokes another session owned by the authenticated account; the current session uses the existing current-session endpoint.
 Requester-secret binding + explicit original-session approval for
 cross-browser flows; email alone never bypasses TOTP (normative behavior,
 schemas follow). Vault: provider connections + per-machine assignment, decrypt
@@ -268,6 +274,8 @@ Config: versioned MCP/skill bundles
 (content SHA-256, R2 manifest, applied-revision reports). Activity + account
 deletion lifecycle. Full request/response/event schemas in Effect Schema with
 strict requests; OpenAPI export; fixtures under `fixtures/v1/`.
+
+`POST /v1/account/disable` requires a session and disables its owning account until a successful sign-in. It revokes all account sessions, rejects machine authentication, and includes its machines in the grant revocation list. A completed sign-in restores the account and machines; revoked sessions stay revoked. Relay enforcement follows revocation polling and existing grant lifetimes.
 
 ### Sign-in link entry (API-only)
 
