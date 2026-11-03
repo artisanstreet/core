@@ -82,7 +82,7 @@ jobs:
       - name: Apply production migrations
         run: pnpm run db:setup
         env:
-          DATABASE_URL: ${{ secrets.AST_CORE_DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.AST_CORE_MIGRATION_DATABASE_URL }}
       - name: Deploy tested commit
         run: pnpm --dir infra run deploy --stage prod --yes --no-input
         env:
