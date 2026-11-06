@@ -38,6 +38,8 @@ export const R = {
   oauth_callback: reg({ method: "POST", path: "/v1/auth/oauth/callback", summary: "Complete provider redirect", tags: ["auth"], auth: "none", request_schema: C.OauthCallbackReq, response_schema: C.OauthCallbackResp }),
   oauth_second_factor: reg({ method: "POST", path: "/v1/auth/oauth/second-factor", summary: "Finish provider sign-in with TOTP", tags: ["auth"], auth: "none", request_schema: C.OauthSecondFactorReq, response_schema: C.MagicFinalizeResp }),
   oauth_signup: reg({ method: "POST", path: "/v1/auth/oauth/signup", summary: "Create account from provider profile", tags: ["auth"], auth: "none", request_schema: C.OauthSignupReq, response_schema: C.MagicFinalizeResp }),
+  desktop_grant: reg({ method: "POST", path: "/v1/auth/desktop/grant", summary: "Issue a one-time desktop sign-in code", tags: ["auth"], auth: "session", request_schema: C.DesktopGrantReq, response_schema: C.DesktopGrantResp }),
+  desktop_redeem: reg({ method: "POST", path: "/v1/auth/desktop/redeem", summary: "Redeem a desktop sign-in code", tags: ["auth"], auth: "none", request_schema: C.DesktopRedeemReq, response_schema: C.MagicFinalizeResp }),
   totp_enroll: reg({ method: "POST", path: "/v1/auth/totp/enroll", summary: "Start TOTP enrollment", tags: ["auth"], auth: "session", response_schema: C.TotpEnrollResp }),
   totp_verify: reg({ method: "POST", path: "/v1/auth/totp/verify", summary: "Confirm TOTP enrollment", tags: ["auth"], auth: "session", request_schema: C.TotpVerifyReq, response_schema: C.TotpVerifyResp }),
   totp_disable: reg({ method: "POST", path: "/v1/auth/totp/disable", summary: "Disable TOTP", tags: ["auth"], auth: "session", request_schema: C.TotpDisableReq, response_schema: C.TotpDisableResp }),
