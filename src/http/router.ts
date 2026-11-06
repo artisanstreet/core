@@ -3,6 +3,7 @@ import * as HttpRouter from "@effect/platform/HttpRouter";
 import { router as meta_router } from "../handlers/meta.ts";
 import { router as magic_router } from "../handlers/auth/magic.ts";
 import { router as oauth_router } from "../handlers/auth/oauth.ts";
+import { router as desktop_router } from "../handlers/auth/desktop.ts";
 import { router as sign_in_router } from "../handlers/sign-in.ts";
 import { router as profile_router } from "../handlers/profile.ts";
 import { router as totp_router } from "../handlers/auth/totp.ts";
@@ -18,6 +19,7 @@ export const base_router = HttpRouter.empty.pipe(
   HttpRouter.concat(meta_router),
   HttpRouter.concat(magic_router),
   HttpRouter.concat(oauth_router),
+  HttpRouter.concat(desktop_router),
   HttpRouter.concat(totp_router),
   HttpRouter.concat(sessions_router),
   HttpRouter.concat(machines_router),

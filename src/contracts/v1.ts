@@ -522,6 +522,13 @@ export const OauthSignupReq = Schema.Struct({
   flowSecret: Base64url,
   displayName: Schema.String.pipe(Schema.maxLength(120)) });
 
+export const DesktopGrantReq = Schema.Struct({ challenge: Base64url32 });
+export const DesktopGrantResp = Schema.Struct({ code: Base64url32, expires_at: Rfc3339 });
+
+export const DesktopRedeemReq = Schema.Struct({
+  code: Schema.String.pipe(Schema.maxLength(256)),
+  verifier: Base64url32 });
+
 export const SignInMethod = Schema.Struct({ kind: SignInKind, created_at: Rfc3339 });
 export const SignInMethodsResp = Schema.Struct({ email: Email, methods: Schema.Array(SignInMethod) });
 export const SignInMethodRemoveReq = Schema.Struct({ totpCode: Schema.optional(Schema.String) });

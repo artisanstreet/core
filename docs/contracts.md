@@ -312,6 +312,29 @@ strict requests; OpenAPI export; fixtures under `fixtures/v1/`.
   `linked_elsewhere`, `email_taken`, `no_verified_email`. A provider
   without client credentials answers 503 `unavailable`.
 
+### Desktop sign-in handoff
+
+- The Editor signs in through the browser with the RFC 8252 loopback
+  pattern. It keeps a random `verifier` (32 bytes, base64url, 43 chars) and
+  opens the auth site with `challenge = base64url(sha256(verifier))`.
+- After a normal web sign-in, the auth site calls
+  `POST /v1/auth/desktop/grant { challenge }` with its cookie session
+  (same origin checks as other cookie mutations) and receives
+  `{ code, expires_at }`: a one-time code (base64url of 32 random bytes)
+  valid for 120 s. Only the code's SHA-256 is stored. A TOTP account needs a
+  `totp_verified` session (403 otherwise), so a handoff is never weaker than
+  a full sign-in. Budgeted per account.
+- The browser is redirected to `http://127.0.0.1:<port>/callback?code=…`.
+  The Editor calls `POST /v1/auth/desktop/redeem { code, verifier }` (no
+  auth, budgeted per IP) and receives `MagicFinalizeResp` plus the
+  `ast_session` cookie, exactly like `/v1/auth/magic/finalize`. The new
+  session carries the grant's `totp_verified`; activity records
+  `login.desktop_granted` and `login.desktop`.
+- Redeeming consumes the code atomically and only once. A wrong verifier
+  leaves the code usable; wrong, expired, reused or unknown codes and
+  deleted or disabled accounts all answer the same 401
+  `invalid or expired sign-in`.
+
 ### Config sync (checksum-based invalidation)
 
 - `GET /v1/config/bundles/latest` and `GET /v1/config/bundles/:version/manifest`
